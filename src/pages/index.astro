@@ -1,0 +1,30 @@
+---
+import FilmLayout from '@/layouts/FilmLayout.astro';
+import N0Preloader from '@/components/actos/N0Preloader.astro';
+import N1Home from '@/components/actos/N1Home.astro';
+import N2Menu from '@/components/actos/N2Menu.astro';
+---
+
+<!-- T20 (docs/2-TECNICO.md): La película completa en una sola página.
+     Monta N0, N1 y N2 en secuencia continua; N3 y N4 viven en sus rutas profundas y aparecen sin recargar. -->
+<FilmLayout initialLevel="N0" title="JSMMDZ — Portafolio Fílmico Multidisciplinar">
+  <N0Preloader />
+  <div class="pelicula-flujo">
+    <N1Home />
+    <N2Menu />
+  </div>
+</FilmLayout>
+
+<script>
+  import '@/lib/pelicula/scroll';
+  import '@/lib/pelicula/lenis';
+</script>
+
+<style>
+  .pelicula-flujo {
+    position: relative;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+</style>

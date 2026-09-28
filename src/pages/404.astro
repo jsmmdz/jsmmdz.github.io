@@ -1,0 +1,76 @@
+---
+import FilmLayout from '@/layouts/FilmLayout.astro';
+import { conBase } from '@/lib/rutas';
+---
+
+<FilmLayout title="404 — No encontrada" initialLevel="N0">
+  <div class="n404-contenedor">
+    <span class="n404-codigo registro-display">404</span>
+    <h1 class="n404-titulo registro-display">Página no encontrada</h1>
+    <p class="n404-descripcion registro-texto">
+      La página que buscas no existe o ha sido movida.
+    </p>
+    <a href={conBase('')} class="n404-salida tipo-rotulo">
+      Volver al menú
+    </a>
+  </div>
+</FilmLayout>
+
+<style>
+  .n404-contenedor {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--espacio-lg);
+    box-sizing: border-box;
+    text-align: center;
+  }
+
+  .n404-codigo {
+    font-size: var(--tamano-display-2xl);
+    line-height: var(--linea-display-2xl);
+    color: var(--color-casa);
+    margin-bottom: var(--espacio-xs);
+  }
+
+  .n404-titulo {
+    font-size: var(--tamano-display-lg);
+    line-height: var(--linea-display-lg);
+    margin: 0 0 var(--espacio-sm) 0;
+  }
+
+  .n404-descripcion {
+    max-width: 48ch;
+    margin: 0 0 var(--espacio-xl) 0;
+    font-size: var(--tamano-texto-md);
+    line-height: var(--linea-texto-md);
+  }
+
+  .n404-salida {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: var(--espacio-2xs) var(--espacio-md);
+    color: var(--color-texto-oscuro);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    font-size: var(--tamano-rotulo);
+    line-height: var(--linea-rotulo);
+    letter-spacing: var(--tracking-rotulo);
+    font-weight: 600;
+    transition: color var(--duracion-corta) var(--curva-entrada);
+  }
+
+  .n404-salida:hover {
+    background-color: var(--color-casa);
+    color: var(--color-crema-base);
+  }
+
+  .n404-salida:focus-visible {
+    outline: 2px solid var(--color-foco);
+    outline-offset: 4px;
+  }
+</style>

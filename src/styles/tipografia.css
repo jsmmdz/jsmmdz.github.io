@@ -1,0 +1,138 @@
+/**
+ * =====================================================================
+ * SISTEMA TIPOGRÁFICO — PORTAFOLIO CINEMATOGRÁFICO JSMMDZ
+ * tipografia.css — Definición de fuentes autoalojadas con @fontsource,
+ * fallbacks calculados, escala fluida con clamp() y los tres registros (R7).
+ * =====================================================================
+ */
+
+@import '@fontsource/unbounded/latin-700.css';
+@import '@fontsource/unbounded/latin-800.css';
+@import '@fontsource/unbounded/latin-900.css';
+
+@import '@fontsource/space-grotesk/latin-400.css';
+@import '@fontsource/space-grotesk/latin-600.css';
+@import '@fontsource/space-grotesk/latin-700.css';
+
+/* Fallback métrico de Unbounded 800 contra Arial Bold: ancho promedio de una frase en
+ * español medido con fontTools (size-adjust) y métricas hhea divididas por ese factor. */
+@font-face {
+  font-family: 'Unbounded Fallback';
+  src: local('Arial Bold'), local('Arial-BoldMT'), local('Helvetica Bold');
+  size-adjust: 132.03%;
+  ascent-override: 75.36%;
+  descent-override: 18.56%;
+  line-gap-override: 0%;
+}
+
+/* Fallback métrico de Space Grotesk 400 contra Arial, mismo método */
+@font-face {
+  font-family: 'Space Grotesk Fallback';
+  src: local('Arial'), local('ArialMT'), local('Helvetica');
+  size-adjust: 108.77%;
+  ascent-override: 90.47%;
+  descent-override: 26.85%;
+  line-gap-override: 0%;
+}
+
+:root {
+  /* ===================================================================
+   * 2. FAMILIAS TIPOGRÁFICAS
+   * =================================================================== */
+  --fuente-display: 'Unbounded', 'Unbounded Fallback', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --fuente-texto: 'Space Grotesk', 'Space Grotesk Fallback', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* ===================================================================
+   * 3. ESCALA TIPOGRÁFICA FLUIDA CON clamp()
+   * Base: 16px (1rem). Razón: Modular fluida 1.25 (móvil) a 1.333 (desktop).
+   * =================================================================== */
+  /* Display Colosal (Números de acto, apertura cinemática) */
+  --tamano-display-2xl: clamp(1.625rem, 4.5vw + 0.8rem, 5.5rem);
+  --linea-display-2xl: 1.02;
+  --tracking-display-2xl: -0.04em;
+
+  /* Display Titulares Principales (Titulares de nivel N1, N2) */
+  --tamano-display-xl: clamp(2rem, 4vw + 0.8rem, 4rem);
+  --linea-display-xl: 1.08;
+  --tracking-display-xl: -0.03em;
+
+  /* Display Títulos de Disciplina y Sección */
+  --tamano-display-lg: clamp(1.5rem, 2.8vw + 0.6rem, 2.75rem);
+  --linea-display-lg: 1.15;
+  --tracking-display-lg: -0.02em;
+
+  /* Display Subtitulares de Pieza */
+  --tamano-display-md: clamp(1.25rem, 1.8vw + 0.5rem, 2rem);
+  --linea-display-md: 1.22;
+  --tracking-display-md: -0.01em;
+
+  /* Texto Intro / Lead en Casos de Estudio (N4) */
+  --tamano-texto-lg: clamp(1.125rem, 0.8vw + 0.85rem, 1.35rem);
+  --linea-texto-lg: 1.45;
+  --tracking-texto-lg: -0.01em;
+
+  /* Texto de Cuerpo Base (Párrafos y UI general) */
+  --tamano-texto-md: clamp(1rem, 0.4vw + 0.88rem, 1.125rem);
+  --linea-texto-md: 1.55;
+  --tracking-texto-md: 0em;
+
+  /* Texto Secundario y Descripciones de Apoyo */
+  --tamano-texto-sm: clamp(0.875rem, 0.2vw + 0.8rem, 0.95rem);
+  --linea-texto-sm: 1.5;
+  --tracking-texto-sm: 0.01em;
+
+  /* Tercer Registro: HUD, Metadatos y Rótulos Técnicos */
+  --tamano-rotulo: clamp(0.72rem, 0.15vw + 0.68rem, 0.825rem);
+  --linea-rotulo: 1.3;
+  --tracking-rotulo: 0.18em;
+}
+
+/* =====================================================================
+ * 4. LOS TRES REGISTROS TIPOGRÁFICOS (R7)
+ * ===================================================================== */
+
+/* Registro 1: Display Gigante (Unbounded) — Solo a tamaño grande */
+.registro-display,
+.tipo-display {
+  font-family: var(--fuente-display);
+  font-weight: 800;
+  line-height: var(--linea-display-xl);
+  letter-spacing: var(--tracking-display-xl);
+  text-rendering: optimizeLegibility;
+  overflow-wrap: break-word;
+  hyphens: manual;
+}
+
+/* Registro 2: Texto de Lectura (Space Grotesk) — Todo el cuerpo y UI */
+.registro-texto,
+.tipo-texto {
+  font-family: var(--fuente-texto);
+  font-weight: 400;
+  font-size: var(--tamano-texto-md);
+  line-height: var(--linea-texto-md);
+  letter-spacing: var(--tracking-texto-md);
+  text-rendering: optimizeLegibility;
+}
+
+/* Registro 3: Versalitas Espaciadas (Space Grotesk) — HUD, rótulos, tags */
+.registro-versalitas,
+.tipo-rotulo,
+.tipo-versalitas {
+  font-family: var(--fuente-texto);
+  font-size: var(--tamano-rotulo);
+  line-height: var(--linea-rotulo);
+  letter-spacing: var(--tracking-rotulo);
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  text-transform: uppercase;
+}
+
+/* Jerarquías Display Reutilizables */
+.display-2xl { font-size: var(--tamano-display-2xl); line-height: var(--linea-display-2xl); letter-spacing: var(--tracking-display-2xl); }
+.display-xl  { font-size: var(--tamano-display-xl);  line-height: var(--linea-display-xl);  letter-spacing: var(--tracking-display-xl);  }
+.display-lg  { font-size: var(--tamano-display-lg);  line-height: var(--linea-display-lg);  letter-spacing: var(--tracking-display-lg);  }
+.display-md  { font-size: var(--tamano-display-md);  line-height: var(--linea-display-md);  letter-spacing: var(--tracking-display-md);  }
+
+.texto-lg    { font-size: var(--tamano-texto-lg);    line-height: var(--linea-texto-lg);    letter-spacing: var(--tracking-texto-lg);    }
+.texto-md    { font-size: var(--tamano-texto-md);    line-height: var(--linea-texto-md);    letter-spacing: var(--tracking-texto-md);    }
+.texto-sm    { font-size: var(--tamano-texto-sm);    line-height: var(--linea-texto-sm);    letter-spacing: var(--tracking-texto-sm);    }

@@ -1,0 +1,218 @@
+---
+import { ClientRouter } from 'astro:transitions';
+import { conBase } from '@/lib/rutas';
+import webPoster from '@/assets/disciplinas/web-poster.jpg';
+import '@/styles/tokens.css';
+import '@/styles/tipografia.css';
+import '@/styles/reduced-motion.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  initialLevel?: 'N0' | 'N1' | 'N2' | 'N3' | 'N4';
+  initialDiscipline?: string;
+  initialProject?: string;
+}
+
+const {
+  title = "Portafolio — JSMMDZ",
+  description = "Portafolio multidisciplinar cinematográfico",
+  initialLevel = "N0",
+  initialDiscipline = "web",
+  initialProject = ""
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <link rel="icon" type="image/svg+xml" href={conBase('favicon.svg')} />
+    <ClientRouter />
+  </head>
+  <body
+    data-current-level={initialLevel}
+    data-discipline={initialDiscipline}
+    data-project={initialProject}
+    data-caida={initialLevel === 'N2' ? '1' : '0'}
+  >
+    <!-- 
+      LAYER 3: Escenario de Actos Cinemáticos (N0, N1, N2, N3, N4)
+      Estructura libre de mobiliario: sin tarjetas, sin bordes, sin retícula visible.
+    -->
+    <main id="film-stage">
+      <slot />
+    </main>
+
+    <!-- 
+      LAYER 0: Canvas WebGL Persistente (Three.js)
+      Una sola escena persistente para el plano infinito (N3) y el visor GLB (3D).
+      Persiste entre navegaciones sin recarga.
+    -->
+    <div id="webgl-canvas-container" aria-hidden="true" transition:persist></div>
+
+    <!-- 
+      LAYER 1: Reproductor de Video de Transición (N2)
+      Persiste en toda la sesión para evitar fugas de memoria y recreación de elementos.
+    -->
+    <div id="transition-video-layer" aria-hidden="true" transition:persist>
+      <video
+        id="n2-video"
+        class="n2-transition-video"
+        muted
+        playsinline
+        preload="auto"
+        poster={webPoster.src}
+      ></video>
+    </div>
+
+    <!-- 
+      LAYER 2: Bisagra de Negro Absoluto (R2)
+      Transición física que absorbe la luz entre actos. Ningún color corta directo contra otro.
+    -->
+    <div id="black-hinge-layer" aria-hidden="true" transition:persist></div>
+
+    <!-- 
+      LAYER: Destello Crema de la Caída (Zero / T25)
+      Cubre la pantalla en crema #FAF8F5 a mitad de la caída entre Home y Menú, sin blanco puro ni resplandor.
+    -->
+    <div id="caida-destello" aria-hidden="true" transition:persist></div>
+
+    <!-- Script arquitectónico para hidratación, máquina de navegación y viewport -->
+    <script>
+      import { obtenerNavegacion } from '@/lib/navigation/instancia';
+
+      const MOBILE_BREAKPOINT = 768;
+      const checkViewport = () => {
+        const isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
+        document.body.dataset.viewport = isMobile ? 'mobile' : 'desktop';
+      };
+
+      // Inicialización y eventos de ciclo de vida con Astro ClientRouter
+      checkViewport();
+      window.addEventListener('resize', checkViewport, { passive: true });
+
+      // Coordinación de la bisagra negra durante las transiciones de página
+      document.addEventListener('astro:before-preparation', () => {
+        const hinge = document.getElementById('black-hinge-layer');
+        if (hinge) {
+          hinge.classList.add('activo');
+        }
+      });
+
+      document.addEventListener('astro:before-swap', (ev) => {
+        const newBody = ev.newDocument.body;
+        if (newBody) {
+          document.body.dataset.currentLevel = newBody.dataset.currentLevel;
+          document.body.dataset.discipline = newBody.dataset.discipline;
+          document.body.dataset.project = newBody.dataset.project;
+        }
+      });
+
+      document.addEventListener('astro:page-load', () => {
+        checkViewport();
+        obtenerNavegacion();
+
+        const hinge = document.getElementById('black-hinge-layer');
+        if (hinge && hinge.classList.contains('activo')) {
+          setTimeout(() => {
+            hinge.classList.remove('activo');
+          }, 60);
+        }
+      });
+
+      obtenerNavegacion();
+    </script>
+
+    <style is:global>
+      /* Bisagra de negro absoluto para transiciones entre actos */
+      #black-hinge-layer {
+        position: fixed;
+        inset: 0;
+        background-color: var(--color-negro);
+        z-index: var(--z-bisagra, 40);
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity var(--duracion-media, 0.4s) var(--curva-bisagra, ease);
+      }
+
+      #black-hinge-layer.activo {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      /* Destello crema de la caída (T25) */
+      #caida-destello {
+        position: fixed;
+        inset: 0;
+        background-color: var(--color-crema-base);
+        z-index: 35;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      /* Reemplazo del crossfade predeterminado de ClientRouter por corte cinematográfico */
+      ::view-transition-old(root),
+      ::view-transition-new(root) {
+        animation: none;
+      }
+
+      /* Capas para N2: el video queda detrás del canvas y el canvas detrás del HUD */
+      /* El video cubre toda la pantalla: con top: 60px quedaba una franja arriba con el fondo de la
+         sección (y a veces con el color de otra disciplina). Pedido del autor, 2026-09-28. */
+      #transition-video-layer {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+        pointer-events: none;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .n2-transition-video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        pointer-events: none;
+      }
+
+      body:not([data-current-level="N2"]) #transition-video-layer {
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      body[data-current-level="N2"] #transition-video-layer {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      body[data-current-level="N2"] #webgl-canvas-container {
+        z-index: 3;
+        pointer-events: none;
+      }
+
+      body[data-current-level="N2"] #webgl-canvas-container canvas {
+        pointer-events: auto;
+      }
+
+      body[data-current-level="N2"] #film-stage {
+        z-index: auto;
+      }
+    </style>
+  </body>
+</html>

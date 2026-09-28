@@ -1,0 +1,563 @@
+---
+/**
+ * N1Home.astro — Acto 1 cinematográfico: El home con distribución de Mr. BLACK (T14 / D13).
+ * Distribución calcada de mrblack-01-home.jpg: navegación superior, bloque informativo,
+ * cifras clave, marca gigante inferior y el autor centrado solapando la marca.
+ */
+import { home } from '@/data/home';
+---
+
+<section
+  id="act-n1"
+  class="n1-seccion"
+  aria-label="Home y presentación"
+  data-level="N1"
+>
+  <!-- Ancla vacía para la transformación del preloader en T3b / T13 -->
+  <div id="n1-ancla-preloader" aria-hidden="true"></div>
+
+  <!-- Disparador para la transición de caída hacia N2 en T3c / T15 / T19 -->
+  <div id="n1-the-drop-trigger" aria-hidden="true"></div>
+
+  <!-- E1: Franja de navegación superior -->
+  <header class="n1-barra-superior">
+    <nav class="n1-nav" data-n1-nav aria-label="Navegación principal">
+      {home.navegacion.map((item) => (
+        <a href={item.href} class="n1-nav-enlace registro-rotulo">
+          {item.texto}
+        </a>
+      ))}
+    </nav>
+
+    <div class="n1-marca-centro registro-rotulo" aria-label="Marca">
+      {home.nombre}
+    </div>
+
+    <div class="n1-superior-derecha">
+      <a
+        href={home.contacto.href}
+        data-n1-contacto
+        class="n1-contacto-enlace registro-rotulo"
+      >
+        {home.contacto.texto}
+      </a>
+      <a
+        href={home.tarjeta.href}
+        data-n1-tarjeta
+        class="n1-tarjeta"
+      >
+        <img
+          src={home.tarjeta.miniatura}
+          alt=""
+          class="n1-tarjeta-miniatura"
+          width="48"
+          height="32"
+          loading="eager"
+          decoding="async"
+        />
+        <span class="n1-tarjeta-texto registro-rotulo">{home.tarjeta.texto}</span>
+        <span class="n1-tarjeta-icono" aria-hidden="true">↗</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- E2: Bloque arriba a la izquierda -->
+  <div class="n1-bloque" data-n1-bloque>
+    <h2 class="n1-bloque-titulo registro-display">{home.titulo}</h2>
+    <p class="n1-bloque-descripcion registro-texto">{home.descripcion}</p>
+
+    <!-- Texto accesible de las líneas del typewriter para lectores de pantalla -->
+    <div class="sr-only" aria-label="Líneas de presentación">
+      {home.lineasTypewriter.map((linea) => (
+        <p>{linea}</p>
+      ))}
+    </div>
+
+    <!-- Capa animada del typewriter (oculta a tecnologías de asistencia) -->
+    <div
+      class="n1-typewriter-capa registro-texto"
+      data-typewriter-capa
+      aria-hidden="true"
+    ></div>
+
+    <!-- Enlace principal que conduce a las disciplinas -->
+    <a
+      href={home.enlacePrincipal.href}
+      data-n1-enlace
+      class="n1-enlace-principal registro-rotulo"
+    >
+      <span class="n1-enlace-icono" aria-hidden="true">↓</span>
+      <span class="n1-enlace-texto">{home.enlacePrincipal.texto}</span>
+    </a>
+  </div>
+
+  <!-- E3: Dos cifras grandes a la derecha -->
+  <div class="n1-cifras-columna" aria-label="Cifras clave">
+    {home.cifras.map((cifra) => (
+      <div class="n1-cifra" data-n1-cifra>
+        <span class="n1-cifra-valor registro-display">{cifra.valor}</span>
+        <span class="n1-cifra-rotulo registro-rotulo">{cifra.rotulo}</span>
+      </div>
+    ))}
+  </div>
+
+  <!-- E4: El nombre gigante abajo, a todo el ancho -->
+  <h1 class="n1-marca-gigante registro-display" data-n1-marca-gigante>
+    {home.nombre}
+  </h1>
+
+  <!-- E5: El autor al centro, por delante de la marca gigante -->
+  <!-- Contenedor [data-n1-autor]: preparado para D13. Aquí se enganchará el script de seguimiento de mirada con el cursor cuando se entregue el asset definitivo -->
+  <div class="n1-autor" data-n1-autor>
+    <img
+      data-personaje
+      src={home.personaje.src}
+      alt={home.personaje.alt}
+      width={home.personaje.ancho}
+      height={home.personaje.alto}
+      class="n1-autor-img"
+      loading="eager"
+      decoding="async"
+    />
+  </div>
+</section>
+
+<script>
+  import { home } from '@/data/home';
+  import { iniciarTypewriter, type ControladorTypewriter } from '@/lib/n1/typewriter';
+
+  let controladorTypewriter: ControladorTypewriter | null = null;
+
+  function inicializarN1(): void {
+    const contenedor = document.querySelector<HTMLElement>(
+      '#act-n1 [data-typewriter-capa]'
+    );
+
+    if (contenedor) {
+      controladorTypewriter?.destruir();
+      controladorTypewriter = iniciarTypewriter({
+        contenedor,
+        lineas: home.lineasTypewriter,
+      });
+    }
+  }
+
+  function destruirN1(): void {
+    if (controladorTypewriter) {
+      controladorTypewriter.destruir();
+      controladorTypewriter = null;
+    }
+  }
+
+  document.addEventListener('astro:page-load', inicializarN1);
+  document.addEventListener('astro:before-swap', destruirN1);
+
+  if (document.readyState !== 'loading') {
+    inicializarN1();
+  } else {
+    document.addEventListener('DOMContentLoaded', inicializarN1, { once: true });
+  }
+</script>
+
+<style>
+  .n1-seccion {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    min-height: 100vh;
+    box-sizing: border-box;
+    overflow: hidden;
+    background-color: var(--fondo-activo);
+    color: var(--texto-activo);
+  }
+
+  #n1-ancla-preloader {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+
+  #n1-the-drop-trigger {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    pointer-events: none;
+  }
+
+  /* E1: Navegación superior */
+  .n1-barra-superior {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--espacio-sm) clamp(var(--espacio-sm), 3.5vw, var(--espacio-xl));
+    z-index: 10;
+  }
+
+  .n1-nav {
+    display: flex;
+    align-items: center;
+    gap: clamp(var(--espacio-xs), 1.5vw, var(--espacio-md));
+  }
+
+  .n1-nav-enlace,
+  .n1-contacto-enlace {
+    color: var(--texto-activo);
+    text-decoration: none;
+    font-family: var(--fuente-texto);
+    font-size: var(--tamano-rotulo);
+    letter-spacing: var(--tracking-rotulo);
+    text-transform: uppercase;
+    transition: opacity var(--duracion-corta) var(--curva-estandar);
+  }
+
+  .n1-nav-enlace:hover,
+  .n1-contacto-enlace:hover {
+    opacity: 0.7;
+  }
+
+  .n1-nav-enlace:focus-visible,
+  .n1-contacto-enlace:focus-visible,
+  .n1-tarjeta:focus-visible,
+  .n1-enlace-principal:focus-visible {
+    outline: 2px solid var(--color-foco);
+    outline-offset: 3px;
+  }
+
+  .n1-marca-centro {
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    font-size: var(--tamano-texto-md);
+    letter-spacing: var(--tracking-rotulo);
+    color: var(--texto-activo);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .n1-superior-derecha {
+    display: flex;
+    align-items: center;
+    gap: var(--espacio-md);
+  }
+
+  .n1-tarjeta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--espacio-xs);
+    padding: var(--espacio-3xs) var(--espacio-xs);
+    background-color: color-mix(in oklch, var(--texto-activo) 6%, transparent);
+    color: var(--texto-activo);
+    text-decoration: none;
+    border-radius: 4px;
+    max-width: min(340px, 23vw);
+    transition: background-color var(--duracion-corta) var(--curva-estandar);
+  }
+
+  .n1-tarjeta:hover {
+    background-color: color-mix(in oklch, var(--texto-activo) 12%, transparent);
+  }
+
+  .n1-tarjeta-miniatura {
+    display: block;
+    width: 36px;
+    height: 26px;
+    object-fit: cover;
+    border-radius: 2px;
+  }
+
+  .n1-tarjeta-texto {
+    font-family: var(--fuente-texto);
+    font-size: var(--tamano-rotulo);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .n1-tarjeta-icono {
+    font-size: var(--tamano-texto-sm);
+  }
+
+  /* E2: Bloque superior izquierdo */
+  .n1-bloque {
+    position: absolute;
+    top: clamp(80px, 14vh, 130px);
+    left: clamp(var(--espacio-sm), 3.5vw, var(--espacio-xl));
+    width: min(390px, 35vw);
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: var(--espacio-xs);
+  }
+
+  .n1-bloque-titulo {
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    font-size: var(--tamano-display-md);
+    line-height: var(--linea-display-md);
+    letter-spacing: var(--tracking-display-md);
+    color: var(--texto-activo);
+    margin: 0;
+    text-transform: uppercase;
+  }
+
+  .n1-bloque-descripcion {
+    font-family: var(--fuente-texto);
+    font-size: var(--tamano-texto-md);
+    line-height: var(--linea-texto-md);
+    color: var(--texto-activo);
+    margin: 0;
+    max-width: 38ch;
+  }
+
+  .n1-enlace-principal {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--espacio-3xs);
+    margin-top: var(--espacio-2xs);
+    color: var(--texto-activo);
+    font-family: var(--fuente-texto);
+    font-size: var(--tamano-rotulo);
+    letter-spacing: var(--tracking-rotulo);
+    text-transform: uppercase;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    width: fit-content;
+    transition: opacity var(--duracion-corta) var(--curva-estandar);
+  }
+
+  .n1-enlace-principal:hover {
+    opacity: 0.7;
+  }
+
+  .n1-enlace-icono {
+    font-size: var(--tamano-texto-sm);
+  }
+
+  /* E3: Columna de cifras derecha */
+  .n1-cifras-columna {
+    position: absolute;
+    top: clamp(140px, 22vh, 230px);
+    right: clamp(var(--espacio-sm), 3.5vw, var(--espacio-xl));
+    display: flex;
+    flex-direction: column;
+    gap: var(--espacio-lg);
+    z-index: 5;
+    width: min(260px, 24vw);
+  }
+
+  .n1-cifra {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espacio-3xs);
+  }
+
+  .n1-cifra-valor {
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    font-size: var(--tamano-display-lg);
+    line-height: var(--linea-display-lg);
+    letter-spacing: var(--tracking-display-lg);
+    color: var(--texto-activo);
+  }
+
+  .n1-cifra-rotulo {
+    font-family: var(--fuente-texto);
+    font-size: var(--tamano-rotulo);
+    line-height: var(--linea-rotulo);
+    letter-spacing: var(--tracking-rotulo);
+    color: var(--texto-activo);
+    text-transform: uppercase;
+  }
+
+  /* E4: Marca gigante inferior */
+  .n1-marca-gigante {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    font-size: clamp(4.5rem, 18.2vw, 17.5rem);
+    line-height: 0.82;
+    letter-spacing: -0.04em;
+    text-align: center;
+    color: var(--color-activo);
+    z-index: 1;
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  /* E5: Protagonista al centro */
+  .n1-autor {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    z-index: 2;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .n1-autor-img {
+    display: block;
+    width: auto;
+    height: clamp(520px, 84vh, 760px);
+    max-width: 80vw;
+    object-fit: contain;
+    object-position: bottom center;
+  }
+
+  /* Typewriter */
+  .n1-typewriter-capa {
+    font-family: var(--fuente-texto);
+    font-weight: 400;
+    font-size: var(--tamano-texto-md);
+    line-height: var(--linea-texto-md);
+    letter-spacing: var(--tracking-texto-md);
+    color: var(--texto-activo);
+    min-height: calc(var(--tamano-texto-md) * 4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--espacio-3xs);
+  }
+
+  :global(.n1-linea) {
+    margin: 0;
+    transition: opacity var(--duracion-corta) var(--curva-entrada);
+    overflow-wrap: break-word;
+  }
+
+  :global(.n1-linea-historial) {
+    color: var(--color-texto-atenuado);
+  }
+
+  :global(.n1-linea-activa) {
+    opacity: 1;
+  }
+
+  :global(.n1-cursor) {
+    display: inline-block;
+    color: var(--color-activo);
+    font-weight: 700;
+    margin-left: var(--espacio-3xs);
+    animation: n1-cursor-blink var(--duracion-larga) infinite;
+  }
+
+  @keyframes n1-cursor-blink {
+    0%,
+    49% {
+      opacity: 1;
+    }
+    50%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 768px) {
+    .n1-seccion {
+      height: 100vh;
+      min-height: 100vh;
+      overflow-x: hidden;
+      overflow-y: hidden;
+    }
+
+    .n1-barra-superior {
+      padding: var(--espacio-2xs) var(--espacio-sm);
+      height: 44px;
+    }
+
+    .n1-nav {
+      gap: var(--espacio-2xs);
+    }
+
+    .n1-nav-enlace:not(:first-child) {
+      display: none;
+    }
+
+    .n1-marca-centro {
+      display: none;
+    }
+
+    .n1-contacto-enlace {
+      display: none;
+    }
+
+    .n1-tarjeta {
+      padding: 2px var(--espacio-3xs);
+      max-width: 170px;
+    }
+
+    .n1-tarjeta-miniatura {
+      width: 28px;
+      height: 20px;
+    }
+
+    .n1-tarjeta-texto {
+      font-size: 0.65rem;
+    }
+
+    .n1-bloque {
+      top: 52px;
+      left: var(--espacio-sm);
+      width: calc(100vw - var(--espacio-md));
+      max-width: calc(100vw - var(--espacio-md));
+      gap: var(--espacio-2xs);
+    }
+
+    .n1-bloque-titulo {
+      font-size: var(--tamano-texto-lg);
+      line-height: var(--linea-texto-lg);
+    }
+
+    .n1-bloque-descripcion {
+      font-size: var(--tamano-texto-sm);
+      line-height: var(--linea-texto-sm);
+    }
+
+    .n1-typewriter-capa {
+      font-size: var(--tamano-texto-sm);
+      min-height: calc(var(--tamano-texto-sm) * 3);
+    }
+
+    .n1-cifras-columna {
+      display: none;
+    }
+
+    .n1-marca-gigante {
+      font-size: clamp(2.8rem, 17vw, 5rem);
+      bottom: 0;
+    }
+
+    .n1-autor-img {
+      height: clamp(280px, 50vh, 420px);
+    }
+  }
+</style>

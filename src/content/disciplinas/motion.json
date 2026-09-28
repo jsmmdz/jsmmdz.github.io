@@ -1,0 +1,10 @@
+{
+  "slug": "motion",
+  "nombre": "Motion graphics",
+  "orden": 2,
+  "acento": "#E09B00",
+  "fondoMenu": "#F0D7A1",
+  "videoOutfit": "transiciones/t1-azul-ambar-adelante.mp4",
+  "poster": "../../assets/disciplinas/motion-poster.jpg",
+  "texturaCilindro": "../../assets/disciplinas/motion-textura.webp"
+}

@@ -1,0 +1,10 @@
+{
+  "slug": "videojuegos",
+  "nombre": "Videojuegos",
+  "orden": 4,
+  "acento": "#9B111E",
+  "fondoMenu": "#DDABAA",
+  "videoOutfit": "transiciones/t3-verde-rojo-adelante.mp4",
+  "poster": "../../assets/disciplinas/videojuegos-poster.jpg",
+  "texturaCilindro": "../../assets/disciplinas/videojuegos-textura.webp"
+}

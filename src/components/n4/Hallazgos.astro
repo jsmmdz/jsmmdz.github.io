@@ -1,0 +1,62 @@
+---
+interface Props {
+  items?: string[];
+}
+
+let { items } = Astro.props;
+if (!items && typeof globalThis !== 'undefined') {
+  const globalRec = globalThis as Record<string, unknown>;
+  if (Array.isArray(globalRec.__currentProjectHallazgos)) {
+    items = globalRec.__currentProjectHallazgos as string[];
+  }
+}
+const lista = items ?? [];
+---
+
+<section class="n4-seccion n4-seccion-hallazgos">
+  <div class="n4-columna-lectura">
+    <h2>Hallazgos</h2>
+    {lista.length > 0 ? (
+      <ul class="n4-lista-hallazgos">
+        {lista.map((hallazgo) => (
+          <li>{hallazgo}</li>
+        ))}
+      </ul>
+    ) : (
+      <p class="n4-vacio">Sin hallazgos documentados.</p>
+    )}
+  </div>
+</section>
+
+<style>
+  .n4-seccion-hallazgos {
+    margin-bottom: var(--espacio-3xl);
+  }
+
+  .n4-columna-lectura {
+    max-width: 68ch;
+  }
+
+  .n4-lista-hallazgos {
+    list-style: disc;
+    padding-left: var(--espacio-lg);
+    margin: var(--espacio-md) 0 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--espacio-xs);
+  }
+
+  .n4-lista-hallazgos li {
+    font-family: var(--fuente-texto);
+    font-size: var(--tamano-texto-md);
+    line-height: var(--linea-texto-md);
+    color: var(--texto-activo);
+  }
+
+  .n4-vacio {
+    font-family: var(--fuente-texto);
+    font-size: var(--tamano-texto-md);
+    line-height: var(--linea-texto-md);
+    color: var(--texto-activo);
+  }
+</style>

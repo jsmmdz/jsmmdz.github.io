@@ -1,0 +1,10 @@
+{
+  "slug": "editorial",
+  "nombre": "Editorial",
+  "orden": 5,
+  "acento": "#111111",
+  "fondoMenu": "#343A3D",
+  "videoOutfit": "transiciones/t4-rojo-editorial-adelante.mp4",
+  "poster": "../../assets/disciplinas/editorial-poster.jpg",
+  "texturaCilindro": "../../assets/disciplinas/editorial-textura.webp"
+}

@@ -1,0 +1,397 @@
+---
+import { render } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
+import Hallazgos from '@/components/n4/Hallazgos.astro';
+import { conBase } from '@/lib/rutas';
+
+interface Props {
+  proyecto: CollectionEntry<'proyectos'>;
+  disciplina?: CollectionEntry<'disciplinas'>['data'];
+}
+
+const { proyecto, disciplina } = Astro.props;
+const discSlug = disciplina?.slug ?? 'web';
+const mundoUrl = conBase(`${discSlug}/`);
+
+// Compartir los hallazgos con el componente Hallazgos inyectado en MDX
+(globalThis as Record<string, unknown>).__currentProjectHallazgos = proyecto.data.hallazgos;
+const { Content } = await render(proyecto);
+---
+
+<article
+  id="act-n4"
+  aria-label="Detalle del caso de estudio"
+  data-level="N4"
+  data-discipline={discSlug}
+  data-project={proyecto.data.slug}
+>
+  <div class="n4-layout">
+    <!-- Columna izquierda fija en escritorio: Volver, disciplina, título y metadatos -->
+    <aside class="n4-columna-fija" aria-label="Información del proyecto">
+      <a
+        href={mundoUrl}
+        data-n4-volver
+        class="n4-volver tipo-rotulo"
+      >
+        <span class="n4-flecha" aria-hidden="true">&larr;</span> Volver
+      </a>
+
+      <div class="n4-info-fija">
+        <div class="n4-disciplina-tag tipo-rotulo">
+          <span class="n4-acento-marca" aria-hidden="true"></span>
+          <span>{disciplina?.nombre ?? 'Diseño web'}</span>
+        </div>
+
+        <h1 class="n4-titulo tipo-display">{proyecto.data.titulo}</h1>
+
+        <dl class="n4-metadatos">
+          <div class="n4-meta-item">
+            <dt class="tipo-rotulo">Año</dt>
+            <dd>{proyecto.data.anio}</dd>
+          </div>
+          <div class="n4-meta-item">
+            <dt class="tipo-rotulo">Rol</dt>
+            <dd>{proyecto.data.rol}</dd>
+          </div>
+        </dl>
+      </div>
+    </aside>
+
+    <!-- Columna derecha con portada arriba y secciones en orden con scroll -->
+    <div class="n4-columna-derecha">
+      <div class="n4-portada-wrap">
+        <img
+          src={proyecto.data.portada.src}
+          alt={`Portada de ${proyecto.data.titulo}`}
+          class="n4-portada"
+          loading="eager"
+          decoding="async"
+        />
+      </div>
+
+      <section class="n4-seccion">
+        <div class="n4-columna-lectura">
+          <h2>Idea</h2>
+          <p>{proyecto.data.idea}</p>
+        </div>
+      </section>
+
+      <section class="n4-seccion">
+        <div class="n4-columna-lectura">
+          <h2>Problema</h2>
+          <p>{proyecto.data.problema}</p>
+        </div>
+      </section>
+
+      <section class="n4-seccion">
+        <div class="n4-columna-lectura">
+          <h2>Rol y aporte</h2>
+          <p><strong>Rol:</strong> {proyecto.data.rol}</p>
+          <p><strong>Aporte:</strong> {proyecto.data.aporte}</p>
+        </div>
+      </section>
+
+      <section class="n4-seccion">
+        <div class="n4-columna-lectura">
+          <h2>Decisiones</h2>
+          <ul class="n4-lista-decisiones">
+            {proyecto.data.decisiones.map((d) => (
+              <li>
+                <strong>{d.que}:</strong> {d.porque}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <div class="n4-mdx-cuerpo">
+        <Content components={{ Hallazgos }} />
+      </div>
+    </div>
+  </div>
+</article>
+
+<script>
+  import { navigate } from 'astro:transitions/client';
+  import { transicionConRespaldo } from '@/lib/navigation/instancia';
+
+  function registrarProyectoActivo() {
+    const act = document.getElementById('act-n4');
+    const slug = act?.dataset.project || document.body.dataset.project;
+    if (slug) {
+      try {
+        sessionStorage.setItem('n3_active_project', slug);
+      } catch {}
+    }
+  }
+
+  function initN4Volver() {
+    registrarProyectoActivo();
+    const volverBtn = document.querySelector<HTMLAnchorElement>('#act-n4 a[data-n4-volver]');
+    if (!volverBtn) return;
+
+    volverBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      registrarProyectoActivo();
+      transicionConRespaldo({ type: 'BACK_BUTTON_CLICK' }, 1200);
+      navigate(volverBtn.href);
+    });
+  }
+
+  document.addEventListener('astro:page-load', () => {
+    if (document.body.dataset.currentLevel === 'N4') {
+      initN4Volver();
+    }
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initN4Volver);
+  } else {
+    initN4Volver();
+  }
+</script>
+
+<style>
+  #act-n4 {
+    position: relative;
+    width: 100%;
+    min-height: 100vh;
+    background-color: var(--color-negro);
+    color: var(--color-texto-claro);
+    box-sizing: border-box;
+    padding-top: var(--espacio-2xl);
+    padding-bottom: var(--espacio-3xl);
+    overflow-x: hidden;
+  }
+
+  .n4-layout {
+    position: relative;
+    width: 100%;
+    max-width: 1440px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--espacio-lg);
+    padding-right: var(--espacio-lg);
+    box-sizing: border-box;
+  }
+
+  .n4-columna-fija {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espacio-md);
+    box-sizing: border-box;
+  }
+
+  .n4-volver {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 32px;
+    min-width: 32px;
+    box-sizing: border-box;
+    gap: var(--espacio-2xs);
+    color: var(--color-texto-claro);
+    text-decoration: none;
+    padding: var(--espacio-2xs) 0;
+    font-family: var(--fuente-texto);
+    font-size: var(--tamano-rotulo);
+    line-height: var(--linea-rotulo);
+    letter-spacing: var(--tracking-rotulo);
+    font-weight: 600;
+    font-variant-caps: all-small-caps;
+    text-transform: uppercase;
+    transition: color var(--duracion-corta) var(--curva-entrada);
+  }
+
+  .n4-volver:hover {
+    color: var(--color-texto-claro);
+    text-decoration: underline;
+  }
+
+  .n4-volver:focus-visible {
+    outline: 2px solid var(--color-texto-claro);
+    outline-offset: 2px;
+  }
+
+  .n4-info-fija {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espacio-sm);
+  }
+
+  .n4-disciplina-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--espacio-2xs);
+    color: var(--color-texto-claro);
+    font-family: var(--fuente-texto);
+    font-size: var(--tamano-rotulo);
+    line-height: var(--linea-rotulo);
+    letter-spacing: var(--tracking-rotulo);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-variant-caps: all-small-caps;
+  }
+
+  .n4-acento-marca {
+    width: 8px;
+    height: 8px;
+    background-color: var(--acento-activo);
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  .n4-titulo {
+    font-family: var(--fuente-display);
+    font-size: var(--tamano-display-lg);
+    line-height: var(--linea-display-lg);
+    letter-spacing: var(--tracking-display-lg);
+    font-weight: 800;
+    margin: 0;
+    color: var(--color-texto-claro);
+    hyphens: none;
+    overflow-wrap: break-word;
+  }
+
+  .n4-metadatos {
+    margin: var(--espacio-md) 0 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--espacio-sm);
+  }
+
+  .n4-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espacio-3xs);
+    margin: 0;
+  }
+
+  .n4-meta-item dt {
+    color: var(--color-texto-claro);
+    font-family: var(--fuente-texto);
+    font-size: var(--tamano-rotulo);
+    line-height: var(--linea-rotulo);
+    letter-spacing: var(--tracking-rotulo);
+    text-transform: uppercase;
+    font-variant-caps: all-small-caps;
+    font-weight: 600;
+  }
+
+  .n4-meta-item dd {
+    margin: 0;
+    color: var(--color-texto-claro);
+    font-family: var(--fuente-texto);
+    font-size: var(--tamano-texto-sm);
+    line-height: var(--linea-texto-sm);
+  }
+
+  /* Columna derecha de medios y contenido */
+  .n4-columna-derecha {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+  }
+
+  .n4-portada-wrap {
+    width: 100%;
+    margin-bottom: var(--espacio-2xl);
+  }
+
+  .n4-portada {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 10;
+    object-fit: cover;
+    display: block;
+  }
+
+  .n4-seccion {
+    position: relative;
+    width: 100%;
+    margin-bottom: var(--espacio-2xl);
+  }
+
+  .n4-columna-lectura {
+    position: relative;
+    max-width: 68ch;
+  }
+
+  .n4-seccion h2,
+  :global(.n4-mdx-cuerpo h2) {
+    font-family: var(--fuente-texto);
+    font-size: var(--tamano-display-md);
+    line-height: var(--linea-display-md);
+    letter-spacing: var(--tracking-display-md);
+    font-weight: 600;
+    color: var(--color-texto-claro);
+    margin: 0 0 var(--espacio-sm) 0;
+  }
+
+  .n4-seccion p,
+  :global(.n4-mdx-cuerpo p) {
+    font-family: var(--fuente-texto);
+    font-size: var(--tamano-texto-md);
+    line-height: var(--linea-texto-md);
+    letter-spacing: var(--tracking-texto-md);
+    color: var(--color-texto-claro);
+    margin: 0 0 var(--espacio-sm) 0;
+    max-width: 68ch;
+  }
+
+  .n4-lista-decisiones {
+    list-style: disc;
+    padding-left: var(--espacio-lg);
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--espacio-xs);
+  }
+
+  .n4-lista-decisiones li {
+    font-family: var(--fuente-texto);
+    font-size: var(--tamano-texto-md);
+    line-height: var(--linea-texto-md);
+    color: var(--color-texto-claro);
+  }
+
+  :global(.n4-mdx-cuerpo) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espacio-2xl);
+  }
+
+  /* Responsive: 1440px y desktop >= 1024px */
+  @media (min-width: 1024px) {
+    .n4-columna-fija {
+      position: fixed;
+      top: var(--espacio-2xl);
+      left: var(--espacio-lg);
+      width: min(34vw, 440px);
+      max-height: calc(100vh - var(--espacio-2xl) * 2);
+      overflow-y: auto;
+      z-index: var(--z-hud);
+    }
+
+    .n4-columna-derecha {
+      margin-left: max(42vw, 600px);
+      width: calc(100% - max(42vw, 600px));
+      max-width: 860px;
+    }
+  }
+
+  /* Responsive: pantallas menores a 1024px (apilado vertical) */
+  @media (max-width: 1023px) {
+    .n4-columna-fija {
+      position: static;
+      width: 100%;
+      margin-bottom: var(--espacio-2xl);
+    }
+
+    .n4-columna-derecha {
+      margin-left: 0;
+      width: 100%;
+    }
+  }
+</style>

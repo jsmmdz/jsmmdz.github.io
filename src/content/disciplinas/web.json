@@ -1,0 +1,10 @@
+{
+  "slug": "web",
+  "nombre": "Diseño web",
+  "orden": 1,
+  "acento": "#1C3F94",
+  "fondoMenu": "#AFB6CD",
+  "videoOutfit": "transiciones/t1-azul-ambar-atras.mp4",
+  "poster": "../../assets/disciplinas/web-poster.jpg",
+  "texturaCilindro": "../../assets/disciplinas/web-textura.webp"
+}

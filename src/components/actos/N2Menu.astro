@@ -1,0 +1,892 @@
+---
+import { getCollection } from 'astro:content';
+import { n2 } from '@/data/n2';
+import { conBase } from '@/lib/rutas';
+
+const disciplinas = (await getCollection('disciplinas')).sort((a, b) => a.data.orden - b.data.orden);
+const todosProyectos = await getCollection('proyectos');
+const disciplinasConMundo = new Set(
+  todosProyectos.map((p) =>
+    typeof p.data.disciplina === 'object' && 'id' in p.data.disciplina
+      ? (p.data.disciplina as { id: string }).id
+      : String(p.data.disciplina)
+  )
+);
+
+const metadatosDisciplinas = disciplinas.map((d) => ({
+  slug: d.data.slug,
+  nombre: d.data.nombre,
+  orden: d.data.orden,
+  acento: d.data.acento,
+  fondoMenu: d.data.fondoMenu,
+  videoOutfit: d.data.videoOutfit,
+  posterSrc: d.data.poster.src,
+  texturaSrc: d.data.texturaCilindro.src,
+  tieneMundo: disciplinasConMundo.has(d.data.slug),
+}));
+
+const primeraDisciplina = metadatosDisciplinas[0];
+---
+
+<section
+  id="act-n2"
+  class="n2-seccion"
+  aria-label="Menú circular de disciplinas"
+  data-level="N2"
+  data-n2-activa={primeraDisciplina.slug}
+  data-n2-estado="reposo"
+  data-angulo="0.00"
+  data-cilindro="371,346,698,67"
+>
+  <!-- Animación de fondo prerenderizada: punto de montaje vacío (Decisión 9) -->
+  <div data-n2-fondo-animado aria-hidden="true" class="n2-fondo-animado"></div>
+
+  <!-- Menú accesible nav[data-n2-menu] para teclado y lectores de pantalla -->
+  <nav data-n2-menu aria-label="Selección de disciplina" class="n2-menu-accesible">
+    {metadatosDisciplinas.map((disc, idx) => (
+      <button
+        type="button"
+        data-n2-ir={disc.slug}
+        aria-current={idx === 0 ? 'true' : 'false'}
+        class="n2-btn-ir tipo-rotulo"
+      >
+        {disc.nombre}
+      </button>
+    ))}
+  </nav>
+
+  <!-- Titular tipográfico gigante detrás del cilindro (B1, T21 § 3) -->
+  <h1 data-n2-titular class="n2-titular registro-display" style="opacity: 0;">
+    {n2.titular}
+  </h1>
+
+  <!-- Control de disciplina centrado debajo del reflejo (Decisión 1) -->
+  <div data-n2-control data-disciplina={primeraDisciplina.slug} class="n2-control">
+    <img
+      id="n2-control-thumb"
+      src={primeraDisciplina.posterSrc}
+      alt={`Miniatura de outfit para ${primeraDisciplina.nombre}`}
+      data-disciplina={primeraDisciplina.slug}
+      class="n2-control-thumb"
+      width="36"
+      height="36"
+    />
+    <span id="n2-control-nombre" class="n2-control-nombre tipo-rotulo">
+      {primeraDisciplina.nombre}
+    </span>
+    <div class="n2-control-flechas">
+      <button
+        type="button"
+        data-n2-anterior
+        aria-label="Disciplina anterior"
+        class="n2-control-btn tipo-rotulo"
+      >
+        &larr;
+      </button>
+      <button
+        type="button"
+        data-n2-siguiente
+        aria-label="Disciplina siguiente"
+        class="n2-control-btn tipo-rotulo"
+      >
+        &rarr;
+      </button>
+    </div>
+    <div id="n2-control-accion" class="n2-control-accion">
+      {primeraDisciplina.tieneMundo ? (
+        <a
+          data-n2-entrar
+          href={conBase(`${primeraDisciplina.slug}/`)}
+          class="n2-control-link tipo-rotulo"
+          aria-label={`Entrar al mundo de ${primeraDisciplina.nombre}`}
+        >
+          Entrar al mundo de {primeraDisciplina.nombre}
+        </a>
+      ) : (
+        <span class="n2-control-proximamente tipo-rotulo">
+          Próximamente
+        </span>
+      )}
+    </div>
+  </div>
+
+  <!-- HUD de N2: cuatro esquinas y regla de progreso -->
+  <aside data-n2-hud class="n2-hud" aria-label="Información y navegación de N2">
+    <div class="n2-hud-esquina n2-hud-arriba-izq">
+      <span class="n2-marca tipo-rotulo">{n2.marca}</span>
+    </div>
+
+    <div class="n2-hud-centro-arriba">
+      <div data-n2-regla class="n2-regla">
+        {metadatosDisciplinas.map((disc, idx) => (
+          <span
+            data-n2-marca
+            data-slug={disc.slug}
+            aria-current={idx === 0 ? 'true' : 'false'}
+            class="n2-marca-progreso"
+          ></span>
+        ))}
+      </div>
+    </div>
+
+    <div class="n2-hud-esquina n2-hud-abajo-izq">
+      <p class="n2-instruccion tipo-rotulo">{n2.instruccion}</p>
+    </div>
+
+    <div class="n2-hud-esquina n2-hud-abajo-der">
+      <a data-n2-cta href={n2.cta.href} class="n2-cta tipo-rotulo">
+        {n2.cta.texto}
+      </a>
+    </div>
+  </aside>
+
+  <!-- Metadatos de disciplinas para el script del cliente -->
+  <script
+    id="n2-meta"
+    type="application/json"
+    set:html={JSON.stringify(metadatosDisciplinas)}
+  />
+</section>
+
+<style>
+  :global(body:not([data-current-level="N2"]) [data-n2-hud]),
+  :global(body:not([data-current-level="N2"]) [data-n2-control]) {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .n2-seccion {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    min-height: 100%;
+    overflow: hidden;
+    user-select: none;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .n2-fondo-animado {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Menú accesible discreto */
+  .n2-menu-accesible {
+    position: absolute;
+    top: var(--espacio-sm);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: var(--espacio-xs);
+    z-index: var(--z-hud);
+  }
+
+  .n2-btn-ir {
+    background: transparent;
+    border-width: 0;
+    padding: var(--espacio-3xs) var(--espacio-2xs);
+    color: var(--texto-activo);
+    cursor: pointer;
+    opacity: 0.001;
+    transition: opacity var(--duracion-corta) var(--curva-entrada);
+  }
+
+  .n2-btn-ir:hover,
+  .n2-btn-ir:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--color-foco);
+    outline-offset: 2px;
+  }
+
+  /* Titular tipográfico gigante detrás del cilindro (B1, T21 § 3) */
+  .n2-titular {
+    position: absolute;
+    top: 75px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90vw;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+    font-family: var(--fuente-display);
+    font-size: clamp(3.5rem, 11vw, 9.5rem);
+    font-weight: 800;
+    line-height: 0.9;
+    letter-spacing: -0.04em;
+    text-transform: uppercase;
+    color: var(--texto-activo);
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* Control de disciplina centrado debajo del reflejo (Decisión 1) */
+  .n2-control {
+    position: absolute;
+    bottom: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: var(--espacio-sm);
+    padding: var(--espacio-2xs) var(--espacio-md);
+    border-radius: var(--radio-full);
+    background-color: rgb(17, 17, 17);
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    color: var(--color-crema-base);
+    z-index: 20;
+    pointer-events: auto;
+  }
+
+  .n2-control-thumb {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    object-position: 15% 45%;
+    display: block;
+  }
+
+  :global([data-n2-control][data-disciplina="web"] .n2-control-thumb),
+  .n2-control-thumb[data-disciplina="web"] {
+    object-position: 15% 45%;
+  }
+
+  :global([data-n2-control][data-disciplina="motion"] .n2-control-thumb),
+  .n2-control-thumb[data-disciplina="motion"] {
+    object-position: 85% 45%;
+  }
+
+  :global([data-n2-control][data-disciplina="3d"] .n2-control-thumb),
+  .n2-control-thumb[data-disciplina="3d"] {
+    object-position: 82% 55%;
+  }
+
+  :global([data-n2-control][data-disciplina="videojuegos"] .n2-control-thumb),
+  .n2-control-thumb[data-disciplina="videojuegos"] {
+    object-position: 18% 45%;
+  }
+
+  :global([data-n2-control][data-disciplina="editorial"] .n2-control-thumb),
+  .n2-control-thumb[data-disciplina="editorial"] {
+    object-position: 80% 50%;
+  }
+
+  .n2-control-nombre {
+    font-family: var(--fuente-texto);
+    font-weight: 600;
+    letter-spacing: var(--tracking-rotulo);
+    text-transform: uppercase;
+    font-variant-caps: all-small-caps;
+    color: var(--color-crema-base);
+    min-width: 110px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .n2-control-flechas {
+    display: flex;
+    align-items: center;
+    gap: var(--espacio-3xs);
+  }
+
+  .n2-control-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: transparent;
+    border: 0;
+    color: var(--color-crema-base);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    line-height: 1;
+    transition: opacity var(--duracion-corta) var(--curva-entrada);
+  }
+
+  .n2-control-btn:hover {
+    opacity: 0.7;
+  }
+
+  .n2-control-btn:focus-visible {
+    outline: 2px solid var(--color-foco);
+    outline-offset: 2px;
+  }
+
+  .n2-control-accion {
+    display: flex;
+    align-items: center;
+  }
+
+  .n2-control-link,
+  :global([data-n2-control] a),
+  :global([data-n2-control] a:visited) {
+    color: var(--color-crema-base);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    font-size: var(--tamano-texto-sm);
+    white-space: nowrap;
+  }
+
+  .n2-control-link:focus-visible {
+    outline: 2px solid var(--color-foco);
+    outline-offset: 2px;
+  }
+
+  .n2-control-proximamente {
+    color: var(--color-texto-atenuado);
+    font-size: var(--tamano-texto-sm);
+    font-style: italic;
+    white-space: nowrap;
+  }
+
+  /* HUD de cuatro esquinas y regla de progreso */
+  .n2-hud {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: var(--z-hud);
+  }
+
+  .n2-hud-esquina {
+    position: absolute;
+    pointer-events: auto;
+  }
+
+  .n2-hud-arriba-izq {
+    top: var(--espacio-lg);
+    left: var(--espacio-lg);
+  }
+
+  .n2-hud-abajo-izq {
+    bottom: var(--espacio-lg);
+    left: var(--espacio-lg);
+  }
+
+  .n2-hud-abajo-der {
+    bottom: var(--espacio-lg);
+    right: var(--espacio-lg);
+  }
+
+  .n2-hud-centro-arriba {
+    position: absolute;
+    top: var(--espacio-lg);
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: auto;
+  }
+
+  .n2-marca,
+  .n2-instruccion,
+  .n2-cta {
+    color: var(--texto-activo);
+    margin: 0;
+    text-decoration: none;
+    display: inline-block;
+  }
+
+  .n2-cta:hover,
+  .n2-cta:focus-visible {
+    outline: 2px solid var(--color-foco);
+    outline-offset: 2px;
+  }
+
+  .n2-regla {
+    display: flex;
+    align-items: center;
+    gap: var(--espacio-xs);
+  }
+
+  .n2-marca-progreso {
+    width: 22px;
+    height: 2px;
+    background: var(--color-texto-atenuado);
+    transition: background var(--duracion-corta) var(--curva-entrada),
+                height var(--duracion-corta) var(--curva-entrada);
+  }
+
+  .n2-marca-progreso[aria-current="true"] {
+    background: var(--texto-activo);
+    height: 3px;
+  }
+
+  @media (max-width: 768px) {
+    .n2-titular {
+      top: 50px;
+      font-size: clamp(2.5rem, 13vw, 4.5rem);
+    }
+    .n2-control {
+      bottom: var(--espacio-md);
+      flex-direction: column;
+      gap: var(--espacio-xs);
+      padding: var(--espacio-xs) var(--espacio-sm);
+    }
+    .n2-hud-arriba-izq,
+    .n2-hud-abajo-izq,
+    .n2-hud-abajo-der {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  import { navigate } from 'astro:transitions/client';
+  import { ORDERED_SLUGS, obtenerClipReposo } from '@/lib/n2/config';
+  import { obtenerNavegacion, transicionConRespaldo } from '@/lib/navigation/instancia';
+  import { conBase, conMedia } from '@/lib/rutas';
+  import { obtenerLenis } from '@/lib/pelicula/lenis';
+  import type { DisciplineSlug } from '@/lib/navigation/types';
+
+  interface DisciplinaItemMeta {
+    slug: string;
+    nombre: string;
+    orden: number;
+    acento: string;
+    fondoMenu: string;
+    videoOutfit: string;
+    posterSrc: string;
+    texturaSrc: string;
+    tieneMundo: boolean;
+  }
+
+  let currentAbortController: AbortController | null = null;
+
+  // Mapa de clips por paso entre disciplinas vecinas
+  const CLIPS_PASOS: Record<string, string | null> = {
+    'web->motion': conMedia('transiciones/t1-azul-ambar-adelante.mp4'),
+    'motion->3d': conMedia('transiciones/t2-ambar-verde-adelante.mp4'),
+    '3d->videojuegos': conMedia('transiciones/t3-verde-rojo-adelante.mp4'),
+    'videojuegos->editorial': conMedia('transiciones/t4-rojo-editorial-adelante.mp4'),
+    'editorial->web': null, // Decisión 7: corte a negro, sin video
+
+    'editorial->videojuegos': conMedia('transiciones/t4-rojo-editorial-atras.mp4'),
+    'videojuegos->3d': conMedia('transiciones/t3-verde-rojo-atras.mp4'),
+    '3d->motion': conMedia('transiciones/t2-ambar-verde-atras.mp4'),
+    'motion->web': conMedia('transiciones/t1-azul-ambar-atras.mp4'),
+    'web->editorial': null, // Decisión 7: corte a negro, sin video
+  };
+
+  function cleanupN2Act() {
+    if (currentAbortController) {
+      currentAbortController.abort();
+      currentAbortController = null;
+    }
+  }
+
+  async function initN2Act() {
+    cleanupN2Act();
+
+    const raiz = document.getElementById('act-n2');
+    if (!raiz) return;
+
+    const abortController = new AbortController();
+    currentAbortController = abortController;
+    const { signal } = abortController;
+
+    const canvasContainer = document.getElementById('webgl-canvas-container');
+    const videoElement = document.getElementById('n2-video') as HTMLVideoElement | null;
+    const pastillaThumb = document.getElementById('n2-control-thumb') as HTMLImageElement | null;
+    const pastillaNombre = document.getElementById('n2-control-nombre');
+    const pastillaAccion = document.getElementById('n2-control-accion');
+    const btnAnterior = raiz.querySelector('button[data-n2-anterior]') as HTMLButtonElement | null;
+    const btnSiguiente = raiz.querySelector('button[data-n2-siguiente]') as HTMLButtonElement | null;
+    const menuBotones = raiz.querySelectorAll('nav[data-n2-menu] [data-n2-ir]');
+    const marcasRegla = raiz.querySelectorAll('[data-n2-marca]');
+
+    const rawMeta = document.getElementById('n2-meta')?.textContent;
+    const metadatos: DisciplinaItemMeta[] = rawMeta ? JSON.parse(rawMeta) : [];
+    const metaMap = new Map<string, DisciplinaItemMeta>(metadatos.map((m) => [m.slug, m]));
+
+    const resolverSlugValido = (candidato: string | null | undefined): DisciplineSlug => {
+      if (candidato && (ORDERED_SLUGS as readonly string[]).includes(candidato)) {
+        return candidato as DisciplineSlug;
+      }
+      return 'web';
+    };
+
+    const hashInicial = window.location.hash.replace('#', '');
+    const navInst = obtenerNavegacion();
+    const estadoNav = navInst.getState();
+    let disciplinaActiva: DisciplineSlug = resolverSlugValido(
+      hashInicial || estadoNav.activeDiscipline || document.body.dataset.discipline || 'web'
+    );
+
+    let angleDegrees = ORDERED_SLUGS.indexOf(disciplinaActiva) * 72;
+    let lastWheelTime = 0;
+    let pointerStartX = 0;
+    let pointerMoved = 0;
+    let isDragging = false;
+
+    // Carga diferida de ThreeSceneManager con dynamic import (compuertas: three fuera del JS inicial de /)
+    const { getThreeSceneManager } = await import('@/lib/three/scene-manager');
+    if (signal.aborted) return;
+
+    const sceneManager = getThreeSceneManager();
+
+    if (canvasContainer) {
+      sceneManager.setupN2Menu(canvasContainer, metadatos, disciplinaActiva, () => {
+        raiz.dataset.n2Estado = 'reposo';
+      });
+    }
+
+    let nivelAnterior = document.body.dataset.currentLevel ?? 'N0';
+    const desuscribirNav = navInst.subscribe((estado) => {
+      if (estado.currentLevel === 'N2' && (nivelAnterior === 'N1' || nivelAnterior === 'N0')) {
+        sceneManager.startRingToCylinderAnimation();
+      } else if (estado.currentLevel === 'N1') {
+        sceneManager.prepareRingInitialState();
+      }
+      nivelAnterior = estado.currentLevel;
+    });
+    signal.addEventListener('abort', () => desuscribirNav());
+
+    const fijarVideoReposo = (slug: DisciplineSlug) => {
+      if (!videoElement) return;
+      const meta = metaMap.get(slug);
+      if (meta?.posterSrc) {
+        videoElement.poster = meta.posterSrc;
+      }
+      const clip = obtenerClipReposo(slug);
+      videoElement.pause();
+      const targetSrc = clip.src;
+      const currentSrc = videoElement.currentSrc || videoElement.src;
+      if (!currentSrc.includes(targetSrc.replace(/^.*\/\/[^/]+/, ''))) {
+        videoElement.src = targetSrc;
+        videoElement.load();
+      }
+      if (clip.seekEnd) {
+        if (videoElement.duration && !Number.isNaN(videoElement.duration)) {
+          videoElement.currentTime = Math.max(0, videoElement.duration - 0.05);
+        } else {
+          videoElement.addEventListener(
+            'loadedmetadata',
+            () => {
+              if (videoElement.duration) {
+                videoElement.currentTime = Math.max(0, videoElement.duration - 0.05);
+              }
+            },
+            { once: true }
+          );
+        }
+      } else {
+        videoElement.currentTime = 0;
+      }
+    };
+
+    const actualizarControlUI = (slug: DisciplineSlug) => {
+      const meta = metaMap.get(slug);
+      if (!meta) return;
+
+      const controlEl = raiz.querySelector('[data-n2-control]') as HTMLElement | null;
+      if (controlEl) {
+        controlEl.setAttribute('data-disciplina', slug);
+      }
+
+      if (pastillaNombre) {
+        pastillaNombre.textContent = meta.nombre;
+      }
+      if (pastillaThumb) {
+        pastillaThumb.src = meta.posterSrc;
+        pastillaThumb.alt = `Miniatura de outfit para ${meta.nombre}`;
+        pastillaThumb.setAttribute('data-disciplina', slug);
+      }
+      if (pastillaAccion) {
+        if (meta.tieneMundo) {
+          pastillaAccion.innerHTML = `<a data-n2-entrar href="${conBase(`${slug}/`)}" class="n2-control-link tipo-rotulo" aria-label="Entrar al mundo de ${meta.nombre}">Entrar al mundo de ${meta.nombre}</a>`;
+          const enlace = pastillaAccion.querySelector('a');
+          if (enlace) {
+            enlace.addEventListener('click', (e) => {
+              e.preventDefault();
+              entrarANivel3();
+            });
+          }
+        } else {
+          pastillaAccion.innerHTML = `<span class="n2-control-proximamente tipo-rotulo">Próximamente</span>`;
+        }
+      }
+
+      menuBotones.forEach((btn) => {
+        const bSlug = btn.getAttribute('data-n2-ir');
+        btn.setAttribute('aria-current', bSlug === slug ? 'true' : 'false');
+      });
+
+      marcasRegla.forEach((marca) => {
+        const mSlug = marca.getAttribute('data-slug');
+        marca.setAttribute('aria-current', mSlug === slug ? 'true' : 'false');
+      });
+
+      raiz.dataset.n2Activa = slug;
+    };
+
+    const entrarANivel3 = () => {
+      const meta = metaMap.get(disciplinaActiva);
+      if (!meta || !meta.tieneMundo) return;
+      transicionConRespaldo({ type: 'ENTER_WORLD', discipline: disciplinaActiva }, 1200);
+      navigate(conBase(`${disciplinaActiva}/`));
+    };
+
+    const cambiarADisciplina = (destinoSlug: DisciplineSlug, dir: 'next' | 'prev') => {
+      if (destinoSlug === disciplinaActiva) return;
+
+      const desdeSlug = disciplinaActiva;
+      disciplinaActiva = destinoSlug;
+      raiz.dataset.n2Estado = 'transicion';
+
+      window.history.replaceState(null, '', conBase(`#${destinoSlug}`));
+
+      // Giro medido de Aikawa
+      if (dir === 'next') {
+        angleDegrees += 72;
+      } else {
+        angleDegrees -= 72;
+      }
+
+      sceneManager.rotateN2ToAngle(angleDegrees, () => {
+        actualizarControlUI(disciplinaActiva);
+        fijarVideoReposo(disciplinaActiva);
+        raiz.dataset.n2Estado = 'reposo';
+        const nav = obtenerNavegacion();
+        nav.completeTransition();
+      });
+
+      // Reproducción del clip de video correspondiente al paso
+      const pasoKey = `${desdeSlug}->${destinoSlug}`;
+      let clipApropiado: string | null = null;
+
+      if (pasoKey in CLIPS_PASOS) {
+        clipApropiado = CLIPS_PASOS[pasoKey];
+      } else {
+        // En saltos rápidos se toma el último paso que entra al destino (Decisión 5)
+        const idxDest = ORDERED_SLUGS.indexOf(destinoSlug);
+        if (dir === 'next') {
+          const prevIdx = (idxDest - 1 + ORDERED_SLUGS.length) % ORDERED_SLUGS.length;
+          const clave = `${ORDERED_SLUGS[prevIdx]}->${destinoSlug}`;
+          clipApropiado = CLIPS_PASOS[clave] ?? null;
+        } else {
+          const nextIdx = (idxDest + 1) % ORDERED_SLUGS.length;
+          const clave = `${ORDERED_SLUGS[nextIdx]}->${destinoSlug}`;
+          clipApropiado = CLIPS_PASOS[clave] ?? null;
+        }
+      }
+
+      let sincronizado = false;
+      const sincronizar = () => {
+        if (sincronizado) return;
+        sincronizado = true;
+        const nav = obtenerNavegacion();
+        nav.completeTransition();
+        nav.transition({ type: 'CYCLE_DISCIPLINE', direction: dir, targetDiscipline: destinoSlug });
+        document.body.dataset.discipline = destinoSlug;
+      };
+
+      if (videoElement && clipApropiado) {
+        videoElement.pause();
+        videoElement.muted = true;
+        videoElement.defaultMuted = true;
+        videoElement.src = clipApropiado;
+        videoElement.currentTime = 0;
+        videoElement.addEventListener('playing', sincronizar, { once: true });
+        const playPromise = videoElement.play();
+        if (playPromise) {
+          playPromise.catch(() => {
+            sincronizar();
+          });
+        }
+        setTimeout(sincronizar, 400);
+      } else {
+        sincronizar();
+        if (videoElement) {
+          fijarVideoReposo(destinoSlug);
+        }
+      }
+    };
+
+    const irSiguiente = () => {
+      const idx = ORDERED_SLUGS.indexOf(disciplinaActiva);
+      const siguienteIdx = (idx + 1) % ORDERED_SLUGS.length;
+      cambiarADisciplina(ORDERED_SLUGS[siguienteIdx], 'next');
+    };
+
+    const irAnterior = () => {
+      const idx = ORDERED_SLUGS.indexOf(disciplinaActiva);
+      const anteriorIdx = (idx - 1 + ORDERED_SLUGS.length) % ORDERED_SLUGS.length;
+      cambiarADisciplina(ORDERED_SLUGS[anteriorIdx], 'prev');
+    };
+
+    // Inicializar estado del menú y cuadro de video en reposo
+    actualizarControlUI(disciplinaActiva);
+    fijarVideoReposo(disciplinaActiva);
+
+    // Eventos de botones de control
+    if (btnAnterior) {
+      btnAnterior.addEventListener('click', () => irAnterior(), { signal });
+    }
+    if (btnSiguiente) {
+      btnSiguiente.addEventListener('click', () => irSiguiente(), { signal });
+    }
+
+    menuBotones.forEach((btn) => {
+      const slug = btn.getAttribute('data-n2-ir');
+      if (slug && (ORDERED_SLUGS as readonly string[]).includes(slug)) {
+        btn.addEventListener(
+          'click',
+          () => {
+            const idxActual = ORDERED_SLUGS.indexOf(disciplinaActiva);
+            const idxDest = ORDERED_SLUGS.indexOf(slug as DisciplineSlug);
+            const dir = idxDest >= idxActual ? 'next' : 'prev';
+            cambiarADisciplina(slug as DisciplineSlug, dir);
+          },
+          { signal }
+        );
+      }
+    });
+
+    // Control por teclado (flechas izquierda/derecha)
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        if (document.body.dataset.currentLevel !== 'N2') return;
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          irSiguiente();
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          irAnterior();
+        }
+      },
+      { signal }
+    );
+
+    // Rueda del mouse: la rueda NO gira el cilindro (decisión del autor, 2026-09-28)
+    // Hacia arriba vuelve al home desde cualquier disciplina; hacia abajo no cambia de disciplina
+    window.addEventListener(
+      'wheel',
+      (e) => {
+        if (document.body.dataset.currentLevel !== 'N2') return;
+        const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+        if (Math.abs(delta) < 20) return;
+
+        const now = performance.now();
+        if (now - lastWheelTime < 350) return;
+        lastWheelTime = now;
+
+        if (delta < 0) {
+          // Rueda hacia arriba: vuelve al home desde cualquier disciplina (decisión 2026-09-28)
+          e.preventDefault();
+          const lenis = obtenerLenis();
+          if (lenis) {
+            lenis.scrollTo(0, { duration: 1.0 });
+          } else {
+            const actN1 = document.getElementById('act-n1');
+            if (actN1) {
+              actN1.scrollIntoView({ behavior: 'smooth' });
+            } else {
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+          }
+        } else {
+          // Rueda hacia abajo: no gira el cilindro (2026-09-28)
+          e.preventDefault();
+        }
+      },
+      { passive: false, signal }
+    );
+
+    // Arrastre horizontal y clic sobre el cilindro WebGL
+    window.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (document.body.dataset.currentLevel !== 'N2') return;
+        const target = e.target as HTMLElement | null;
+        if (target && target.closest('button, a, input, textarea, select')) return;
+
+        isDragging = true;
+        pointerStartX = e.clientX;
+        pointerMoved = 0;
+      },
+      { signal }
+    );
+
+    window.addEventListener(
+      'pointermove',
+      (e) => {
+        if (!isDragging) return;
+        pointerMoved += Math.abs(e.movementX || e.clientX - pointerStartX);
+      },
+      { signal }
+    );
+
+    window.addEventListener(
+      'pointerup',
+      (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        const deltaX = e.clientX - pointerStartX;
+
+        if (pointerMoved >= 20) {
+          if (deltaX < -30) {
+            irSiguiente();
+          } else if (deltaX > 30) {
+            irAnterior();
+          }
+        } else {
+          // Si fue un clic simple, verificar si cayó dentro del cilindro proyectado
+          const c = sceneManager.getCylinderBox();
+          if (
+            e.clientX >= c.x &&
+            e.clientX <= c.x + c.ancho &&
+            e.clientY >= c.y &&
+            e.clientY <= c.y + c.alto
+          ) {
+            entrarANivel3();
+          }
+        }
+      },
+      { signal }
+    );
+
+    window.addEventListener(
+      'hashchange',
+      () => {
+        if (document.body.dataset.currentLevel !== 'N2') return;
+        const nuevoHash = window.location.hash.replace('#', '');
+        if ((ORDERED_SLUGS as readonly string[]).includes(nuevoHash) && nuevoHash !== disciplinaActiva) {
+          const idxActual = ORDERED_SLUGS.indexOf(disciplinaActiva);
+          const idxDest = ORDERED_SLUGS.indexOf(nuevoHash as DisciplineSlug);
+          const dir = idxDest >= idxActual ? 'next' : 'prev';
+          cambiarADisciplina(nuevoHash as DisciplineSlug, dir);
+        }
+      },
+      { signal }
+    );
+  }
+
+  // Ciclo de vida con Astro ClientRouter: astro:page-load se dispara en carga inicial y swap
+  let n2ActInitialized = false;
+
+  document.addEventListener('astro:page-load', () => {
+    initN2Act();
+    n2ActInitialized = true;
+  });
+
+  document.addEventListener('astro:before-swap', () => {
+    cleanupN2Act();
+    n2ActInitialized = false;
+  });
+
+  // Respaldo solo si se carga sin Astro ClientRouter activo
+  if (!n2ActInitialized && document.readyState === 'complete') {
+    initN2Act();
+    n2ActInitialized = true;
+  }
+</script>

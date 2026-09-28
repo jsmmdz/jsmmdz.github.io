@@ -1,0 +1,470 @@
+---
+/**
+ * Componente del Acto N3 — Plano Infinito y Mundo de la Disciplina.
+ *
+ * Muestra las piezas de la disciplina activa sobre el plano infinito WebGL (Landberg).
+ * Cada pieza presenta su título y enlace accesible debajo de ella proyectados desde Three.js.
+ * HUD en las esquinas: volver (arriba-izq), disciplina (arriba-der), cantidad (abajo-der).
+ */
+import type { CollectionEntry } from 'astro:content';
+import { conBase } from '@/lib/rutas';
+
+interface Props {
+  disciplina?: CollectionEntry<'disciplinas'>['data'];
+  proyectos?: CollectionEntry<'proyectos'>[];
+}
+
+const { disciplina, proyectos = [] } = Astro.props;
+const volverUrl = disciplina ? conBase(`#${disciplina.slug}`) : conBase('');
+---
+
+{disciplina ? (
+  <section
+    id="act-n3"
+    class="n3-escenario"
+    aria-label="Plano infinito de proyectos"
+    data-level="N3"
+    data-discipline={disciplina.slug}
+    data-velocidad="0"
+    data-curvatura="0"
+  >
+    <!-- HUD en las tres esquinas (spec § 5 y Landberg-01) -->
+    <aside data-n3-hud class="n3-hud" aria-label="Navegación del mundo">
+      <div data-esquina="arriba-izquierda" class="n3-esquina n3-esq-arriba-izq">
+        <a href={volverUrl} data-n3-volver class="n3-hud-volver tipo-rotulo">
+          <span class="n3-flecha" aria-hidden="true">&larr;</span> VOLVER
+        </a>
+      </div>
+
+      <div data-esquina="arriba-derecha" class="n3-esquina n3-esq-arriba-der">
+        <span class="n3-hud-disciplina tipo-rotulo">{disciplina.nombre}</span>
+      </div>
+
+      <div data-esquina="abajo-derecha" class="n3-esquina n3-esq-abajo-der">
+        <span class="n3-hud-cantidad tipo-rotulo">
+          {`${proyectos.length} ${proyectos.length === 1 ? 'PIEZA' : 'PIEZAS'}`}
+        </span>
+      </div>
+    </aside>
+
+    <!-- Etiquetas proyectadas bajo cada pantalla 3D visible (sin tarjeta ni fondo, R19) -->
+    <div class="n3-etiquetas-plano" data-n3-etiquetas aria-label="Proyectos de la disciplina">
+      {proyectos.map((p) => {
+        const casoUrl = conBase(`${disciplina.slug}/${p.data.slug}/`);
+        return (
+          <div
+            class="n3-etiqueta-pieza"
+            id={`n3-label-${p.data.slug}`}
+            data-slug={p.data.slug}
+            style="left: 50%; top: 78%;"
+          >
+            <span class="n3-pieza-titulo tipo-display">
+              {p.data.titulo}
+            </span>
+            <a
+              href={casoUrl}
+              class="n3-pieza-enlace tipo-rotulo"
+              data-slug={p.data.slug}
+              aria-label={`Entrar al caso de estudio: ${p.data.titulo}`}
+            >
+              Entrar al caso <span aria-hidden="true">&rarr;</span>
+            </a>
+          </div>
+        );
+      })}
+    </div>
+
+    <!-- Datos estructurados espaciales para inicialización 3D -->
+    <script
+      id="n3-spatial-data"
+      type="application/json"
+      set:html={JSON.stringify(
+        proyectos.map((p, index) => ({
+          id: p.data.slug,
+          slug: p.data.slug,
+          titulo: p.data.titulo,
+          disciplinaSlug: disciplina.slug,
+          coords: {
+            x: (p.data.orden ?? (index + 1)) * 4.4 - 4.4,
+            y: 0,
+            z: 0,
+          },
+          assetType: 'imagen',
+          assetSrc: p.data.portada.src,
+          poster: p.data.portada.src,
+          href: conBase(`${disciplina.slug}/${p.data.slug}/`),
+        }))
+      )}
+    />
+  </section>
+) : (
+  <section id="act-n3" class="n3-escenario" data-level="N3" aria-hidden="true"></section>
+)}
+
+<script>
+  import { navigate } from 'astro:transitions/client';
+  import { transicionConRespaldo } from '@/lib/navigation/instancia';
+  import type { ThreeSceneManager } from '@/lib/three/scene-manager';
+
+  let sceneManagerInstance: ThreeSceneManager | null = null;
+  let escapeHandler: ((e: KeyboardEvent) => void) | null = null;
+
+  function initN3Act() {
+    const act = document.getElementById('act-n3');
+    if (!act || act.getAttribute('aria-hidden') === 'true') return;
+
+    const volverBtn = act.querySelector<HTMLAnchorElement>('[data-n3-volver]');
+    const canvasContainer = document.getElementById('webgl-canvas-container');
+    const labelsContainer = act.querySelector<HTMLElement>('[data-n3-etiquetas]');
+
+    const salirAlMenu = () => {
+      if (!volverBtn) return;
+      transicionConRespaldo({ type: 'BACK_BUTTON_CLICK' }, 1200);
+      navigate(volverBtn.href);
+    };
+
+    if (volverBtn) {
+      volverBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        salirAlMenu();
+      });
+    }
+
+    if (escapeHandler) {
+      window.removeEventListener('keydown', escapeHandler);
+    }
+    escapeHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (sceneManagerInstance && sceneManagerInstance.isExpanding) {
+          sceneManagerInstance.cancelExpansion();
+          act.classList.remove('n3-expandiendo');
+          return;
+        }
+        salirAlMenu();
+      }
+    };
+    window.addEventListener('keydown', escapeHandler);
+
+    // Cancelar expansión si el usuario usa la navegación del navegador
+    const popstateHandler = () => {
+      if (sceneManagerInstance && sceneManagerInstance.isExpanding) {
+        sceneManagerInstance.cancelExpansion();
+        act.classList.remove('n3-expandiendo');
+      }
+    };
+    window.addEventListener('popstate', popstateHandler, { once: true });
+
+    if (labelsContainer) {
+      labelsContainer.addEventListener('click', (e) => {
+        const link = (e.target as HTMLElement)?.closest<HTMLAnchorElement>('.n3-pieza-enlace');
+        if (link && link.getAttribute('href') && link.getAttribute('href') !== '#') {
+          e.preventDefault();
+          const slug = link.dataset.slug;
+          if (slug) {
+            try {
+              sessionStorage.setItem('n3_active_project', slug);
+            } catch {}
+            act.classList.add('n3-expandiendo');
+            const reduced = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (reduced || !sceneManagerInstance) {
+              transicionConRespaldo({ type: 'SELECT_PROJECT', projectSlug: slug }, 1200);
+              navigate(link.href);
+              return;
+            }
+
+            sceneManagerInstance
+              .expandProjectScreen(slug, 600)
+              .then(() => {
+                transicionConRespaldo({ type: 'SELECT_PROJECT', projectSlug: slug }, 1200);
+                navigate(link.href);
+              })
+              .catch(() => {
+                act.classList.remove('n3-expandiendo');
+              });
+          } else {
+            navigate(link.href);
+          }
+        }
+      });
+    }
+
+    // Centrado y foco preliminar si venimos de un caso de estudio
+    let returnSlugSync: string | null = null;
+    try {
+      returnSlugSync = sessionStorage.getItem('n3_active_project');
+    } catch {}
+    if (returnSlugSync) {
+      const targetLabel = document.getElementById(`n3-label-${returnSlugSync}`);
+      if (targetLabel) {
+        targetLabel.style.left = '50%';
+      }
+      const targetLink = act.querySelector<HTMLAnchorElement>(`a.n3-pieza-enlace[data-slug="${returnSlugSync}"]`);
+      if (targetLink) {
+        targetLink.focus();
+      }
+    }
+
+    // Inicialización dinámica de Three.js
+    import('@/lib/three/scene-manager')
+      .then(({ getThreeSceneManager }) => {
+        const manager = getThreeSceneManager();
+        sceneManagerInstance = manager;
+
+        if (!canvasContainer) return;
+
+        const mounted = manager.mount(
+          canvasContainer,
+          () => {
+            act.classList.add('n3-sin-webgl');
+          },
+          (href: string) => {
+            navigate(href);
+          }
+        );
+
+        if (!mounted) {
+          act.classList.add('n3-sin-webgl');
+          return;
+        }
+
+        const dataEl = document.getElementById('n3-spatial-data');
+        let items = [];
+        if (dataEl && dataEl.textContent) {
+          try {
+            items = JSON.parse(dataEl.textContent);
+          } catch {
+            items = [];
+          }
+        }
+
+        const disc = document.body.dataset.discipline || 'web';
+        manager.swapDisciplineContent(disc, items);
+
+        // Si venimos de un caso de estudio, centrar en 3D y enfocar con teclado
+        let returnSlug: string | null = null;
+        try {
+          returnSlug = sessionStorage.getItem('n3_active_project');
+        } catch {
+          returnSlug = null;
+        }
+
+        if (returnSlug) {
+          manager.centerOnSlug(returnSlug);
+          const aplicarFoco = () => {
+            const targetLink = act.querySelector<HTMLAnchorElement>(`a.n3-pieza-enlace[data-slug="${returnSlug}"]`);
+            if (targetLink) {
+              targetLink.focus();
+            }
+          };
+          aplicarFoco();
+          requestAnimationFrame(aplicarFoco);
+          setTimeout(aplicarFoco, 80);
+          setTimeout(aplicarFoco, 250);
+          setTimeout(() => {
+            try {
+              sessionStorage.removeItem('n3_active_project');
+            } catch {}
+          }, 1200);
+        }
+      })
+      .catch(() => {
+        act.classList.add('n3-sin-webgl');
+      });
+  }
+
+  document.addEventListener('astro:page-load', () => {
+    if (document.body.dataset.currentLevel === 'N3') {
+      initN3Act();
+    }
+  });
+
+  document.addEventListener('astro:before-swap', () => {
+    if (escapeHandler) {
+      window.removeEventListener('keydown', escapeHandler);
+      escapeHandler = null;
+    }
+    if (sceneManagerInstance) {
+      if (sceneManagerInstance.isExpanding) {
+        sceneManagerInstance.cancelExpansion();
+      }
+      sceneManagerInstance.pause();
+      sceneManagerInstance.setN3Active(false);
+    }
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initN3Act);
+  } else {
+    initN3Act();
+  }
+</script>
+
+<style>
+  .n3-escenario {
+    position: relative;
+    width: 100%;
+    min-height: 100vh;
+    background: transparent;
+    color: var(--color-texto-claro);
+    box-sizing: border-box;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  /* HUD en las esquinas */
+  .n3-hud {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-hud);
+    pointer-events: none;
+  }
+
+  .n3-esquina {
+    position: fixed;
+    display: flex;
+    align-items: center;
+    pointer-events: auto;
+  }
+
+  .n3-esq-arriba-izq {
+    top: var(--espacio-lg);
+    left: var(--espacio-lg);
+  }
+
+  .n3-esq-arriba-der {
+    top: var(--espacio-lg);
+    right: var(--espacio-lg);
+  }
+
+  .n3-esq-abajo-der {
+    bottom: var(--espacio-lg);
+    right: var(--espacio-lg);
+  }
+
+  .n3-hud-volver {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    min-width: 32px;
+    box-sizing: border-box;
+    gap: var(--espacio-2xs);
+    color: var(--color-texto-claro);
+    text-decoration: none;
+    padding: var(--espacio-2xs) var(--espacio-xs);
+    transition: color var(--duracion-corta) var(--curva-entrada);
+  }
+
+  .n3-hud-volver:hover {
+    color: var(--color-texto-claro);
+    text-decoration: underline;
+  }
+
+  .n3-hud-volver:focus-visible {
+    outline: 2px solid var(--color-texto-claro);
+    outline-offset: 2px;
+  }
+
+  .n3-hud-disciplina,
+  .n3-hud-cantidad {
+    color: var(--color-texto-claro);
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+  }
+
+  /* Contenedor de etiquetas proyectadas bajo el plano 3D */
+  .n3-etiquetas-plano {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-stage);
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .n3-etiqueta-pieza {
+    position: absolute;
+    transform: translateX(-50%);
+    display: flex;
+    /* En fila: en columna, el enlace quedaba fuera de la ventana a 1440×900 (T22 · E1, T23 · E2). */
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: center;
+    gap: var(--espacio-sm);
+    text-align: center;
+    pointer-events: auto;
+    background: transparent;
+    border-width: 0;
+    width: max-content;
+    max-width: 80vw;
+  }
+
+  .n3-pieza-titulo {
+    font-size: var(--tamano-texto-lg);
+    line-height: var(--linea-texto-lg);
+    color: var(--color-texto-claro);
+    margin: 0;
+    text-align: center;
+  }
+
+  .n3-pieza-enlace {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--espacio-2xs);
+    color: var(--color-texto-claro);
+    text-decoration: none;
+    min-height: 44px;
+    padding: var(--espacio-2xs) var(--espacio-sm);
+    font-size: var(--tamano-rotulo);
+    letter-spacing: var(--tracking-rotulo);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-variant-caps: all-small-caps;
+    border-width: 0;
+    background: transparent;
+    transition: color var(--duracion-corta) var(--curva-entrada);
+  }
+
+  .n3-pieza-enlace:hover {
+    color: var(--color-texto-claro);
+    text-decoration: underline;
+  }
+
+  .n3-pieza-enlace:focus-visible {
+    outline: 2px solid var(--color-texto-claro);
+    outline-offset: 2px;
+  }
+
+  /* Respaldo accesible sin WebGL */
+  .n3-sin-webgl {
+    background-color: var(--color-negro);
+    pointer-events: auto;
+  }
+
+  .n3-sin-webgl .n3-etiquetas-plano {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: var(--espacio-3xl) var(--espacio-lg);
+    gap: var(--espacio-2xl);
+  }
+
+  .n3-sin-webgl .n3-etiqueta-pieza {
+    position: static;
+    transform: none;
+    display: flex !important;
+  }
+
+  /* Expansión de pieza hacia el caso de estudio (N4) */
+  .n3-escenario.n3-expandiendo .n3-hud,
+  .n3-escenario.n3-expandiendo .n3-etiquetas-plano {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--duracion-corta) var(--curva-entrada);
+  }
+</style>

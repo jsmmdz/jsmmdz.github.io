@@ -1,0 +1,10 @@
+{
+  "slug": "3d",
+  "nombre": "3D",
+  "orden": 3,
+  "acento": "#046A38",
+  "fondoMenu": "#A4C4AD",
+  "videoOutfit": "transiciones/t2-ambar-verde-adelante.mp4",
+  "poster": "../../assets/disciplinas/3d-poster.jpg",
+  "texturaCilindro": "../../assets/disciplinas/3d-textura.webp"
+}

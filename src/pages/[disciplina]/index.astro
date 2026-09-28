@@ -1,0 +1,47 @@
+---
+import FilmLayout from '@/layouts/FilmLayout.astro';
+import N3PlanoInfinito from '@/components/actos/N3PlanoInfinito.astro';
+import { getCollection } from 'astro:content';
+
+export async function getStaticPaths() {
+  const todasDisciplinas = await getCollection('disciplinas');
+  const todosProyectos = await getCollection('proyectos');
+
+  // Solo las disciplinas con al menos un caso tienen mundo: hoy web, motion y 3d
+  const conCasos = todasDisciplinas.filter((disc) =>
+    todosProyectos.some((p) => {
+      const discSlug =
+        typeof p.data.disciplina === 'object' && 'id' in p.data.disciplina
+          ? (p.data.disciplina as { id: string }).id
+          : String(p.data.disciplina);
+      return discSlug === disc.data.slug || discSlug === disc.id;
+    })
+  );
+
+  return conCasos.map((disciplina) => ({
+    params: { disciplina: disciplina.data.slug },
+    props: { disciplina: disciplina.data },
+  }));
+}
+
+const { disciplina } = Astro.props;
+const todosProyectos = await getCollection('proyectos');
+const proyectos = todosProyectos
+  .filter((p) => {
+    const discSlug =
+      typeof p.data.disciplina === 'object' && 'id' in p.data.disciplina
+        ? (p.data.disciplina as { id: string }).id
+        : String(p.data.disciplina);
+    return discSlug === disciplina.slug;
+  })
+  .sort((a, b) => a.data.orden - b.data.orden);
+---
+
+<FilmLayout
+  title={`${disciplina.nombre} — JSMMDZ`}
+  description={`Mundo interactivo de la disciplina ${disciplina.nombre}`}
+  initialLevel="N3"
+  initialDiscipline={disciplina.slug}
+>
+  <N3PlanoInfinito disciplina={disciplina} proyectos={proyectos} />
+</FilmLayout>

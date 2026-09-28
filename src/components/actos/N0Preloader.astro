@@ -1,0 +1,526 @@
+---
+/**
+ * N0Preloader.astro — Preloader cinemático calcado de Aikawa (spec § 3, § 4.0, § 7).
+ * Entrada de la película: sobre crema de la casa, trazo amatista en círculo,
+ * texturas de las cinco disciplinas escalonadas, giro lento en reposo y carga real
+ * garantizada con tiempo máximo de 6 s.
+ */
+import { getCollection } from 'astro:content';
+import { home } from '@/data/home';
+import { conMedia } from '@/lib/rutas';
+import { calcularSectorCorona } from '@/lib/n0/geometria';
+
+const disciplinas = (await getCollection('disciplinas')).sort((a, b) => a.data.orden - b.data.orden);
+
+// Corona circular: radio interior 120 px, radio exterior 160 px, centro (200, 200)
+// 5 sectores de 70° con 2° de separación entre cada uno
+const sectores = disciplinas.map((d, i) => {
+  const anguloInicio = -90 + i * 72 + 1;
+  const anguloFin = -90 + (i + 1) * 72 - 1;
+  const dPath = calcularSectorCorona(200, 200, 120, 160, anguloInicio, anguloFin);
+  return {
+    slug: d.data.slug,
+    nombre: d.data.nombre,
+    acento: d.data.acento,
+    texturaSrc: d.data.texturaCilindro.src,
+    dPath,
+    orden: d.data.orden,
+  };
+});
+
+const primerVideoOutfit = disciplinas[0]?.data.videoOutfit
+  ? conMedia(disciplinas[0].data.videoOutfit)
+  : '';
+
+const urlsImagenes = [
+  home.personaje.src,
+  home.tarjeta.miniatura,
+  ...sectores.map((s) => s.texturaSrc),
+];
+---
+
+<section
+  id="act-n0"
+  aria-label="Preloader cinematográfico"
+  data-level="N0"
+  data-assets-imagenes={JSON.stringify(urlsImagenes)}
+  data-video-primer={primerVideoOutfit}
+>
+  <div class="n0-escenario">
+    <!-- SVG del anillo cinemático calcado de Aikawa -->
+    <svg
+      class="n0-svg-anillo"
+      viewBox="0 0 400 400"
+      width="380"
+      height="380"
+      aria-hidden="true"
+    >
+      <defs>
+        {sectores.map((s) => (
+          <pattern
+            id={`pat-n0-${s.slug}`}
+            patternUnits="userSpaceOnUse"
+            width="400"
+            height="400"
+          >
+            <image
+              href={s.texturaSrc}
+              x="0"
+              y="0"
+              width="400"
+              height="400"
+              preserveAspectRatio="xMidYMid slice"
+            />
+          </pattern>
+        ))}
+      </defs>
+
+      <g id="n0-anillo-grupo" class="n0-anillo-grupo">
+        <!-- Fondos de acento por si la textura tarda en pintar -->
+        {sectores.map((s) => (
+          <path
+            d={s.dPath}
+            class={`n0-sector-fondo n0-color-${s.slug}`}
+            data-sector-fondo={s.orden - 1}
+          />
+        ))}
+
+        <!-- Sectores texturados de las cinco disciplinas -->
+        {sectores.map((s) => (
+          <path
+            d={s.dPath}
+            fill={`url(#pat-n0-${s.slug})`}
+            class="n0-sector-textura"
+            data-sector={s.orden - 1}
+          />
+        ))}
+
+        <!-- Trazo circular en amatista de la casa (r = 140, perímetro ≈ 880 px) -->
+        <circle
+          id="n0-trazo-circulo"
+          cx="200"
+          cy="200"
+          r="140"
+          fill="none"
+          stroke="var(--color-casa)"
+          stroke-width="5"
+          class="n0-trazo-circulo"
+        />
+      </g>
+    </svg>
+
+    <!-- Información central: nombre, contador chico y barra accesible -->
+    <div class="n0-centro-info">
+      <h1 class="n0-nombre">Junior Mejía</h1>
+      <span id="n0-contador" class="n0-contador">0%</span>
+
+      <!-- Barra de progreso accesible con role="progressbar" -->
+      <div
+        id="n0-barra-progreso"
+        role="progressbar"
+        aria-label="Progreso de carga"
+        aria-valuenow="0"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        class="n0-barra-progreso"
+      >
+        <div id="n0-progreso-indicador" class="n0-progreso-indicador"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { obtenerNavegacion } from '@/lib/navigation/instancia';
+  import { MonitorPrecarga } from '@/lib/n0/precarga';
+
+  function ejecutarPreloader() {
+    const preloader = document.getElementById('act-n0');
+    if (!preloader) return;
+
+    const nav = obtenerNavegacion();
+    const rutaActual = window.location.pathname;
+    const base = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
+    const rutaSinIndex = rutaActual.replace(/\/index\.html$/, '');
+    const rutaNormalizada = rutaSinIndex.replace(/\/+$/, '') || '/';
+    const esRaiz = rutaNormalizada === base || rutaNormalizada === '' || rutaNormalizada === '/';
+    const esSoloRaizSinHash = esRaiz && (!window.location.hash || window.location.hash.trim() === '');
+
+    // Criterio del orquestador: solo / sin fragmento lleva preloader completo.
+    // Toda ruta profunda o la raíz con hash (#web, etc.) es enlace directo y lleva preloader corto.
+    const esEnlaceDirecto = !esSoloRaizSinHash;
+
+    let terminado = false;
+    let desuscribirNav: (() => void) | null = null;
+
+    // Función de cierre y transición a N1
+    const finalizar = (inmediato = false) => {
+      if (desuscribirNav) {
+        desuscribirNav();
+        desuscribirNav = null;
+      }
+      preloader.setAttribute('data-completado', 'true');
+      const barra = document.getElementById('n0-barra-progreso');
+      const contador = document.getElementById('n0-contador');
+      if (barra) barra.setAttribute('aria-valuenow', '100');
+      if (contador) contador.textContent = '100%';
+
+      if (document.body.dataset.currentLevel === 'N0') {
+        nav.transition({ type: 'PRELOAD_COMPLETE' });
+        document.body.dataset.currentLevel = 'N1';
+      }
+
+      // Desactivar bloqueo inerte
+      document.querySelectorAll('[data-n0-bloqueado]').forEach((el) => {
+        el.removeAttribute('inert');
+        el.removeAttribute('data-n0-bloqueado');
+      });
+
+      if (inmediato) {
+        preloader.style.display = 'none';
+        preloader.setAttribute('hidden', '');
+      } else {
+        preloader.style.opacity = '0';
+        window.setTimeout(() => {
+          preloader.style.display = 'none';
+          preloader.setAttribute('hidden', '');
+        }, 120);
+      }
+    };
+
+    // Preloader corto para enlaces directos (se va en < 150 ms)
+    if (esEnlaceDirecto) {
+      if (document.readyState === 'complete') {
+        window.setTimeout(() => finalizar(true), 30);
+      } else {
+        window.addEventListener('load', () => finalizar(true), { once: true });
+        window.setTimeout(() => finalizar(true), 150);
+      }
+      return;
+    }
+
+    // Asegurar que el nivel es N0 durante el preloader completo
+    document.body.dataset.currentLevel = 'N0';
+    if (nav.getState().currentLevel !== 'N0') {
+      nav.transition({ type: 'DEEP_LINK_HYDRATE', level: 'N0', discipline: 'web' });
+      document.body.dataset.currentLevel = 'N0';
+    }
+
+    // Evitar que la hidratación asíncrona de Astro ClientRouter cambie el nivel a N1 antes de terminar la coreografía
+    desuscribirNav = nav.subscribe((estado) => {
+      if (!terminado && estado.currentLevel !== 'N0' && esSoloRaizSinHash) {
+        document.body.dataset.currentLevel = 'N0';
+      }
+    });
+
+    // Proteger contra foco debajo del preloader mientras esté visible
+    const elementosDebajo = document.querySelectorAll('.pelicula-flujo, #transition-video-layer');
+    elementosDebajo.forEach((el) => {
+      el.setAttribute('inert', '');
+      el.setAttribute('data-n0-bloqueado', 'true');
+    });
+
+    // Iniciar monitor de precarga real
+    const jsonImagenes = preloader.getAttribute('data-assets-imagenes') || '[]';
+    const videoPrimer = preloader.getAttribute('data-video-primer') || '';
+    let imagenes: string[] = [];
+    try {
+      imagenes = JSON.parse(jsonImagenes);
+    } catch {
+      imagenes = [];
+    }
+
+    const monitor = new MonitorPrecarga({
+      imagenes,
+      videoUrl: videoPrimer,
+      tiempoMaximoMs: 6000,
+    });
+
+    let cargaRealLista = false;
+    let progresoReal = 0;
+
+    monitor.suscribir((estado) => {
+      progresoReal = estado.progreso;
+      if (estado.finalizado) {
+        cargaRealLista = true;
+      }
+    });
+
+    monitor.iniciar().then(() => {
+      cargaRealLista = true;
+    });
+
+    // Elementos visuales
+    const trazoCirculo = document.getElementById('n0-trazo-circulo') as SVGCircleElement | null;
+    const anilloGrupo = document.getElementById('n0-anillo-grupo') as SVGGElement | null;
+    const sectoresTextura = preloader.querySelectorAll<SVGPathElement>('.n0-sector-textura');
+    const sectoresFondo = preloader.querySelectorAll<SVGPathElement>('.n0-sector-fondo');
+    const contador = document.getElementById('n0-contador');
+    const barra = document.getElementById('n0-barra-progreso');
+    const indicador = document.getElementById('n0-progreso-indicador');
+
+    const reduccionMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const PERIMETRO_CIRCULO = 880;
+
+    // Estado inicial en el frame 0
+    if (trazoCirculo) {
+      trazoCirculo.style.strokeDasharray = `${PERIMETRO_CIRCULO}`;
+      trazoCirculo.style.strokeDashoffset = `${PERIMETRO_CIRCULO}`;
+    }
+    sectoresTextura.forEach((s) => {
+      s.style.opacity = '0';
+    });
+    sectoresFondo.forEach((s) => {
+      s.style.opacity = '0';
+    });
+
+    const inicio = performance.now();
+
+    const actualizarFrame = (ahora: number) => {
+      if (terminado) return;
+      const transcurrido = ahora - inicio;
+
+      // Mantener N0 mientras el preloader esté corriendo
+      if (document.body.dataset.currentLevel !== 'N0') {
+        document.body.dataset.currentLevel = 'N0';
+      }
+
+      // 1. Trazo del círculo en amatista: de 400 ms a 1200 ms (≈ 800 ms)
+      if (trazoCirculo) {
+        if (transcurrido < 400) {
+          trazoCirculo.style.strokeDashoffset = `${PERIMETRO_CIRCULO}`;
+        } else if (transcurrido <= 1200) {
+          const ratioTrazo = (transcurrido - 400) / 800;
+          trazoCirculo.style.strokeDashoffset = `${(PERIMETRO_CIRCULO * (1 - ratioTrazo)).toFixed(2)}`;
+        } else {
+          trazoCirculo.style.strokeDashoffset = '0';
+        }
+      }
+
+      // 2. Llenado escalonado de texturas de las 5 disciplinas: de 1300 ms a 1950 ms (≈ 650 ms)
+      // Cada sector ocupa 130 ms
+      sectoresTextura.forEach((sector, idx) => {
+        const sectorInicio = 1300 + idx * 130;
+        const sectorFin = sectorInicio + 130;
+        let opacidad = 0;
+
+        if (transcurrido < sectorInicio) {
+          opacidad = 0;
+        } else if (transcurrido >= sectorFin) {
+          opacidad = 1;
+        } else {
+          opacidad = (transcurrido - sectorInicio) / 130;
+        }
+
+        sector.style.opacity = opacidad.toFixed(3);
+        const fondo = sectoresFondo[idx];
+        if (fondo) fondo.style.opacity = opacidad.toFixed(3);
+      });
+
+      // 3. Giro lento del anillo en espera: de 1950 ms a 2500 ms (≈ 550 ms)
+      if (anilloGrupo && !reduccionMovimiento) {
+        if (transcurrido < 1950) {
+          anilloGrupo.setAttribute('transform', 'rotate(0 200 200)');
+        } else if (transcurrido <= 2500) {
+          const ratioGiro = (transcurrido - 1950) / 550;
+          // Curva suave hacia 32 grados
+          const grados = 32 * (1 - Math.cos(ratioGiro * Math.PI)) / 2;
+          anilloGrupo.setAttribute('transform', `rotate(${grados.toFixed(2)} 200 200)`);
+        } else {
+          anilloGrupo.setAttribute('transform', 'rotate(32 200 200)');
+        }
+      }
+
+      // 4. Progreso numérico de la coreografía y de la carga real
+      let progresoAnim = 0;
+      if (transcurrido < 400) {
+        progresoAnim = (transcurrido / 400) * 15;
+      } else if (transcurrido <= 1200) {
+        progresoAnim = 15 + ((transcurrido - 400) / 800) * 50;
+      } else if (transcurrido <= 1950) {
+        progresoAnim = 65 + ((transcurrido - 1200) / 750) * 20;
+      } else if (transcurrido <= 2450) {
+        progresoAnim = 85 + ((transcurrido - 1950) / 500) * 10;
+      } else {
+        progresoAnim = 95;
+      }
+
+      // Si la carga real concluyó (o llegamos al tiempo de seguridad de 6 s)
+      const forzarSalida = transcurrido >= 6000;
+      let valorProgreso = 0;
+
+      if (cargaRealLista || forzarSalida) {
+        if (transcurrido >= 2450 || forzarSalida) {
+          valorProgreso = 100;
+        } else {
+          valorProgreso = Math.min(99, Math.floor(progresoAnim));
+        }
+      } else {
+        // Red lenta: esperamos a la carga real o a los 6 s sin pasar de 95%
+        const techoReal = Math.floor(progresoReal * 100);
+        valorProgreso = Math.min(95, Math.max(techoReal, Math.floor(progresoAnim)));
+      }
+
+      if (barra) barra.setAttribute('aria-valuenow', `${valorProgreso}`);
+      if (contador) contador.textContent = `${valorProgreso}%`;
+      if (indicador) indicador.style.width = `${valorProgreso}%`;
+
+      // 5. Criterio de terminación: coreografía terminada (≥ 2500 ms) y carga real lista (o ≥ 6 s)
+      if (valorProgreso === 100 && (transcurrido >= 2500 || forzarSalida)) {
+        terminado = true;
+        monitor.limpiar();
+
+        // Asegurar que al menos dos fotogramas registren el 100% antes de iniciar desvanecimiento
+        requestAnimationFrame(() => {
+          if (barra) barra.setAttribute('aria-valuenow', '100');
+          if (contador) contador.textContent = '100%';
+          requestAnimationFrame(() => {
+            finalizar(false);
+          });
+        });
+        return;
+      }
+
+      requestAnimationFrame(actualizarFrame);
+    };
+
+    requestAnimationFrame(actualizarFrame);
+  }
+
+  // Inicializar en la carga inicial y en eventos de Astro ClientRouter
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', ejecutarPreloader, { once: true });
+  } else {
+    ejecutarPreloader();
+  }
+</script>
+
+<style>
+  #act-n0 {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background-color: var(--fondo-crema-casa);
+    color: var(--color-texto-oscuro);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity var(--duracion-corta, 0.25s) ease;
+    will-change: opacity;
+  }
+
+  #act-n0[hidden],
+  #act-n0[data-completado="true"],
+  :global(body:not([data-current-level="N0"]) #act-n0[data-completado="true"]) {
+    display: none !important;
+  }
+
+  .n0-escenario {
+    position: relative;
+    width: 380px;
+    height: 380px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .n0-svg-anillo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .n0-anillo-grupo {
+    transform-origin: 200px 200px;
+    transition: transform 0.05s linear;
+  }
+
+  .n0-sector-fondo {
+    opacity: 0;
+  }
+
+  .n0-color-web {
+    fill: var(--color-web);
+  }
+
+  .n0-color-motion {
+    fill: var(--color-motion);
+  }
+
+  .n0-color-3d {
+    fill: var(--color-3d);
+  }
+
+  .n0-color-videojuegos {
+    fill: var(--color-videojuegos);
+  }
+
+  .n0-color-editorial {
+    fill: var(--color-editorial);
+  }
+
+  .n0-sector-textura {
+    opacity: 0;
+    transition: opacity 0.12s linear;
+  }
+
+  .n0-trazo-circulo {
+    transition: stroke-dashoffset 0.05s linear;
+  }
+
+  .n0-centro-info {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .n0-nombre {
+    font-family: var(--fuente-display);
+    font-size: clamp(1.125rem, 1.8vw, 1.5rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0;
+    color: var(--color-texto-oscuro);
+  }
+
+  .n0-contador {
+    font-family: var(--fuente-texto);
+    font-size: clamp(0.8125rem, 1.1vw, 0.9375rem);
+    font-weight: 500;
+    line-height: 1.2;
+    margin-top: var(--espacio-3xs, 0.25rem);
+    color: var(--color-texto-atenuado);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .n0-barra-progreso {
+    width: 120px;
+    height: 2px;
+    background-color: rgba(17, 17, 17, 0.12);
+    margin-top: var(--espacio-xs, 0.75rem);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .n0-progreso-indicador {
+    width: 0%;
+    height: 100%;
+    background-color: var(--color-casa);
+    transition: width 0.08s linear;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .n0-anillo-grupo {
+      transform: none !important;
+    }
+  }
+</style>

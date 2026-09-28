@@ -1,0 +1,35 @@
+---
+import FilmLayout from '@/layouts/FilmLayout.astro';
+import N4CasoDeEstudio from '@/components/actos/N4CasoDeEstudio.astro';
+import { getCollection } from 'astro:content';
+
+export async function getStaticPaths() {
+  const proyectos = await getCollection('proyectos');
+  const disciplinas = await getCollection('disciplinas');
+
+  return proyectos.map((proyecto) => {
+    const discSlug =
+      typeof proyecto.data.disciplina === 'object' && 'id' in proyecto.data.disciplina
+        ? (proyecto.data.disciplina as { id: string }).id
+        : String(proyecto.data.disciplina);
+    const disc = disciplinas.find((d) => d.data.slug === discSlug || d.id === discSlug);
+
+    return {
+      params: { disciplina: discSlug, proyecto: proyecto.data.slug },
+      props: { proyecto, disciplina: disc?.data },
+    };
+  });
+}
+
+const { proyecto, disciplina } = Astro.props;
+---
+
+<FilmLayout
+  title={`${proyecto.data.titulo} — ${disciplina?.nombre ?? 'Caso de estudio'}`}
+  description={proyecto.data.idea}
+  initialLevel="N4"
+  initialDiscipline={disciplina?.slug ?? 'web'}
+  initialProject={proyecto.data.slug}
+>
+  <N4CasoDeEstudio proyecto={proyecto} disciplina={disciplina} />
+</FilmLayout>

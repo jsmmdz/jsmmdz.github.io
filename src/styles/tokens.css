@@ -1,0 +1,322 @@
+/**
+ * =====================================================================
+ * SISTEMA DE DISEÑO — PORTAFOLIO CINEMATOGRÁFICO JSMMDZ
+ * tokens.css — Única fuente de verdad para el sistema de diseño.
+ * =====================================================================
+ * Reglas de Dirección de Arte:
+ * - R19 Cero mobiliario: sin tarjetas, sin bordes, sin sombras de card ni fondos de panel.
+ * - R2 Negro absoluto (#000000) como bisagra: un color nunca corta directo contra otro.
+ * - R10 Materiales con peso: luz y textura física, no degradados planos.
+ * - R17 N3 es negro y 90% vacío.
+ * - Editorial: proporción invertida en N3/N4.
+ * - Ningún hex literal fuera de este archivo.
+ */
+
+/* ---------------------------------------------------------------------
+ * @property — Registro de propiedades personalizadas para interpolación
+ * Permite que GSAP y las transiciones CSS animen suavemente los cambios de tinte.
+ * --------------------------------------------------------------------- */
+@property --color-activo {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #6D2FA8;
+}
+
+@property --fondo-activo {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #FAF8F5;
+}
+
+@property --texto-activo {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #111111;
+}
+
+@property --acento-activo {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #6D2FA8;
+}
+
+:root {
+  /* ===================================================================
+   * 1. PALETA CROMÁTICA CERRADA (Tonos joya, no colores planos)
+   * =================================================================== */
+  --color-casa: #6D2FA8;         /* Amatista — Color de la casa (N0, N1, sistema) */
+  --color-web: #1C3F94;          /* Lapislázuli — Disciplina 1: Diseño Web */
+  --color-motion: #E09B00;       /* Ámbar — Disciplina 2: Motion Graphics */
+  --color-3d: #046A38;           /* Esmeralda — Disciplina 3: 3D (Ropa + Props) */
+  --color-videojuegos: #9B111E;  /* Rubí — Disciplina 4: Videojuegos */
+  --color-editorial: #111111;    /* Ónix — Disciplina 5: Editorial */
+
+  /* Neutros estructurales */
+  --color-negro: #000000;        /* Negro absoluto — Bisagra de transición y fondo N3/N4 */
+  --color-crema-base: #FAF8F5;   /* Crema neutro base para N0, N1 y N2 */
+  --color-texto-oscuro: #111111; /* Texto principal en fondos crema */
+  --color-texto-claro: #FAF8F5;  /* Texto principal en fondo negro N3/N4 */
+  /* Historial typewriter y metadatos. Alfa 0.62: con 0.55 daba 3,97:1 sobre el crema de la
+   * casa, bajo el 4,5:1 del texto; el mínimo que cumple en los seis cremas es 0.60
+   * (scripts/contraste.mjs § 4). Corregido por el orquestador en la auditoría de T3a.
+   * 2026-09-26 (T10): con los fondos de N2 medidos en los videos, 0.62 daba 4,00:1 sobre el
+   * de web; 0.68 es el mínimo que cumple en los cuatro cremas de N2 (peor caso 4,68:1). */
+  --color-texto-atenuado: rgba(17, 17, 17, 0.68);
+  --color-foco: var(--color-casa); /* Foco accesible para navegación por teclado */
+
+  /* ===================================================================
+   * 2. CREMAS TEÑIDOS
+   * N0 y N1: crema pastel al 6 % de la joya de la casa sobre el crema base.
+   * N2: el fondo de los VIDEOS de transición, medido (D1, 2026-09-26; T10). La página tiene
+   * que ser idéntica al video o se ve el rectángulo del clip: estos valores salen de los
+   * clips, no al revés. Promedio de 120×120 px en las esquinas superiores del cuadro donde
+   * el personaje queda en reposo (sitio/scripts/transiciones.mjs). Editorial es oscuro por
+   * la proporción invertida.
+   * =================================================================== */
+  --fondo-crema-casa: color-mix(in oklch, var(--color-casa) 6%, var(--color-crema-base));
+  --fondo-crema-web: #AFB6CD;         /* t1, cuadro 0 */
+  --fondo-crema-motion: #F0D7A1;      /* t1, último cuadro (84) */
+  --fondo-crema-3d: #A4C4AD;          /* t2, último cuadro (120) */
+  --fondo-crema-videojuegos: #DDABAA; /* t3, último cuadro (96) */
+  --fondo-crema-editorial: #343A3D;   /* t4, último cuadro (108) */
+
+  /* ===================================================================
+   * 3. ESCALA DE ESPACIADO MODULAR (Razón 1.5 — Quinta Justa)
+   * Base: 1rem (16px). Cero mobiliario: el ritmo y el espacio separan la obra.
+   * =================================================================== */
+  --espacio-3xs: 0.25rem;     /* 4px   (Base / 4) */
+  --espacio-2xs: 0.5rem;      /* 8px   (Base / 2) */
+  --espacio-xs: 0.75rem;      /* 12px  (Base * 0.75) */
+  --espacio-sm: 1rem;         /* 16px  (Tamaño base) */
+  --espacio-md: 1.5rem;       /* 24px  (Base * 1.5) */
+  --espacio-lg: 2.25rem;      /* 36px  (Base * 1.5^2) */
+  --espacio-xl: 3.375rem;     /* 54px  (Base * 1.5^3) */
+  --espacio-2xl: 5.0625rem;   /* 81px  (Base * 1.5^4) */
+  --espacio-3xl: 7.59375rem;  /* 121.5px (Base * 1.5^5) */
+
+  /* ===================================================================
+   * 4. CAPAS Z NOMBRADAS Y ORDENADAS (Alineadas con FilmLayout.astro)
+   * Justificación:
+   * - z-canvas (1): Three.js persistente de fondo (N3 plano infinito / visor GLB).
+   * - z-video (2): Video H.264 de acrobacias N2.
+   * - z-hinge (5): Bisagra inactiva entre video y escenario.
+   * - z-stage (10): Escenario DOM sin mobiliario (N0 a N4).
+   * - z-hud (20): Controles fijos de navegación, regla y CTA.
+   * - z-hinge-active (100): Bisagra de negro absoluto cuando se activa para
+   *   cubrir TODO, incluido el HUD, garantizando oscuridad total entre actos.
+   * =================================================================== */
+  --z-canvas: 1;
+  --z-video: 2;
+  --z-hinge: 5;
+  --z-stage: 10;
+  --z-hud: 20;
+  --z-hinge-active: 100;
+
+  /* ===================================================================
+   * 5. CURVAS Y DURACIONES DE ANIMACIÓN (Para CSS y GSAP)
+   * Dinámicas cinemáticas que evocan peso físico y desaceleración fluida.
+   * =================================================================== */
+  --duracion-inmediata: 0.1s;
+  --duracion-corta: 0.25s;
+  --duracion-media: 0.5s;
+  --duracion-larga: 0.8s;
+  --duracion-despliegue: 0.7s;
+  --duracion-bisagra: 1.2s;
+
+  /* Curvas bézier con peso cinematográfico */
+  --curva-entrada: cubic-bezier(0.16, 1, 0.3, 1);    /* power4.out / expo.out */
+  --curva-salida: cubic-bezier(0.7, 0, 0.84, 0);     /* power4.in */
+  --curva-bisagra: cubic-bezier(0.65, 0, 0.35, 1);   /* power3.inOut cinemático */
+  --curva-despliegue: cubic-bezier(0.25, 1, 0.5, 1); /* Despliegue de pieza Landberg */
+  --curva-resorte: cubic-bezier(0.34, 1.56, 0.64, 1);/* Asentamiento elástico sutil */
+
+  /* ===================================================================
+   * 6. RADIOS MÍNIMOS DE SISTEMA (R19: cero mobiliario, sin tarjetas)
+   * Solo para elementos de foco, etiquetas pequeñas y geometrías puras.
+   * =================================================================== */
+  --radio-sm: 2px;
+  --radio-md: 4px;
+  --radio-full: 9999px;
+}
+
+/* =====================================================================
+ * 7. TOKENS ACTIVOS CONTROLADOS POR ATRIBUTOS EN <body> (Ajuste A2)
+ *
+ * El layout FilmLayout.astro define data-current-level y data-discipline.
+ * Los componentes de fase 2 solo consumen estos tokens dinámicos:
+ * - var(--color-activo)
+ * - var(--fondo-activo)
+ * - var(--texto-activo)
+ * - var(--acento-activo)
+ * ===================================================================== */
+
+/* --- Estado por Defecto / N0 Preloader / N1 Home (Amatista) --- */
+body,
+body[data-current-level="N0"],
+body[data-current-level="N1"] {
+  --color-activo: var(--color-casa);
+  --fondo-activo: var(--fondo-crema-casa);
+  --texto-activo: var(--color-texto-oscuro);
+  --acento-activo: var(--color-casa);
+}
+
+/* --- N2 Menú Circular de 5 Disciplinas (Crema teñido por disciplina) --- */
+body[data-current-level="N2"][data-discipline="web"] {
+  --color-activo: var(--color-web);
+  --fondo-activo: var(--fondo-crema-web);
+  --texto-activo: var(--color-texto-oscuro);
+  --acento-activo: var(--color-web);
+}
+
+body[data-current-level="N2"][data-discipline="motion"] {
+  --color-activo: var(--color-motion);
+  --fondo-activo: var(--fondo-crema-motion);
+  --texto-activo: var(--color-texto-oscuro);
+  --acento-activo: var(--color-motion);
+}
+
+body[data-current-level="N2"][data-discipline="3d"] {
+  --color-activo: var(--color-3d);
+  --fondo-activo: var(--fondo-crema-3d);
+  --texto-activo: var(--color-texto-oscuro);
+  --acento-activo: var(--color-3d);
+}
+
+body[data-current-level="N2"][data-discipline="videojuegos"] {
+  --color-activo: var(--color-videojuegos);
+  --fondo-activo: var(--fondo-crema-videojuegos);
+  --texto-activo: var(--color-texto-oscuro);
+  --acento-activo: var(--color-videojuegos);
+}
+
+/* Editorial en N2: el fondo del video es oscuro (#343A3D), así que el texto pasa a claro y el
+ * acento al crema, como la proporción invertida de N3/N4. Claro 10,89:1; atenuado 0.68 → 5,4:1. */
+body[data-current-level="N2"][data-discipline="editorial"] {
+  --color-activo: var(--color-editorial);
+  --fondo-activo: var(--fondo-crema-editorial);
+  --texto-activo: var(--color-texto-claro);
+  --acento-activo: var(--color-crema-base);
+  --color-texto-atenuado: rgba(250, 248, 245, 0.68);
+  --color-foco: var(--color-crema-base); /* la amatista da 1,44:1 sobre #343A3D; el crema, 10,89:1 */
+}
+
+/* --- N3 Mundo de la Disciplina & N4 Caso de Estudio (Negro absoluto) ---
+ * Regla dura: Fondo negro, el color de la joya sobrevive únicamente como acento.
+ * Editorial invierte la proporción: el acento pasa al crema.
+ * El foco amatista pura da 2,62:1 sobre negro; mezclado al 80 % con crema en oklab
+ * (oklch rota el matiz hacia el rosado) sube a 4,24:1. Medido con scripts/contraste.mjs.
+ */
+body[data-current-level="N3"],
+body[data-current-level="N4"] {
+  --fondo-activo: var(--color-negro);
+  --texto-activo: var(--color-texto-claro);
+  --color-foco: color-mix(in oklab, var(--color-casa) 80%, var(--color-crema-base));
+}
+
+body[data-current-level="N3"][data-discipline="web"],
+body[data-current-level="N4"][data-discipline="web"] {
+  --color-activo: var(--color-web);
+  --acento-activo: var(--color-web);
+}
+
+body[data-current-level="N3"][data-discipline="motion"],
+body[data-current-level="N4"][data-discipline="motion"] {
+  --color-activo: var(--color-motion);
+  --acento-activo: var(--color-motion);
+}
+
+body[data-current-level="N3"][data-discipline="3d"],
+body[data-current-level="N4"][data-discipline="3d"] {
+  --color-activo: var(--color-3d);
+  --acento-activo: var(--color-3d);
+}
+
+body[data-current-level="N3"][data-discipline="videojuegos"],
+body[data-current-level="N4"][data-discipline="videojuegos"] {
+  --color-activo: var(--color-videojuegos);
+  --acento-activo: var(--color-videojuegos);
+}
+
+/* Inversión de proporción editorial en N3 y N4 */
+body[data-current-level="N3"][data-discipline="editorial"],
+body[data-current-level="N4"][data-discipline="editorial"] {
+  --color-activo: var(--color-editorial);
+  --acento-activo: var(--color-crema-base);
+}
+
+/* =====================================================================
+ * 8. ESTILOS BASE Y CONEXIÓN DE CAPAS Z (Alineadas con FilmLayout.astro)
+ * ===================================================================== */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  background-color: var(--fondo-activo);
+  color: var(--texto-activo);
+  font-family: var(--fuente-texto);
+  font-size: var(--tamano-texto-md);
+  line-height: var(--linea-texto-md);
+  transition: background-color var(--duracion-media) var(--curva-entrada),
+              color var(--duracion-media) var(--curva-entrada);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-foco);
+  outline-offset: 2px;
+}
+
+/* Mapeo estricto de las 5 capas de FilmLayout.astro */
+#webgl-canvas-container {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-canvas);
+  pointer-events: none;
+}
+
+#transition-video-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-video);
+  pointer-events: none;
+}
+
+#black-hinge-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-hinge);
+  background-color: var(--color-negro);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duracion-bisagra) var(--curva-bisagra);
+}
+
+#black-hinge-layer.activo,
+#black-hinge-layer[data-active="true"] {
+  z-index: var(--z-hinge-active);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#film-stage {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  z-index: var(--z-stage);
+}
+
+#film-hud {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-hud);
+  pointer-events: none;
+}
+
+#film-hud button,
+#film-hud a {
+  pointer-events: auto;
+}
+

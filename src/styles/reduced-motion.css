@@ -1,0 +1,58 @@
+/**
+ * =====================================================================
+ * ACCESIBILIDAD Y MOVIMIENTO REDUCIDO — PORTAFOLIO JSMMDZ
+ * reduced-motion.css — Neutralización de scroll secuestrado y animaciones.
+ * =====================================================================
+ * Regla de Calidad:
+ * "Todo lo que se anima tiene su camino con prefers-reduced-motion: reduce:
+ * el sitio sigue siendo navegable y el contenido completo, sin scroll secuestrado."
+ */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    /* Neutralización instantánea de duraciones de animación */
+    --duracion-inmediata: 0.001s !important;
+    --duracion-corta: 0.001s !important;
+    --duracion-media: 0.001s !important;
+    --duracion-larga: 0.001s !important;
+    --duracion-despliegue: 0.001s !important;
+    --duracion-bisagra: 0.001s !important;
+
+    /* Curvas lineales directas */
+    --curva-entrada: linear !important;
+    --curva-salida: linear !important;
+    --curva-bisagra: linear !important;
+    --curva-despliegue: linear !important;
+    --curva-resorte: linear !important;
+  }
+
+  /* Desactivación universal de transiciones y animaciones complejas */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001s !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Neutralización de scroll secuestrado: habilita desplazamiento estándar */
+  html,
+  body {
+    overflow-y: auto !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Elementos con opacidad o transformaciones cinemáticas quedan visibles y estables */
+  [data-animate],
+  .cinematic-element,
+  #film-stage {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  /* La bisagra de negro nunca se queda congelada a mitad de camino */
+  #black-hinge-layer {
+    transition: none !important;
+  }
+}
