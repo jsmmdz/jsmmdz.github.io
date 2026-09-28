@@ -97,10 +97,15 @@ export class ThreeSceneManager {
   private dragMovedDistance: number = 0;
 
   // Parámetros de diseño y spec de Landberg
-  private readonly stride: number = 4.4;
+  private readonly stride: number = 3.9; // pulido: pantallas más juntas, como landberg-01
   private readonly tau: number = 0.35; // Constante de tiempo de decaimiento (s)
-  private readonly curvaturaBase: number = 0.6; // Curvatura de las pantallas en reposo (pulido, calcado de landberg-01)
+  private readonly curvaturaBase: number = 0.7; // Curvatura de las pantallas en reposo (pulido, calcado de landberg-01)
   private readonly gridSpacing: number = 1.4;
+  // Encuadre del mundo (pulido, landberg-01): la cámara mira un poco hacia abajo; las pantallas
+  // quedan a media altura y el piso se ve debajo.
+  private readonly camY: number = 2.0;
+  private readonly camZ: number = 5.6;
+  private readonly miraY: number = 1.0;
 
   private raycaster: THREE.Raycaster = new THREE.Raycaster();
   private mouseVector: THREE.Vector2 = new THREE.Vector2();
@@ -166,13 +171,13 @@ export class ThreeSceneManager {
 
       if (!this.camera) {
         this.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-        this.camera.position.set(0, 1.45, 4.8);
-        this.camera.lookAt(0, 1.55, 0);
+        this.camera.position.set(0, this.camY, this.camZ);
+        this.camera.lookAt(0, this.miraY, 0);
       }
 
       if (!this.n2Camera) {
         this.n2Camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
-        this.n2Camera.position.set(0, 0.25, 4.8);
+        this.n2Camera.position.set(0, 0.25, 4.4); // pulido: más cerca, el cilindro ocupa ≈ 40 % del alto como en aikawa-05
         this.n2Camera.lookAt(0, 0.12, 0);
       }
 
@@ -231,7 +236,7 @@ export class ThreeSceneManager {
 
       const R = 1.3;
       const H = 0.95;
-      this.n2CylinderGroup.position.set(0, 0.35, 0);
+      this.n2CylinderGroup.position.set(0, 0.2, 0); // pulido: sobre la base del titular (aikawa-05)
 
       const arc = (2 * Math.PI) / 5;
       const loader = new THREE.TextureLoader();
@@ -268,7 +273,7 @@ export class ThreeSceneManager {
         this.n2CylinderGroup.add(new THREE.Mesh(divGeo, divMat));
 
         // Reflejo invertido hacia abajo con desvanecimiento
-        const H_refl = H * 0.75;
+        const H_refl = H * 0.6; // pulido: más corto, para no cruzarse con el personaje
         const y_refl = -H / 2 - H_refl / 2;
         const reflGeo = new THREE.CylinderGeometry(R, R, H_refl, 32, 1, true, thetaCenter - arc / 2, arc);
         reflGeo.translate(0, y_refl, 0);
@@ -277,7 +282,7 @@ export class ThreeSceneManager {
         const reflMat = new THREE.ShaderMaterial({
           uniforms: {
             map: { value: tex },
-            uOpacity: { value: 0.5 },
+            uOpacity: { value: 0.35 },
           },
           vertexShader: `
             varying vec2 vUv;
@@ -298,7 +303,7 @@ export class ThreeSceneManager {
           `,
           transparent: true,
           depthWrite: false,
-          side: THREE.DoubleSide,
+          side: THREE.FrontSide, // pulido: sin la cara interior (se veía negra sobre el personaje)
         });
         this.materialsToDispose.push(reflMat);
         this.n2ReflectionMaterials.push(reflMat);
@@ -349,7 +354,7 @@ export class ThreeSceneManager {
     const scaleY = this.n2CylinderGroup?.scale.y ?? 1;
     const R = 1.3;
     const H = 0.95 * scaleY;
-    const yCenter = 0.35;
+    const yCenter = this.n2CylinderGroup?.position.y ?? 0.2; // sigue la posición real del cilindro
     const yMin = yCenter - H / 2;
     const yMax = yCenter + H / 2;
 
@@ -699,11 +704,11 @@ export class ThreeSceneManager {
 
     const pos = this.screenGeometry.attributes.position;
     const halfWidth = 3.6 / 2;
-    const maxDepth = 0.45;
+    const maxDepth = 0.7; // pulido: curvatura visible, como landberg-01
     for (let i = 0; i < pos.count; i++) {
       const x = this.originalPlanePositions[i * 3];
       const nx = x / halfWidth;
-      const z = Math.pow(nx, 2) * maxDepth * Math.abs(c);
+      const z = Math.pow(nx, 2) * maxDepth * k; // con k: la curvatura base también (antes solo la de la velocidad)
       pos.setZ(i, z);
     }
     pos.needsUpdate = true;
@@ -725,7 +730,7 @@ export class ThreeSceneManager {
     const xMin = -60;
     const xMax = 60;
     const zStart = 4.6;
-    const zEnd = -80;
+    const zEnd = -18; // pulido: la grilla termina antes de juntarse en una franja brillante en el horizonte
 
     const pts: number[] = [];
     for (let x = xMin; x <= xMax; x += this.gridSpacing) {
@@ -870,7 +875,7 @@ export class ThreeSceneManager {
     this.expansionDuration = durationMs;
 
     this.expansionStartCamPos.copy(this.camera.position);
-    this.expansionStartLookAt.set(this.camera.position.x, 1.55, 0);
+    this.expansionStartLookAt.set(this.camera.position.x, this.miraY, 0);
 
     // Posición destino de la cámara para que la pantalla de 3.6 x 2.1 llene toda la vista
     this.expansionTargetCamPos.set(targetMesh.position.x, targetMesh.position.y, 1.4);
@@ -886,7 +891,7 @@ export class ThreeSceneManager {
     if (this.screenGeometry && this.originalPlanePositions) {
       const pos = this.screenGeometry.attributes.position;
       const halfWidth = 3.6 / 2;
-      const maxDepth = 0.45;
+      const maxDepth = 0.7; // pulido: curvatura visible, como landberg-01
       for (let i = 0; i < pos.count; i++) {
         const x = this.originalPlanePositions[i * 3];
         const nx = x / halfWidth;
@@ -925,9 +930,9 @@ export class ThreeSceneManager {
     }
     if (this.camera) {
       this.camera.position.x = this.currentX;
-      this.camera.position.y = 1.45;
-      this.camera.position.z = 4.8;
-      this.camera.lookAt(this.currentX, 1.55, 0);
+      this.camera.position.y = this.camY;
+      this.camera.position.z = this.camZ;
+      this.camera.lookAt(this.currentX, this.miraY, 0);
     }
     this.updateScreenCurvature(0);
     this.updateInfiniteScreens();
@@ -959,9 +964,9 @@ export class ThreeSceneManager {
 
     if (this.camera) {
       this.camera.position.x = this.currentX;
-      this.camera.position.y = 1.45;
-      this.camera.position.z = 4.8;
-      this.camera.lookAt(this.currentX, 1.55, 0);
+      this.camera.position.y = this.camY;
+      this.camera.position.z = this.camZ;
+      this.camera.lookAt(this.currentX, this.miraY, 0);
     }
 
     this.updateScreenCurvature(0);
@@ -1008,7 +1013,7 @@ export class ThreeSceneManager {
 
       // Sobre el piso, delante de la pantalla: la etiqueta cae sobre el negro y no sobre la
       // imagen (con la etiqueta encima de la portada, el título crema daba ≈ 1,9:1).
-      this.tempVec.set(worldX, 0, 0);
+      this.tempVec.set(worldX, 0, 0.8); // sobre el piso, delante del borde curvo de la pantalla
       this.tempVec.project(this.camera);
 
       const screenX = (this.tempVec.x * 0.5 + 0.5) * window.innerWidth;
@@ -1095,9 +1100,12 @@ export class ThreeSceneManager {
         }
         this.updateCylinderBoundingBox();
 
+        // Pulido (spec § 4.0 Aikawa): el titular entra de 3,2 a 3,8 s en una transformación de 2,5 a
+        // 4,1 s, es decir, entre 0,7 y 1,3 s de los 1,6 s (progreso 0,4375–0,8125), no durante toda.
         const titular = document.querySelector<HTMLElement>('[data-n2-titular]');
         if (titular) {
-          titular.style.opacity = ease.toFixed(3);
+          const tramo = Math.min(1, Math.max(0, (progress - 0.4375) / 0.375));
+          titular.style.opacity = (tramo * tramo * (3 - 2 * tramo)).toFixed(3);
         }
 
         if (progress >= 1) {
@@ -1141,7 +1149,7 @@ export class ThreeSceneManager {
       if (this.screenGeometry && this.originalPlanePositions) {
         const pos = this.screenGeometry.attributes.position;
         const halfWidth = 3.6 / 2;
-        const maxDepth = 0.45;
+        const maxDepth = 0.7; // pulido: curvatura visible, como landberg-01
         for (let i = 0; i < pos.count; i++) {
           const x = this.originalPlanePositions[i * 3];
           const nx = x / halfWidth;
@@ -1203,7 +1211,7 @@ export class ThreeSceneManager {
 
     if (this.camera && this.renderer && this.scene) {
       this.camera.position.x = this.currentX;
-      this.camera.lookAt(this.currentX, 1.55, 0);
+      this.camera.lookAt(this.currentX, this.miraY, 0);
 
       if (this.gridLines) {
         this.gridLines.position.x = Math.round(this.currentX / this.gridSpacing) * this.gridSpacing;

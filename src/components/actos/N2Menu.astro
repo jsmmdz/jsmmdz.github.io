@@ -208,15 +208,17 @@ const primeraDisciplina = metadatosDisciplinas[0];
   /* Titular tipográfico gigante detrás del cilindro (B1, T21 § 3) */
   .n2-titular {
     position: absolute;
-    top: 75px;
+    /* Pulido (aikawa-05): el titular baja y crece; el cilindro le tapa el tercio inferior. */
+    top: 17vh;
     left: 50%;
     transform: translateX(-50%);
-    width: 90vw;
+    width: 94vw;
     margin: 0;
     padding: 0;
     text-align: center;
     font-family: var(--fuente-display);
-    font-size: clamp(3.5rem, 11vw, 9.5rem);
+    font-size: clamp(3.5rem, 11.6vw, 10.5rem);
+    white-space: nowrap;
     font-weight: 800;
     line-height: 0.9;
     letter-spacing: -0.04em;
@@ -488,6 +490,18 @@ const primeraDisciplina = metadatosDisciplinas[0];
 
     const raiz = document.getElementById('act-n2');
     if (!raiz) return;
+
+    // Pulido (aikawa-05): el titular va DETRÁS del cilindro. El menú vive en un contexto de
+    // apilamiento por encima del canvas, así que el titular se muda a la capa del video (debajo
+    // del canvas). Se quitan los titulares de visitas anteriores para no duplicarlo.
+    const capaVideo = document.getElementById('transition-video-layer');
+    const titularMenu = raiz.querySelector<HTMLElement>('[data-n2-titular]');
+    if (capaVideo && titularMenu) {
+      capaVideo.querySelectorAll('[data-n2-titular]').forEach((n) => {
+        if (n !== titularMenu) n.remove();
+      });
+      if (titularMenu.parentElement !== capaVideo) capaVideo.appendChild(titularMenu);
+    }
 
     const abortController = new AbortController();
     currentAbortController = abortController;

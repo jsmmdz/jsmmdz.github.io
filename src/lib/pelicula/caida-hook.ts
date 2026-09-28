@@ -43,6 +43,10 @@ export function notificarProgresoCaida(progreso: number): void {
   if (typeof document !== 'undefined') {
     if (document.body) {
       document.body.dataset.caida = Number(normalizado.toFixed(3)).toString();
+      // Pulido: pasada la mitad (bajo el destello), la escena ya es el menú: el home se oculta y el
+      // video del personaje aparece. Al disolverse el destello se ven el personaje y el anillo, no el
+      // final del home con «JSMMDZ» cortado arriba.
+      document.body.toggleAttribute('data-caida-menu', normalizado >= 0.5);
     }
     const destello = document.getElementById('caida-destello');
     if (destello) {

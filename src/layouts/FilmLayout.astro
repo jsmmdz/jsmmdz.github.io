@@ -196,9 +196,15 @@ const {
         visibility: hidden;
       }
 
-      body[data-current-level="N2"] #transition-video-layer {
+      body[data-current-level="N2"] #transition-video-layer,
+      body[data-caida-menu] #transition-video-layer {
         opacity: 1;
         visibility: visible;
+      }
+
+      /* Pulido de la caída: pasada la mitad, bajo el destello, el home ya no se ve. */
+      body[data-caida-menu] #act-n1 {
+        visibility: hidden;
       }
 
       body[data-current-level="N2"] #webgl-canvas-container {
