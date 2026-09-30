@@ -3,6 +3,7 @@ import { render } from 'astro:content';
 import type { CollectionEntry } from 'astro:content';
 import Hallazgos from '@/components/n4/Hallazgos.astro';
 import { conBase } from '@/lib/rutas';
+import { variablesCssPortada } from '@/lib/n4/portada';
 
 interface Props {
   proyecto: CollectionEntry<'proyectos'>;
@@ -24,6 +25,7 @@ const { Content } = await render(proyecto);
   data-level="N4"
   data-discipline={discSlug}
   data-project={proyecto.data.slug}
+  style={variablesCssPortada()}
 >
   <div class="n4-layout">
     <!-- Columna izquierda fija en escritorio: Volver, disciplina, título y metadatos -->
@@ -66,6 +68,7 @@ const { Content } = await render(proyecto);
           class="n4-portada"
           loading="eager"
           decoding="async"
+          fetchpriority="high"
         />
       </div>
 
@@ -115,6 +118,18 @@ const { Content } = await render(proyecto);
   import { navigate } from 'astro:transitions/client';
   import { transicionConRespaldo } from '@/lib/navigation/instancia';
 
+  // Un solo arranque por visita: el listener cuelga de este controlador y se suelta al irse
+  let controlN4: AbortController | null = null;
+  let actIniciado: HTMLElement | null = null;
+
+  function limpiarN4() {
+    if (controlN4) {
+      controlN4.abort();
+      controlN4 = null;
+    }
+    actIniciado = null;
+  }
+
   function registrarProyectoActivo() {
     const act = document.getElementById('act-n4');
     const slug = act?.dataset.project || document.body.dataset.project;
@@ -126,16 +141,31 @@ const { Content } = await render(proyecto);
   }
 
   function initN4Volver() {
+    const act = document.getElementById('act-n4');
+    if (!act) return;
+
+    // Idempotente: el módulo corre al cargar (o al entrar por ClientRouter) y `astro:page-load`
+    // llega después; con el mismo artículo ya iniciado no se arranca otra vez.
+    if (act === actIniciado && controlN4) return;
+    limpiarN4();
+    actIniciado = act;
+
     registrarProyectoActivo();
-    const volverBtn = document.querySelector<HTMLAnchorElement>('#act-n4 a[data-n4-volver]');
+    const volverBtn = act.querySelector<HTMLAnchorElement>('a[data-n4-volver]');
     if (!volverBtn) return;
 
-    volverBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      registrarProyectoActivo();
-      transicionConRespaldo({ type: 'BACK_BUTTON_CLICK' }, 1200);
-      navigate(volverBtn.href);
-    });
+    const control = new AbortController();
+    controlN4 = control;
+    volverBtn.addEventListener(
+      'click',
+      (e) => {
+        e.preventDefault();
+        registrarProyectoActivo();
+        transicionConRespaldo({ type: 'BACK_BUTTON_CLICK' }, 1200);
+        navigate(volverBtn.href);
+      },
+      { signal: control.signal }
+    );
   }
 
   document.addEventListener('astro:page-load', () => {
@@ -144,8 +174,10 @@ const { Content } = await render(proyecto);
     }
   });
 
+  document.addEventListener('astro:before-swap', limpiarN4);
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initN4Volver);
+    document.addEventListener('DOMContentLoaded', initN4Volver, { once: true });
   } else {
     initN4Volver();
   }
@@ -167,7 +199,7 @@ const { Content } = await render(proyecto);
   .n4-layout {
     position: relative;
     width: 100%;
-    max-width: 1440px;
+    max-width: var(--n4-contenedor-max);
     margin-left: auto;
     margin-right: auto;
     padding-left: var(--espacio-lg);
@@ -302,7 +334,7 @@ const { Content } = await render(proyecto);
   .n4-portada {
     width: 100%;
     height: auto;
-    aspect-ratio: 16 / 10;
+    aspect-ratio: var(--n4-proporcion);
     object-fit: cover;
     display: block;
   }
@@ -375,9 +407,9 @@ const { Content } = await render(proyecto);
     }
 
     .n4-columna-derecha {
-      margin-left: max(42vw, 600px);
-      width: calc(100% - max(42vw, 600px));
-      max-width: 860px;
+      margin-left: max(var(--n4-columna-vw), var(--n4-columna-min));
+      width: calc(100% - max(var(--n4-columna-vw), var(--n4-columna-min)));
+      max-width: var(--n4-ancho-max);
     }
   }
 

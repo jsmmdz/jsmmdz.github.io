@@ -19,7 +19,7 @@ export interface NavigationState {
   activeProject: string | null;
   isTransitioning: boolean;
   canGoBack: boolean;
-  historyAction: 'pushState' | 'replaceState' | 'none';
+  historyAction: 'replaceState' | 'none';
 }
 
 export type TransitionTrigger =

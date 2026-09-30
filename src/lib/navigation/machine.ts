@@ -107,7 +107,7 @@ export class NavigationMachine {
     let targetLevel: Level = this.state.currentLevel;
     let targetDiscipline = this.state.activeDiscipline;
     let targetProject = this.state.activeProject;
-    let historyAction: 'pushState' | 'replaceState' | 'none' = 'none';
+    let historyAction: 'replaceState' | 'none' = 'none';
     let setsTransitionLock = false;
 
     switch (trigger.type) {
@@ -215,11 +215,11 @@ export class NavigationMachine {
   /**
    * Libera el bloqueo de transición y notifica a los suscriptores.
    * 
-   * RESPONSABILIDAD DE LLAMADA:
-   * - En N2 (giro entre disciplinas): Debe ser invocado por el reproductor de video de transición
-   *   al escuchar el evento 'ended' del clip de video correspondiente.
-   * - En N2->N3, N3->N4, N4->N3, N3->N2: Debe ser invocado por el CinematicDirector una vez
-   *   completado el desvanecimiento de la bisagra de negro absoluto (#000000) o la animación de cámara.
+   * QUIÉN LA LLAMA:
+   * - En N2 (giro entre disciplinas): el script de `N2Menu.astro`, al asentarse el giro o al
+   *   empezar a reproducirse el clip de transición.
+   * - En N2->N3, N3->N4, N4->N3, N3->N2: `transicionConRespaldo` (instancia.ts) la llama sola a los
+   *   1200 ms si nadie lo hizo antes, para que ninguna espera quede sin salida.
    */
   public completeTransition(): void {
     if (this.state.isTransitioning) {
@@ -249,17 +249,13 @@ export class NavigationMachine {
   /**
    * Sincroniza el URL con la History API del navegador
    */
-  private syncBrowserUrl(action: 'pushState' | 'replaceState' | 'none'): void {
+  private syncBrowserUrl(action: 'replaceState' | 'none'): void {
     if (typeof window === 'undefined' || action === 'none') return;
     const url = this.generateCanonicalUrl();
     const currentFull = window.location.pathname + window.location.hash;
     if (currentFull === url || currentFull.replace(/\/$/, '') === url.replace(/\/$/, '')) return;
 
-    if (action === 'pushState') {
-      window.history.pushState(this.getState(), '', url);
-    } else if (action === 'replaceState') {
-      window.history.replaceState(this.getState(), '', url);
-    }
+    window.history.replaceState(this.getState(), '', url);
   }
 
   /**

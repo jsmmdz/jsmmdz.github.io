@@ -6,9 +6,9 @@ import { obtenerNavegacion } from '@/lib/navigation/instancia';
 import { notificarProgresoCaida } from './caida-hook';
 import { obtenerLenis } from './lenis';
 
-let observer: IntersectionObserver | null = null;
 let abortController: AbortController | null = null;
 let desuscribirNav: (() => void) | null = null;
+let actN1Iniciado: HTMLElement | null = null;
 
 export function inicializarPelicula(): void {
   const actN1 = document.getElementById('act-n1');
@@ -17,8 +17,13 @@ export function inicializarPelicula(): void {
   // Si no estamos en la página de la película con N1 y N2, no hacer nada
   if (!actN1 || !actN2) return;
 
-  // Limpiar instancias previas antes de reiniciar
+  // Idempotente: si ya arrancó para esta página (el mismo #act-n1), no arranca otra vez.
+  // El módulo corre al cargar y `astro:page-load` llega después: sin esto se iniciaba dos veces.
+  if (abortController && actN1Iniciado === actN1) return;
+
+  // Limpiar instancias de una página anterior antes de reiniciar
   destruirPelicula();
+  actN1Iniciado = actN1;
 
   abortController = new AbortController();
   const { signal } = abortController;
@@ -112,10 +117,7 @@ export function inicializarPelicula(): void {
 }
 
 export function destruirPelicula(): void {
-  if (observer) {
-    observer.disconnect();
-    observer = null;
-  }
+  actN1Iniciado = null;
   if (abortController) {
     abortController.abort();
     abortController = null;
@@ -127,30 +129,13 @@ export function destruirPelicula(): void {
 }
 
 // Conectar con el ciclo de vida de Astro ClientRouter
-let peliculaInicializada = false;
 if (typeof document !== 'undefined') {
-  document.addEventListener('astro:page-load', () => {
-    inicializarPelicula();
-    peliculaInicializada = true;
-  });
-  document.addEventListener('astro:before-swap', () => {
-    destruirPelicula();
-    peliculaInicializada = false;
-  });
+  document.addEventListener('astro:page-load', inicializarPelicula);
+  document.addEventListener('astro:before-swap', destruirPelicula);
 
   if (document.readyState !== 'loading') {
     inicializarPelicula();
-    peliculaInicializada = true;
   } else {
-    document.addEventListener(
-      'DOMContentLoaded',
-      () => {
-        if (!peliculaInicializada) {
-          inicializarPelicula();
-          peliculaInicializada = true;
-        }
-      },
-      { once: true }
-    );
+    document.addEventListener('DOMContentLoaded', inicializarPelicula, { once: true });
   }
 }

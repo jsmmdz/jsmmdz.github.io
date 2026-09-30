@@ -53,6 +53,9 @@ export const collections = {
           .min(1, 'decisiones debe tener al menos un elemento'),
         hallazgos: z.array(z.string()),
         portada: image(),
+        // Portada en video (opcional): ruta relativa a /media, MP4. La tarjeta del N3 lo usa como
+        // textura y deja la imagen de portada como póster y como respaldo si el video falla.
+        video: z.string().trim().min(1).optional(),
         orden: z.coerce.number().int(),
       }),
   }),

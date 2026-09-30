@@ -1,44 +1,17 @@
 /**
- * Punto de enganche arquitectónico para «La Caída» (T15).
- * 
- * Contrato para T15 y T14:
- * - T19 establece el contenedor de scroll entre N1 y N2.
- * - T15 conectará aquí la animación de GSAP ScrollTrigger o deformación espacial
- *   durante el desplazamiento del home hacia el menú circular de disciplinas.
- * - Se preserva la regla de tuteo colombiano, cero datos inventados y tipado estricto.
+ * Efectos de «La Caída» entre el home (N1) y el menú (N2), amarrados al progreso del scroll.
+ *
+ * `scroll.ts` calcula el progreso (0 = N1 completo, 1 = N2 completo) y lo notifica aquí. Esta
+ * función lo refleja en el DOM: `data-caida` y `data-caida-menu` en el body y el destello crema.
+ * Sigue el scroll con un `scroll` de la ventana, sin ScrollTrigger (D2).
  */
 
-export type CaidaScrollCallback = (progreso: number) => void;
-
-interface CaidaHookRegistry {
-  callbacks: Set<CaidaScrollCallback>;
-  progresoActual: number;
-}
-
-const registroCaida: CaidaHookRegistry = {
-  callbacks: new Set<CaidaScrollCallback>(),
-  progresoActual: 0,
-};
-
 /**
- * Registra un callback que se invocará con el progreso (0 = N1 completo, 1 = N2 completo).
- * Devuelve una función para desuscribirse.
- */
-export function suscribirCaida(callback: CaidaScrollCallback): () => void {
-  registroCaida.callbacks.add(callback);
-  callback(registroCaida.progresoActual);
-  return () => {
-    registroCaida.callbacks.delete(callback);
-  };
-}
-
-/**
- * Notifica a los observadores de la caída sobre el progreso actual del scroll.
+ * Notifica el progreso actual del scroll y actualiza los efectos de la caída.
  * Invocado por el controlador de scroll de la película.
  */
 export function notificarProgresoCaida(progreso: number): void {
   const normalizado = Math.max(0, Math.min(1, progreso));
-  registroCaida.progresoActual = normalizado;
 
   if (typeof document !== 'undefined') {
     if (document.body) {
@@ -69,13 +42,4 @@ export function notificarProgresoCaida(progreso: number): void {
       }
     }
   }
-
-  registroCaida.callbacks.forEach((cb) => cb(normalizado));
-}
-
-/**
- * Obtiene el progreso actual de la caída (0 a 1).
- */
-export function obtenerProgresoCaida(): number {
-  return registroCaida.progresoActual;
 }

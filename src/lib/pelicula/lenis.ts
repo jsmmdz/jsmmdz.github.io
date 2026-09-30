@@ -1,8 +1,5 @@
 import Lenis from 'lenis';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import gsap from 'gsap';
-
-gsap.registerPlugin(ScrollTrigger);
 
 let lenisInstancia: Lenis | null = null;
 let tickerCallback: ((time: number) => void) | null = null;
@@ -11,8 +8,10 @@ export function obtenerLenis(): Lenis | null {
   return lenisInstancia;
 }
 
+// Idempotente: si ya hay una instancia viva, no crea otra. Al irse de la página, `astro:before-swap`
+// la destruye y `astro:page-load` la vuelve a crear.
 export function iniciarLenis(): void {
-  destruirLenis();
+  if (lenisInstancia) return;
 
   if (typeof window === 'undefined') return;
 
@@ -25,8 +24,7 @@ export function iniciarLenis(): void {
     autoRaf: false,
   });
 
-  lenisInstancia.on('scroll', ScrollTrigger.update);
-
+  // Un solo reloj (D2): el ticker de GSAP mueve Lenis y el render de three
   tickerCallback = (time: number) => {
     lenisInstancia?.raf(time * 1000);
   };

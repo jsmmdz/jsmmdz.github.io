@@ -289,7 +289,10 @@ const primeraDisciplina = metadatosDisciplinas[0];
     text-transform: uppercase;
     font-variant-caps: all-small-caps;
     color: var(--color-crema-base);
-    min-width: 110px;
+    /* Pulido (auditoría T27 · E4): ancho fijo. Si el nombre y la acción cambian de ancho, la
+       pastilla centrada se reajusta al asentarse el giro y la flecha «siguiente» se corre bajo el
+       cursor: un clic seguido caía fuera del botón. 128 px cabe «Motion graphics» (126). */
+    width: 128px;
     text-align: center;
     white-space: nowrap;
   }
@@ -328,6 +331,14 @@ const primeraDisciplina = metadatosDisciplinas[0];
   .n2-control-accion {
     display: flex;
     align-items: center;
+    justify-content: center;
+    min-width: 336px; /* cabe «Entrar al mundo de Motion graphics», la más larga (336) */
+  }
+
+  @media (max-width: 720px) {
+    .n2-control-accion {
+      min-width: 0;
+    }
   }
 
   .n2-control-link,
@@ -642,11 +653,36 @@ const primeraDisciplina = metadatosDisciplinas[0];
       raiz.dataset.n2Activa = slug;
     };
 
-    const entrarANivel3 = () => {
-      const meta = metaMap.get(disciplinaActiva);
-      if (!meta || !meta.tieneMundo) return;
+    let isExiting = false;
+
+    const ejecutarNavegacionSalida = () => {
+      isExiting = false;
       transicionConRespaldo({ type: 'ENTER_WORLD', discipline: disciplinaActiva }, 1200);
       navigate(conBase(`${disciplinaActiva}/`));
+    };
+
+    const entrarANivel3 = () => {
+      if (isExiting) return;
+      const meta = metaMap.get(disciplinaActiva);
+      if (!meta || !meta.tieneMundo) return;
+
+      const reduced = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduced) {
+        transicionConRespaldo({ type: 'ENTER_WORLD', discipline: disciplinaActiva }, 1200);
+        navigate(conBase(`${disciplinaActiva}/`));
+        return;
+      }
+
+      isExiting = true;
+      raiz.dataset.n2Estado = 'salida';
+
+      // Pulido (auditoría T27 · E1): la salida cuenta desde el clic (al soltar), no desde el
+      // pointerdown; con el clic sostenido se saltaba el desenrollado.
+      sceneManager.startN2ExitAnimation(disciplinaActiva, () => {
+        if (isExiting) {
+          ejecutarNavegacionSalida();
+        }
+      });
     };
 
     const cambiarADisciplina = (destinoSlug: DisciplineSlug, dir: 'next' | 'prev') => {
@@ -655,6 +691,7 @@ const primeraDisciplina = metadatosDisciplinas[0];
       const desdeSlug = disciplinaActiva;
       disciplinaActiva = destinoSlug;
       raiz.dataset.n2Estado = 'transicion';
+      document.body.dataset.discipline = destinoSlug;
 
       window.history.replaceState(null, '', conBase(`#${destinoSlug}`));
 

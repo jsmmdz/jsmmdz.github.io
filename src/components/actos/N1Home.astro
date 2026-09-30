@@ -127,14 +127,20 @@ import { home } from '@/data/home';
   import { iniciarTypewriter, type ControladorTypewriter } from '@/lib/n1/typewriter';
 
   let controladorTypewriter: ControladorTypewriter | null = null;
+  let contenedorIniciado: HTMLElement | null = null;
 
   function inicializarN1(): void {
     const contenedor = document.querySelector<HTMLElement>(
       '#act-n1 [data-typewriter-capa]'
     );
 
+    // Idempotente: el módulo corre al cargar y `astro:page-load` llega después; con el mismo
+    // contenedor no se reinicia el typewriter.
+    if (contenedor && contenedor === contenedorIniciado && controladorTypewriter) return;
+
     if (contenedor) {
       controladorTypewriter?.destruir();
+      contenedorIniciado = contenedor;
       controladorTypewriter = iniciarTypewriter({
         contenedor,
         lineas: home.lineasTypewriter,
@@ -147,6 +153,7 @@ import { home } from '@/data/home';
       controladorTypewriter.destruir();
       controladorTypewriter = null;
     }
+    contenedorIniciado = null;
   }
 
   document.addEventListener('astro:page-load', inicializarN1);
