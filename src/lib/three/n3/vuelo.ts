@@ -1,8 +1,8 @@
 /**
- * El vuelo de la pieza al caso (K16, con los ajustes del autor del 2026-09-29).
+ * El vuelo de la pieza al caso (K16, con los ajustes del autor del 2026-10-01).
  *
- * La tarjeta clicada arranca desde donde esté (con su deformación del momento) y llega a la portada
- * del caso N4 en 0,7 s con la curva «ro». El progreso `p = ro(v)` interpola posición y escala; la
+ * La tarjeta clicada arranca desde donde esté (con su deformación del momento) y llega al medio del
+ * caso N4 en 1,0 s con la curva «ro». El progreso `p = ro(v)` interpola posición y escala; la
  * deformación, la luz y la esquina bajan con él. Este módulo solo lleva el reloj y la geometría del
  * vuelo; quien dibuja (mundo.ts) lee `p` y `rect()` en cada cuadro.
  */
@@ -10,8 +10,8 @@ import gsap from 'gsap';
 import { ro } from '@/lib/n3/curva-ro';
 import type { RectTarjeta } from '@/lib/n3/pista';
 
-/** Duración medida en la grabación (el código de Landberg declara 1,0 s; el autor eligió 0,7 s). */
-export const DURACION_VUELO = 0.7;
+/** Duración del vuelo: la del código de Landberg, 1,0 s (autor, 2026-10-01; antes 0,7 s). */
+export const DURACION_VUELO = 1.0;
 
 export class Vuelo {
   /** Tiempo normalizado 0..1 y progreso con la curva «ro». */
@@ -24,7 +24,7 @@ export class Vuelo {
     readonly indice: number,
     /** Rectángulo de la tarjeta al hacer clic (px CSS de la ventana), ya con el bucle aplicado. */
     private readonly origen: RectTarjeta,
-    /** Rectángulo de la portada del caso N4 (px CSS). */
+    /** Rectángulo del medio del caso N4 (px CSS). */
     private readonly destino: RectTarjeta,
     /** Velocidad de la cinta al hacer clic: la deformación del momento se congela con ella. */
     readonly velocidad0: number,
@@ -47,7 +47,7 @@ export class Vuelo {
     });
   }
 
-  /** Rectángulo actual: interpolación lineal entre el origen y la portada con `p`. */
+  /** Rectángulo actual: interpolación lineal entre el origen y el medio del caso con `p`. */
   rect(): RectTarjeta {
     const { origen: o, destino: d, p } = this;
     return {

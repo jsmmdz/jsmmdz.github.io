@@ -13,15 +13,29 @@ decisiones:
 hallazgos:
   - "[EJEMPLO] Las texturas a 1k o 2k garantizan 60 fps en escritorio estándar."
 portada: ../../assets/proyectos/ejemplo-3d-portada.jpg
+medios:
+  - src: ../../assets/proyectos/ejemplo-3d-portada.jpg
+    alt: "[EJEMPLO] Portada del caso"
+  - src: ../../assets/disciplinas/3d-textura.webp
+    alt: "[EJEMPLO] Medio del proceso (relleno)"
+  - src: ../../assets/disciplinas/3d-poster.jpg
+    alt: "[EJEMPLO] Medio del resultado (relleno)"
 orden: 1
 ---
 
-## Proceso
+{/* Cada bloque es un capítulo del caso (T31): Proceso, Hallazgos y Resultado, en ese orden. Los otros
+cuatro (idea, problema, rol y aporte, decisiones) salen del encabezado de arriba. */}
+
+<Proceso>
 
 [EJEMPLO] Modelado modular, configuración de rig y pruebas de render en tiempo real.
 
-<Hallazgos />
+</Proceso>
 
-## Resultado
+<Hallazgos items={frontmatter.hallazgos} />
+
+<Resultado>
 
 [EJEMPLO] Modelos 3D integrados y optimizados para visualización fluida.
+
+</Resultado>

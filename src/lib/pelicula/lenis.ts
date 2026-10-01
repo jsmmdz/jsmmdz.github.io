@@ -20,6 +20,11 @@ export function iniciarLenis(): void {
     return;
   }
 
+  // El caso de estudio (N4) tiene su propio scroll virtual: Lenis no mueve el N4
+  if (document.body?.dataset.currentLevel === 'N4') {
+    return;
+  }
+
   lenisInstancia = new Lenis({
     autoRaf: false,
   });

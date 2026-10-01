@@ -110,6 +110,7 @@ const bloqueadas = Math.max(0, TARJETAS_DEL_BUCLE - reales.length);
 <script>
   import { navigate } from 'astro:transitions/client';
   import { transicionConRespaldo } from '@/lib/navigation/instancia';
+  import { precargar } from '@/lib/navigation/precarga';
   import type { ThreeSceneManager } from '@/lib/three/scene-manager';
   import type { ControladorN3, TarjetaDom } from '@/lib/three/n3/controlador';
 
@@ -118,7 +119,7 @@ const bloqueadas = Math.max(0, TARJETAS_DEL_BUCLE - reales.length);
   // Un solo arranque por visita: los listeners cuelgan de este controlador y se sueltan al irse
   let controlN3: AbortController | null = null;
   let actIniciado: HTMLElement | null = null;
-  // La navegación que sigue a un vuelo no pasa por la bisagra negra: el vuelo ya es la transición
+  // La navegación que acompaña a un vuelo no pasa por la bisagra negra: el vuelo ya es la transición
   let llegadaDeVuelo = false;
 
   function limpiarN3Act() {
@@ -173,9 +174,9 @@ const bloqueadas = Math.max(0, TARJETAS_DEL_BUCLE - reales.length);
       navigate(href);
     };
 
-    // El layout enciende la bisagra negra en `astro:before-preparation`. Tras un vuelo la pieza ya llegó
-    // a la portada del caso: si la bisagra se encendiera, taparía justo el relevo. Se apaga en una
-    // microtarea, antes de que el navegador pinte un solo cuadro con ella encendida.
+    // El layout enciende la bisagra negra en `astro:before-preparation`. Con un vuelo en curso la pieza
+    // vuela sobre el canvas mientras llega la página del caso: si la bisagra se encendiera, taparía el
+    // vuelo. Se apaga en una microtarea, antes de que el navegador pinte un solo cuadro con ella.
     document.addEventListener(
       'astro:before-preparation',
       () => {
@@ -221,8 +222,9 @@ const bloqueadas = Math.max(0, TARJETAS_DEL_BUCLE - reales.length);
       { once: true, signal }
     );
 
-    // Clic o Enter en el enlace de un caso real: la pieza vuela al caso y al llegar se navega.
-    // Sin vuelo (movimiento reducido, sin WebGL o ventana angosta) se navega directo.
+    // Clic o Enter en el enlace de un caso real: la pieza vuela al caso (1,0 s) y la página del caso se
+    // navega al clic, así su texto entra mientras la pieza todavía vuela (como Landberg). Sin vuelo
+    // (movimiento reducido, sin WebGL o ventana angosta) se navega directo.
     if (pista) {
       pista.addEventListener(
         'click',
@@ -238,12 +240,15 @@ const bloqueadas = Math.max(0, TARJETAS_DEL_BUCLE - reales.length);
           try {
             sessionStorage.setItem('n3_active_project', slug);
           } catch {}
-          if (controlador?.abrirCaso(slug)) return;
+          if (controlador?.abrirCaso(slug)) llegadaDeVuelo = true;
           irAlCaso(slug, enlace.href);
         },
         { signal }
       );
     }
+
+    // Precarga de las páginas de los casos: al clic la página tiene que llegar mientras la pieza vuela
+    for (const enlace of act.querySelectorAll<HTMLAnchorElement>('a[data-slug]')) precargar(enlace.href);
 
     // Si venimos de un caso de estudio, la pieza de origen queda centrada y con el foco
     let returnSlug: string | null = null;
@@ -280,11 +285,6 @@ const bloqueadas = Math.max(0, TARJETAS_DEL_BUCLE - reales.length);
             hud,
             tarjetas,
             slugInicial: returnSlug,
-            alTerminarVuelo: (slug) => {
-              const enlace = act.querySelector<HTMLAnchorElement>(`a[data-slug="${slug}"]`);
-              llegadaDeVuelo = true;
-              if (enlace) irAlCaso(slug, enlace.href);
-            },
           },
           () => {
             act.classList.add('n3-sin-webgl');
@@ -296,6 +296,11 @@ const bloqueadas = Math.max(0, TARJETAS_DEL_BUCLE - reales.length);
           return;
         }
         controlador = montado;
+
+        // Con el caso a un clic de distancia, su código se baja ya: al clic la página tiene que montar
+        // mientras la pieza todavía vuela
+        void import('@/lib/n4/caso');
+        void import('@/lib/three/n4/mundo');
 
         if (returnSlug) {
           aplicarFoco();
@@ -321,7 +326,8 @@ const bloqueadas = Math.max(0, TARJETAS_DEL_BUCLE - reales.length);
 
   document.addEventListener('astro:before-swap', () => {
     limpiarN3Act();
-    sceneManagerInstance?.desmontarN3();
+    // Si la pieza todavía vuela al caso, el mundo sigue dibujándola hasta que aterrice
+    sceneManagerInstance?.soltarN3();
   });
 
   if (document.readyState === 'loading') {

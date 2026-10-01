@@ -1,62 +1,25 @@
 ---
+/**
+ * Capítulo 5 («Hallazgos»). En el MDX del caso: `<Hallazgos items={frontmatter.hallazgos} />`. Los
+ * hallazgos llegan por la propiedad, no por estado global: con el build de Astro renderizando páginas
+ * en paralelo, un estado global podía filtrar los hallazgos de un caso a otro.
+ */
+import Capitulo from './Capitulo.astro';
+import { CAPITULOS } from '@/lib/n4/capitulos';
+
 interface Props {
   items?: string[];
 }
 
-let { items } = Astro.props;
-if (!items && typeof globalThis !== 'undefined') {
-  const globalRec = globalThis as Record<string, unknown>;
-  if (Array.isArray(globalRec.__currentProjectHallazgos)) {
-    items = globalRec.__currentProjectHallazgos as string[];
-  }
-}
-const lista = items ?? [];
+const { items = [] } = Astro.props;
 ---
 
-<section class="n4-seccion n4-seccion-hallazgos">
-  <div class="n4-columna-lectura">
-    <h2>Hallazgos</h2>
-    {lista.length > 0 ? (
-      <ul class="n4-lista-hallazgos">
-        {lista.map((hallazgo) => (
-          <li>{hallazgo}</li>
-        ))}
-      </ul>
-    ) : (
-      <p class="n4-vacio">Sin hallazgos documentados.</p>
-    )}
-  </div>
-</section>
-
-<style>
-  .n4-seccion-hallazgos {
-    margin-bottom: var(--espacio-3xl);
-  }
-
-  .n4-columna-lectura {
-    max-width: 68ch;
-  }
-
-  .n4-lista-hallazgos {
-    list-style: disc;
-    padding-left: var(--espacio-lg);
-    margin: var(--espacio-md) 0 0 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--espacio-xs);
-  }
-
-  .n4-lista-hallazgos li {
-    font-family: var(--fuente-texto);
-    font-size: var(--tamano-texto-md);
-    line-height: var(--linea-texto-md);
-    color: var(--texto-activo);
-  }
-
-  .n4-vacio {
-    font-family: var(--fuente-texto);
-    font-size: var(--tamano-texto-md);
-    line-height: var(--linea-texto-md);
-    color: var(--texto-activo);
-  }
-</style>
+<Capitulo k={5} titulo={CAPITULOS[5]}>
+  {items.length > 0 ? (
+    <ul class="n4-lista">
+      {items.map((hallazgo) => <li>{hallazgo}</li>)}
+    </ul>
+  ) : (
+    <p>Sin hallazgos documentados.</p>
+  )}
+</Capitulo>

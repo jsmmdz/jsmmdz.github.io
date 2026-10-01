@@ -5,6 +5,9 @@
  * - N2 (Aikawa): el cilindro de tarjetas de vidrio, dibujado directo a pantalla, sin antialias.
  * - N3 (Landberg): el mundo de la disciplina vive en `lib/three/n3/` (la cinta, el piso y el vuelo);
  *   aquí solo se monta, se le da el reloj y se desmonta. No se cambia nada del N2 para eso.
+ * - N4 (caso de estudio): el medio del caso vive en `lib/three/n4/`; lo dibuja el controlador del caso
+ *   (`lib/n4/caso.ts`) con su propio paso del reloj único. Aquí solo se monta y se desmonta. Mientras
+ *   la pieza todavía vuela del N3 al N4 conviven los dos mundos: el N3 se suelta al aterrizar.
  * - Un solo reloj: gsap.ticker mueve el render (y Lenis, en el home); no hay rAF propio.
  * - Antialias por nivel (D4): el contexto se crea sin antialias (N2, como Aikawa) y el mundo N3 se
  *   dibuja en un render target de 4 muestras que se copia a pantalla (como Landberg).
@@ -12,8 +15,11 @@
  */
 import * as THREE from 'three';
 import gsap from 'gsap';
+import { tomarRegreso } from '@/lib/navigation/vuelo';
+import type { CasoN4 } from '@/lib/n4/caso';
 import type { N2TarjetasManager } from './n2-tarjetas';
 import type { ControladorN3, EntradaControlador } from './n3/controlador';
+import type { MundoN4 } from './n4/mundo';
 
 export interface N2DisciplinaItem {
   slug: string;
@@ -38,6 +44,11 @@ export class ThreeSceneManager {
   // El mundo de la disciplina (N3) y su montaje en curso
   private n3: ControladorN3 | null = null;
   private montajeN3: number = 0;
+  // El N3 espera a soltarse hasta que su pieza termine de volar al caso (la página N4 ya montó)
+  private n3SoltarAlTerminar: boolean = false;
+  // El medio del caso (N4)
+  private mundoN4: MundoN4 | null = null;
+  private montajeN4: number = 0;
 
   // Estado y objetos de N2 (Menú circular Aikawa)
   private n2IsActive: boolean = false;
@@ -152,7 +163,7 @@ export class ThreeSceneManager {
    */
   public async montarN3(
     container: HTMLElement,
-    entrada: Omit<EntradaControlador, 'reducido'>,
+    entrada: Omit<EntradaControlador, 'reducido' | 'regresoDe' | 'alTerminarVuelo'>,
     onContextLost?: () => void,
   ): Promise<ControladorN3 | null> {
     this.onContextLostCallback = onContextLost;
@@ -164,13 +175,20 @@ export class ThreeSceneManager {
     this.n2IsActive = false;
     if (this.n2Group) this.n2Group.visible = false;
     this.renderer.setClearColor(0x000000, 1);
+    this.desmontarN4();
 
     const { ControladorN3 } = await import('./n3/controlador');
     // El visitante se fue mientras cargaba el módulo: no se monta nada
     if (turno !== this.montajeN3 || this.isDisposed || !this.renderer) return null;
     let controlador: ControladorN3;
     try {
-      controlador = new ControladorN3(this.renderer, { ...entrada, reducido: () => this.reducido });
+      controlador = new ControladorN3(this.renderer, {
+        ...entrada,
+        // Si se viene de un caso, su pieza volvió volando: queda quieta en su sitio
+        regresoDe: tomarRegreso(),
+        reducido: () => this.reducido,
+        alTerminarVuelo: () => this.alTerminarVueloN3(),
+      });
     } catch {
       return null;
     }
@@ -184,11 +202,72 @@ export class ThreeSceneManager {
   /** Suelta el mundo N3 (listeners, tweens y recursos de GPU). */
   public desmontarN3(): void {
     this.montajeN3++;
+    this.n3SoltarAlTerminar = false;
     if (this.n3) {
       this.n3.destruir();
       this.n3 = null;
     }
     this.isN3Active = false;
+  }
+
+  /**
+   * Al irse de la página del mundo: si la pieza todavía vuela al caso, el mundo sigue vivo hasta que
+   * aterrice (dibuja el vuelo sobre la página del caso, que ya montó); si no, se suelta ya.
+   */
+  public soltarN3(): void {
+    if (this.n3?.vueloPendiente) {
+      this.n3SoltarAlTerminar = true;
+      return;
+    }
+    this.desmontarN3();
+  }
+
+  /** La pieza aterrizó y su textura ya se entregó al caso: si la página del mundo ya se fue, se suelta. */
+  private alTerminarVueloN3(): void {
+    if (this.n3SoltarAlTerminar) this.desmontarN3();
+  }
+
+  /**
+   * Monta el medio del caso (N4) sobre el canvas persistente. Devuelve false si no hay WebGL (el caso
+   * cae al respaldo DOM). Si la pieza todavía vuela desde el N3, ese mundo sigue dibujándola y el caso
+   * espera su relevo antes de dibujar.
+   */
+  public async montarN4(container: HTMLElement, caso: CasoN4, onContextLost?: () => void): Promise<boolean> {
+    this.onContextLostCallback = onContextLost;
+    this.desmontarN4();
+    const turno = this.montajeN4;
+    if (!this.ensureRenderer(container) || !this.renderer) return false;
+
+    this.n2IsActive = false;
+    if (this.n2Group) this.n2Group.visible = false;
+    if (!this.n3?.volando) this.desmontarN3();
+    this.renderer.setClearColor(0x000000, 1);
+
+    const { MundoN4 } = await import('./n4/mundo');
+    // El visitante se fue mientras cargaba el módulo: no se monta nada
+    if (turno !== this.montajeN4 || this.isDisposed || !this.renderer) return false;
+    let mundo: MundoN4;
+    try {
+      mundo = new MundoN4(
+        this.renderer,
+        caso.imagenesDeMedios.map((img) => ({ img })),
+      );
+    } catch {
+      return false;
+    }
+    this.mundoN4 = mundo;
+    this.resume();
+    caso.adjuntarMundo(mundo);
+    return true;
+  }
+
+  /** Suelta el medio del caso (textura, render target y geometría). */
+  public desmontarN4(): void {
+    this.montajeN4++;
+    if (this.mundoN4) {
+      this.mundoN4.dispose();
+      this.mundoN4 = null;
+    }
   }
 
   public setupN2Menu(
@@ -536,8 +615,9 @@ export class ThreeSceneManager {
   public setN2Active(active: boolean): void {
     this.n2IsActive = active;
     if (active) {
-      // Se sale del mundo N3: sus recursos se sueltan antes de que N2 use el mismo contexto
+      // Se sale del mundo N3 (o del caso): sus recursos se sueltan antes de que N2 use el mismo contexto
       this.desmontarN3();
+      this.desmontarN4();
       if (this.scene) this.scene.background = null;
       if (this.renderer) {
         this.renderer.setRenderTarget(null);
@@ -568,6 +648,7 @@ export class ThreeSceneManager {
     this.detenerReloj();
     this.detachEvents();
     this.desmontarN3();
+    this.desmontarN4();
     if (this.n2TarjetasManager) {
       this.n2TarjetasManager.dispose();
       this.n2TarjetasManager = null;

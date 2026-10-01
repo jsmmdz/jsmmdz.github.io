@@ -1,0 +1,7 @@
+---
+/** Capítulo 4 («Proceso») para usar en el cuerpo MDX del caso: `<Proceso>texto</Proceso>`. */
+import Capitulo from './Capitulo.astro';
+import { CAPITULOS } from '@/lib/n4/capitulos';
+---
+
+<Capitulo k={4} titulo={CAPITULOS[4]}><slot /></Capitulo>

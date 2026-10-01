@@ -10,6 +10,7 @@ import type * as THREE from 'three';
 import { Pista } from '@/lib/n3/pista';
 import { ScrollVirtual } from '@/lib/n3/scroll';
 import { rectPortadaN4 } from '@/lib/n4/portada';
+import { cancelarVueloIda, entregarVueloIda, iniciarVueloIda } from '@/lib/navigation/vuelo';
 import { MundoN3, type DatosTarjeta } from './mundo';
 
 // K14: el HUD se apaga en 0,3 s con power1.out al abrir un caso
@@ -27,7 +28,9 @@ export interface EntradaControlador {
   /** Tarjeta que queda centrada al entrar (si no, la primera de un caso real). */
   slugInicial: string | null;
   reducido: () => boolean;
-  /** El vuelo llegó a la portada del caso: hay que navegar. */
+  /** Pieza de la que se viene de regreso volando desde su caso: queda quieta en su sitio al entrar. */
+  regresoDe: string | null;
+  /** El vuelo aterrizó y ya se entregó su relevo al caso: el mundo puede soltarse. */
   alTerminarVuelo: (slug: string) => void;
 }
 
@@ -45,11 +48,16 @@ export class ControladorN3 {
   private notificado = false;
   private destruido = false;
   private slugEnVuelo: string | null = null;
+  private indiceEnVuelo = -1;
+  private ultVuelo = '';
+  /** El contenedor del canvas persistente: ahí se publica `data-vuelo` (el `ClientRouter` reemplaza el de <html>). */
+  private readonly contenedorCanvas: HTMLElement | null;
 
   constructor(
     renderer: THREE.WebGLRenderer,
     private readonly e: EntradaControlador,
   ) {
+    this.contenedorCanvas = renderer.domElement.parentElement;
     this.hoverPosible = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     this.pista = new Pista(
       e.contenedor,
@@ -96,7 +104,8 @@ export class ControladorN3 {
     }
     if (this.destruido) return;
     this.publicar(true);
-    await this.mundo.entrar();
+    const quieta = this.e.regresoDe ? this.e.tarjetas.findIndex((t) => t.slug === this.e.regresoDe) : -1;
+    await this.mundo.entrar(quieta);
     if (this.destruido) return;
     this.mundo.listo = true;
     this.e.act.dataset.listo = '1';
@@ -119,12 +128,36 @@ export class ControladorN3 {
       this.mundo.actualizar(Math.abs(this.scroll.velocidad));
       this.mundo.dibujar();
     }
-    // El vuelo terminó y ya se dibujó su último cuadro: ahora sí se navega
+    if (this.mundo.volando && !this.notificado) this.publicarVuelo();
+    // El vuelo terminó y ya se dibujó su último cuadro: se entrega la textura al caso (que ya está
+    // montado o está por montar) y el mundo puede soltarse
     if (this.mundo.vueloTerminado && !this.notificado) {
       this.notificado = true;
+      this.quitarVuelo();
       const slug = this.slugEnVuelo;
-      if (slug) this.e.alTerminarVuelo(slug);
+      if (slug) {
+        entregarVueloIda(this.mundo.entregarRelevo(this.indiceEnVuelo));
+        this.e.alTerminarVuelo(slug);
+      }
     }
+  }
+
+  /** `data-vuelo` en el contenedor persistente: el progreso 0..1 del vuelo en curso. */
+  private publicarVuelo(): void {
+    const v = this.mundo.progresoVuelo.toFixed(3);
+    if (v === this.ultVuelo || !this.contenedorCanvas) return;
+    this.ultVuelo = v;
+    this.contenedorCanvas.dataset.vuelo = v;
+  }
+
+  private quitarVuelo(): void {
+    this.ultVuelo = '';
+    if (this.contenedorCanvas) delete this.contenedorCanvas.dataset.vuelo;
+  }
+
+  /** El vuelo sigue en curso (o aterrizó pero todavía no se entregó): el mundo no se puede soltar. */
+  get vueloPendiente(): boolean {
+    return this.mundo.volando && !this.notificado;
   }
 
   /** Escribe data-posicion y data-velocidad solo cuando cambian. */
@@ -173,8 +206,9 @@ export class ControladorN3 {
   // ---------- Del mundo al caso ----------
 
   /**
-   * Inicia el vuelo de la pieza del caso. Devuelve false si no hay vuelo (movimiento reducido, ventana
-   * angosta o tarjeta desconocida): quien llama navega directo.
+   * Inicia el vuelo de la pieza del caso (1,0 s). Devuelve false si no hay vuelo (movimiento reducido,
+   * ventana angosta o tarjeta desconocida): quien llama navega directo. Si hay vuelo, quien llama
+   * navega también, al clic: la página del caso monta mientras la pieza todavía vuela.
    */
   abrirCaso(slug: string): boolean {
     if (this.mundo.volando) return true;
@@ -182,7 +216,9 @@ export class ControladorN3 {
     const destino = rectPortadaN4(window.innerWidth);
     if (i < 0 || !destino || this.e.reducido()) return false;
     this.slugEnVuelo = slug;
+    this.indiceEnVuelo = i;
     this.notificado = false;
+    iniciarVueloIda(slug);
     this.e.act.classList.add('n3-volando');
     if (this.e.hud) gsap.to(this.e.hud, { opacity: 0, duration: HUD_APAGADO, ease: 'power1.out' });
     this.mundo.volar(i, { izq: destino.x, arriba: destino.y, ancho: destino.width, alto: destino.height }, Math.abs(this.scroll.velocidad));
@@ -198,6 +234,8 @@ export class ControladorN3 {
     if (!this.mundo.volando) return;
     this.mundo.cancelarVuelo();
     this.slugEnVuelo = null;
+    this.quitarVuelo();
+    cancelarVueloIda();
     this.e.act.classList.remove('n3-volando');
     if (this.e.hud) {
       gsap.killTweensOf(this.e.hud);
@@ -217,7 +255,8 @@ export class ControladorN3 {
   }
 
   alRedimensionar(): void {
-    if (this.destruido) return;
+    // Con la pieza volando la página ya puede ser la del caso: la pista del N3 no se vuelve a medir
+    if (this.destruido || this.mundo.volando) return;
     // La tarjeta que estaba en el centro sigue ahí después de medir otra vez
     const ancla = this.pista.ancla();
     this.pista.medir();
@@ -236,6 +275,7 @@ export class ControladorN3 {
       gsap.set(this.e.hud, { clearProps: 'opacity' });
     }
     this.e.act.classList.remove('n3-volando', 'n3-arrastrando');
+    this.quitarVuelo();
     this.mundo.dispose();
   }
 }

@@ -1,0 +1,21 @@
+---
+/**
+ * Un capítulo del caso (T31): el bloque de texto de la columna izquierda. Los siete ocupan el mismo
+ * sitio y se ve uno a la vez; todos están en el DOM, en orden y con su `h2`, para que un lector de
+ * pantalla los lea completos. Sus estilos viven en `N4CasoDeEstudio.astro`.
+ */
+interface Props {
+  /** Posición del capítulo, de 0 (idea) a 6 (resultado). */
+  k: number;
+  titulo: string;
+}
+
+const { k, titulo } = Astro.props;
+---
+
+<section class="n4-capitulo" data-n4-capitulo={k}>
+  <h2 class="n4-capitulo-rotulo">{titulo}</h2>
+  <div class="n4-capitulo-cuerpo">
+    <slot />
+  </div>
+</section>

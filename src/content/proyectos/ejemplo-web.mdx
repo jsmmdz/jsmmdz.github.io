@@ -13,15 +13,29 @@ decisiones:
 hallazgos:
   - "[EJEMPLO] La continuidad espacial mejora la comprensión del contenido."
 portada: ../../assets/proyectos/ejemplo-web-portada.jpg
+medios:
+  - src: ../../assets/proyectos/ejemplo-web-portada.jpg
+    alt: "[EJEMPLO] Portada del caso"
+  - src: ../../assets/disciplinas/web-textura.webp
+    alt: "[EJEMPLO] Medio del proceso (relleno)"
+  - src: ../../assets/disciplinas/web-poster.jpg
+    alt: "[EJEMPLO] Medio del resultado (relleno)"
 orden: 1
 ---
 
-## Proceso
+{/* Cada bloque es un capítulo del caso (T31): Proceso, Hallazgos y Resultado, en ese orden. Los otros
+cuatro (idea, problema, rol y aporte, decisiones) salen del encabezado de arriba. */}
+
+<Proceso>
 
 [EJEMPLO] Estructuración de la máquina de estados y pruebas continuas de accesibilidad.
 
-<Hallazgos />
+</Proceso>
 
-## Resultado
+<Hallazgos items={frontmatter.hallazgos} />
+
+<Resultado>
 
 [EJEMPLO] Sistema funcional con navegación fluida y tiempos de carga reducidos.
+
+</Resultado>

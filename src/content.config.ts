@@ -56,6 +56,19 @@ export const collections = {
         // Portada en video (opcional): ruta relativa a /media, MP4. La tarjeta del N3 lo usa como
         // textura y deja la imagen de portada como póster y como respaldo si el video falla.
         video: z.string().trim().min(1).optional(),
+        // Medios del caso (opcional, T31): el medio k es el del capítulo k (idea, problema, rol y aporte,
+        // decisiones, proceso, hallazgos, resultado). Si faltan, se repite el último; sin este campo,
+        // todos son la portada. Conviene que el primero sea la portada: es donde aterriza el vuelo.
+        medios: z
+          .array(
+            z.object({
+              src: image(),
+              alt: z.string(),
+              video: z.string().trim().min(1).optional(),
+            })
+          )
+          .max(7, 'medios admite a lo sumo 7 (uno por capítulo)')
+          .optional(),
         orden: z.coerce.number().int(),
       }),
   }),

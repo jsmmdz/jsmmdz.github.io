@@ -1,9 +1,23 @@
 ---
-import { render } from 'astro:content';
+/**
+ * Acto N4 — el caso de estudio (T31): la exposición por capítulos de Zero en dos columnas, con la regla
+ * de capítulos de Zero arriba y el anillo y la curvatura de Landberg.
+ *
+ * A la izquierda, el título y el capítulo activo (idea, problema, rol y aporte, decisiones, proceso,
+ * hallazgos, resultado); a la derecha, el medio del capítulo. El documento no se desplaza: el scroll es
+ * virtual (`lib/n4/scroll.ts`). Con WebGL el medio lo dibuja el canvas persistente y las imágenes de
+ * aquí son su respaldo; sin WebGL el medio es la imagen. El DOM del N4 es transparente sobre el canvas.
+ * Bajo 1024 px es una página apilada con scroll normal (el responsive queda fuera del MVP).
+ */
 import type { CollectionEntry } from 'astro:content';
+import { render } from 'astro:content';
+import Capitulo from '@/components/n4/Capitulo.astro';
 import Hallazgos from '@/components/n4/Hallazgos.astro';
+import Proceso from '@/components/n4/Proceso.astro';
+import Resultado from '@/components/n4/Resultado.astro';
 import { conBase } from '@/lib/rutas';
 import { variablesCssPortada } from '@/lib/n4/portada';
+import { CAPITULOS, mediosPorCapitulo, PX_POR_CAPITULO, PX_POR_MARCA, type MedioCaso } from '@/lib/n4/capitulos';
 
 interface Props {
   proyecto: CollectionEntry<'proyectos'>;
@@ -11,12 +25,21 @@ interface Props {
 }
 
 const { proyecto, disciplina } = Astro.props;
+const datos = proyecto.data;
 const discSlug = disciplina?.slug ?? 'web';
 const mundoUrl = conBase(`${discSlug}/`);
-
-// Compartir los hallazgos con el componente Hallazgos inyectado en MDX
-(globalThis as Record<string, unknown>).__currentProjectHallazgos = proyecto.data.hallazgos;
 const { Content } = await render(proyecto);
+
+// Un medio por capítulo: los del caso, el último repetido si faltan; sin `medios`, la portada
+const portada: MedioCaso = { src: datos.portada.src, ancho: datos.portada.width, alto: datos.portada.height, alt: `Portada de ${datos.titulo}` };
+const medios = mediosPorCapitulo(
+  datos.medios?.map((m) => ({ src: m.src.src, ancho: m.src.width, alto: m.src.height, alt: m.alt, video: m.video })),
+  portada,
+);
+
+// La regla de capítulos: una marca cada 0,1 alturas de ventana de scroll
+const marcas = Array.from({ length: Math.ceil((CAPITULOS.length * PX_POR_CAPITULO) / PX_POR_MARCA) + 1 }, (_, i) => i * PX_POR_MARCA);
+const anchoPista = CAPITULOS.length * PX_POR_CAPITULO;
 ---
 
 <article
@@ -24,110 +47,105 @@ const { Content } = await render(proyecto);
   aria-label="Detalle del caso de estudio"
   data-level="N4"
   data-discipline={discSlug}
-  data-project={proyecto.data.slug}
+  data-project={datos.slug}
+  data-aspecto-portada={portada.ancho / portada.alto}
   style={variablesCssPortada()}
 >
-  <div class="n4-layout">
-    <!-- Columna izquierda fija en escritorio: Volver, disciplina, título y metadatos -->
-    <aside class="n4-columna-fija" aria-label="Información del proyecto">
-      <a
-        href={mundoUrl}
-        data-n4-volver
-        class="n4-volver tipo-rotulo"
-      >
-        <span class="n4-flecha" aria-hidden="true">&larr;</span> Volver
-      </a>
+  <!-- Los medios de cada capítulo, en el rectángulo del medio. Con WebGL quedan ocultos tras el canvas. -->
+  <div class="n4-medios" role="group" aria-label="Medios del caso">
+    {medios.map((m, k) => (
+      <img
+        class="n4-medio"
+        data-n4-medio={k}
+        data-video={m.video ? m.video : undefined}
+        src={m.src}
+        width={m.ancho}
+        height={m.alto}
+        alt={m.alt}
+        loading="eager"
+        decoding="async"
+        fetchpriority={k === 0 ? 'high' : 'auto'}
+        draggable="false"
+      />
+    ))}
+  </div>
 
-      <div class="n4-info-fija">
-        <div class="n4-disciplina-tag tipo-rotulo">
-          <span class="n4-acento-marca" aria-hidden="true"></span>
-          <span>{disciplina?.nombre ?? 'Diseño web'}</span>
-        </div>
-
-        <h1 class="n4-titulo tipo-display">{proyecto.data.titulo}</h1>
-
-        <dl class="n4-metadatos">
-          <div class="n4-meta-item">
-            <dt class="tipo-rotulo">Año</dt>
-            <dd>{proyecto.data.anio}</dd>
-          </div>
-          <div class="n4-meta-item">
-            <dt class="tipo-rotulo">Rol</dt>
-            <dd>{proyecto.data.rol}</dd>
-          </div>
-        </dl>
-      </div>
-    </aside>
-
-    <!-- Columna derecha con portada arriba y secciones en orden con scroll -->
-    <div class="n4-columna-derecha">
-      <div class="n4-portada-wrap">
-        <img
-          src={proyecto.data.portada.src}
-          alt={`Portada de ${proyecto.data.titulo}`}
-          class="n4-portada"
-          loading="eager"
-          decoding="async"
-          fetchpriority="high"
-        />
-      </div>
-
-      <section class="n4-seccion">
-        <div class="n4-columna-lectura">
-          <h2>Idea</h2>
-          <p>{proyecto.data.idea}</p>
-        </div>
-      </section>
-
-      <section class="n4-seccion">
-        <div class="n4-columna-lectura">
-          <h2>Problema</h2>
-          <p>{proyecto.data.problema}</p>
-        </div>
-      </section>
-
-      <section class="n4-seccion">
-        <div class="n4-columna-lectura">
-          <h2>Rol y aporte</h2>
-          <p><strong>Rol:</strong> {proyecto.data.rol}</p>
-          <p><strong>Aporte:</strong> {proyecto.data.aporte}</p>
-        </div>
-      </section>
-
-      <section class="n4-seccion">
-        <div class="n4-columna-lectura">
-          <h2>Decisiones</h2>
-          <ul class="n4-lista-decisiones">
-            {proyecto.data.decisiones.map((d) => (
-              <li>
-                <strong>{d.que}:</strong> {d.porque}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      <div class="n4-mdx-cuerpo">
-        <Content components={{ Hallazgos }} />
-      </div>
+  <!-- Columna izquierda: el título y el capítulo activo -->
+  <div class="n4-columna">
+    <h1 class="n4-titulo">{datos.titulo}</h1>
+    <div class="n4-capitulos">
+      <Capitulo k={0} titulo={CAPITULOS[0]}>
+        <p>{datos.idea}</p>
+      </Capitulo>
+      <Capitulo k={1} titulo={CAPITULOS[1]}>
+        <p>{datos.problema}</p>
+      </Capitulo>
+      <Capitulo k={2} titulo={CAPITULOS[2]}>
+        <p><strong>Rol:</strong> {datos.rol}</p>
+        <p><strong>Aporte:</strong> {datos.aporte}</p>
+      </Capitulo>
+      <Capitulo k={3} titulo={CAPITULOS[3]}>
+        <ul class="n4-lista">
+          {datos.decisiones.map((d) => (
+            <li>
+              <strong>{d.que}:</strong> {d.porque}
+            </li>
+          ))}
+        </ul>
+      </Capitulo>
+      <!-- Proceso, Hallazgos y Resultado salen del cuerpo MDX, cada uno como su capítulo -->
+      <Content components={{ Proceso, Hallazgos, Resultado }} />
     </div>
+  </div>
+
+  <a href={mundoUrl} data-n4-volver class="n4-volver"><span class="n4-flecha" aria-hidden="true">&larr;</span> Volver</a>
+
+  <!-- La regla de capítulos de Zero: la pista se traslada bajo la aguja; cada rótulo salta a su capítulo -->
+  <nav class="n4-regla" aria-label="Capítulos" data-n4-regla>
+    <div class="n4-regla-pista" data-n4-regla-pista style={`width: ${anchoPista}px`}>
+      {marcas.map((x) => <i class="n4-marca" style={`left: ${x}px`}></i>)}
+      {CAPITULOS.map((_, k) => <i class="n4-marca n4-marca-capitulo" style={`left: ${k * PX_POR_CAPITULO}px`}></i>)}
+      {CAPITULOS.map((nombre, k) => (
+        <button type="button" class="n4-rotulo" data-n4-rotulo={k} style={`left: ${k * PX_POR_CAPITULO}px`}>{nombre}</button>
+      ))}
+    </div>
+    <span class="n4-aguja" aria-hidden="true"></span>
+  </nav>
+
+  <!-- El anillo de progreso de Landberg: abajo a la izquierda, con arco desde las 12 h -->
+  <div class="n4-anillo" data-n4-anillo aria-hidden="true">
+    <svg class="n4-anillo-svg" viewBox="0 0 24 24" focusable="false">
+      <circle class="n4-anillo-pista" data-n4-anillo-pista fill="none"></circle>
+      <circle class="n4-anillo-arco" data-n4-anillo-arco fill="none"></circle>
+    </svg>
   </div>
 </article>
 
 <script>
-  import { navigate } from 'astro:transitions/client';
+  import { isTransitionBeforePreparationEvent, navigate } from 'astro:transitions/client';
   import { transicionConRespaldo } from '@/lib/navigation/instancia';
+  import { CasoN4 } from '@/lib/n4/caso';
+  import { N4_MEDIO } from '@/lib/n4/portada';
+  import type { ThreeSceneManager } from '@/lib/three/scene-manager';
 
-  // Un solo arranque por visita: el listener cuelga de este controlador y se suelta al irse
+  // Un solo arranque por visita: los listeners cuelgan de este controlador y se sueltan al irse
   let controlN4: AbortController | null = null;
   let actIniciado: HTMLElement | null = null;
+  let caso: CasoN4 | null = null;
+  let manager: ThreeSceneManager | null = null;
+  let saliendo = false;
 
   function limpiarN4() {
     if (controlN4) {
       controlN4.abort();
       controlN4 = null;
     }
+    caso?.destruir();
+    caso = null;
+    manager?.desmontarN4();
+    manager = null;
     actIniciado = null;
+    saliendo = false;
   }
 
   function registrarProyectoActivo() {
@@ -140,7 +158,7 @@ const { Content } = await render(proyecto);
     }
   }
 
-  function initN4Volver() {
+  function initN4() {
     const act = document.getElementById('act-n4');
     if (!act) return;
 
@@ -151,279 +169,447 @@ const { Content } = await render(proyecto);
     actIniciado = act;
 
     registrarProyectoActivo();
-    const volverBtn = act.querySelector<HTMLAnchorElement>('a[data-n4-volver]');
-    if (!volverBtn) return;
-
     const control = new AbortController();
     controlN4 = control;
-    volverBtn.addEventListener(
+    const { signal } = control;
+    const volverBtn = act.querySelector<HTMLAnchorElement>('a[data-n4-volver]');
+    const contenedor = document.getElementById('webgl-canvas-container');
+    const casoActual = new CasoN4(act, { contenedor });
+    caso = casoActual;
+
+    // «← Volver» y Esc: salen al mundo. Con la pieza llegada volando, el plano vuela de regreso (1,0 s)
+    // antes de que la página cambie; si no, sale con la bisagra negra de siempre
+    const salir = () => {
+      if (saliendo || !volverBtn) return;
+      saliendo = true;
+      registrarProyectoActivo();
+      transicionConRespaldo({ type: 'BACK_BUTTON_CLICK' }, 1200);
+      navigate(volverBtn.href);
+    };
+    volverBtn?.addEventListener(
       'click',
       (e) => {
         e.preventDefault();
-        registrarProyectoActivo();
-        transicionConRespaldo({ type: 'BACK_BUTTON_CLICK' }, 1200);
-        navigate(volverBtn.href);
+        salir();
       },
-      { signal: control.signal }
+      { signal }
     );
+    window.addEventListener(
+      'keydown',
+      (e: KeyboardEvent) => {
+        if (e.key !== 'Escape' || e.ctrlKey || e.metaKey || e.altKey) return;
+        e.preventDefault();
+        salir();
+      },
+      { signal }
+    );
+
+    // Cualquier salida al mundo (el control, Esc o el atrás del navegador) pasa por aquí: se pide que la
+    // carga de la página corra a la vez que el vuelo de regreso, y la bisagra negra no tapa la pieza
+    document.addEventListener(
+      'astro:before-preparation',
+      (ev) => {
+        if (!isTransitionBeforePreparationEvent(ev) || !caso || !caso.puedeVolarAl(ev.to)) return;
+        saliendo = true;
+        const cargar = ev.loader;
+        // Si el vuelo falla, la navegación sigue igual
+        const vuelo = caso.volarDeRegreso().catch(() => undefined);
+        ev.loader = async () => {
+          await Promise.all([vuelo, cargar()]);
+        };
+        queueMicrotask(() => document.getElementById('black-hinge-layer')?.classList.remove('activo'));
+      },
+      { signal }
+    );
+
+    casoActual.iniciar();
+    // Ventana angosta: página apilada, sin WebGL
+    if (window.innerWidth < N4_MEDIO.anchoMinEscritorioPx) return;
+    if (!contenedor) {
+      casoActual.sinWebgl();
+      return;
+    }
+
+    // Three.js y el medio del caso se cargan aparte: nada de eso entra en el JS inicial del home
+    import('@/lib/three/scene-manager')
+      .then(async ({ getThreeSceneManager }) => {
+        if (signal.aborted) return;
+        manager = getThreeSceneManager();
+        const montado = await manager.montarN4(contenedor, casoActual, () => casoActual.sinWebgl());
+        if (signal.aborted) return;
+        if (!montado) casoActual.sinWebgl();
+      })
+      .catch(() => {
+        casoActual.sinWebgl();
+      });
   }
 
   document.addEventListener('astro:page-load', () => {
     if (document.body.dataset.currentLevel === 'N4') {
-      initN4Volver();
+      initN4();
     }
   });
 
   document.addEventListener('astro:before-swap', limpiarN4);
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initN4Volver, { once: true });
+    document.addEventListener('DOMContentLoaded', initN4, { once: true });
   } else {
-    initN4Volver();
+    initN4();
   }
 </script>
 
-<style>
+<style is:global>
+  /* En escritorio el N4 usa el rem de Landberg (1 rem = 0,667 vw), como el N3: las medidas de la ficha
+     (x 9 rem, y 6 rem, 70 rem…) valen en cualquier ancho. El documento no se desplaza. */
+  @media (min-width: 1024px) {
+    html:has(#act-n4) {
+      font-size: clamp(5px, 0.6667vw, 20px);
+      overflow: hidden;
+    }
+  }
+
+  /* Medidas propias del N4 que no son rem: la regla de Zero (px) y el trazo del anillo */
   #act-n4 {
+    --n4-regla-ancho: 300px;
+    --n4-regla-alto: 60px;
+    --n4-regla-arriba: 16px;
+    --n4-regla-rotulo: 12px;
+    --n4-trazo: 2px;
+    --n4-foco: 2px;
     position: relative;
-    width: 100%;
-    min-height: 100vh;
-    background-color: var(--color-negro);
+    box-sizing: border-box;
     color: var(--color-texto-claro);
-    box-sizing: border-box;
-    padding-top: var(--espacio-2xl);
-    padding-bottom: var(--espacio-3xl);
-    overflow-x: hidden;
+    font-family: var(--fuente-texto);
+    font-size: 1rem;
+    line-height: 1.4;
+    /* Transparente: el negro lo pone la escena (así el vuelo y el medio en WebGL se ven a través) */
+    background: transparent;
   }
 
-  .n4-layout {
-    position: relative;
+  #act-n4 :focus-visible {
+    outline: var(--n4-foco) solid var(--color-texto-claro);
+    outline-offset: var(--n4-foco);
+  }
+
+  /* ---------- Escritorio: dos columnas sobre una página que no se desplaza ---------- */
+  @media (min-width: 1024px) {
+    #act-n4 {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    #act-n4 a,
+    #act-n4 button {
+      pointer-events: auto;
+    }
+
+    /* Con JS y antes de arrancar, lo que entra animado está oculto: así no hay un destello previo */
+    @media (scripting: enabled) {
+      #act-n4:not(.n4-iniciado) :is(.n4-titulo, .n4-capitulo, .n4-volver, .n4-regla) {
+        opacity: 0;
+      }
+    }
+
+    /* El medio: x 63 rem, y 6 rem, 70 rem de ancho y 16:10. No se desplaza: cambia en su sitio. */
+    #act-n4 .n4-medio {
+      position: absolute;
+      left: calc(var(--n4-medio-x) * 1rem);
+      top: calc(var(--n4-medio-y) * 1rem);
+      width: calc(var(--n4-medio-ancho) * 1rem);
+      height: auto;
+      aspect-ratio: var(--n4-proporcion);
+      object-fit: cover;
+      display: block;
+      pointer-events: none;
+    }
+
+    /* Con WebGL el plano del canvas dibuja el medio; la imagen queda detrás como respaldo */
+    #act-n4.n4-con-webgl .n4-medio {
+      opacity: 0 !important;
+    }
+
+    /* La columna del texto: en x 9 rem; el título a 6 rem del borde y el capítulo a 2 rem debajo */
+    #act-n4 .n4-columna {
+      position: absolute;
+      left: calc(9 * 1rem);
+      top: calc(6 * 1rem);
+      width: calc(44 * 1rem);
+    }
+
+    #act-n4 .n4-titulo {
+      margin: 0;
+      font-family: var(--fuente-display);
+      font-weight: 800;
+      /* El tamaño exacto lo mide `lib/n4/titulo.ts` (el mayor que quepa en 44 rem, hasta 4,5 rem) */
+      font-size: 2rem;
+      line-height: 1.15;
+      letter-spacing: var(--tracking-display-lg);
+      white-space: nowrap;
+      color: var(--color-texto-claro);
+    }
+
+    @media (scripting: enabled) {
+      /* Los siete capítulos ocupan el mismo sitio; se ve uno a la vez */
+      #act-n4 .n4-capitulos {
+        display: grid;
+        grid-template-columns: minmax(0, calc(40 * 1rem));
+        margin-top: calc(2 * 1rem);
+        max-height: calc(100svh - 24rem);
+        overflow: clip;
+      }
+
+      #act-n4 .n4-capitulo {
+        grid-area: 1 / 1;
+        pointer-events: none;
+      }
+    }
+
+    /* «← Volver»: en el sitio del «VOLVER» del mundo (x 8 rem, y 4 rem) */
+    #act-n4 .n4-volver {
+      position: fixed;
+      left: calc(8 * 1rem);
+      top: calc(4 * 1rem);
+      z-index: var(--z-hud);
+      font-size: 1rem;
+      line-height: 1;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    /* La regla de Zero: 300 × 60 px, centrada, a 16 px del borde de arriba */
+    #act-n4 .n4-regla {
+      position: fixed;
+      top: var(--n4-regla-arriba);
+      left: 50%;
+      width: var(--n4-regla-ancho);
+      height: var(--n4-regla-alto);
+      margin-left: calc(var(--n4-regla-ancho) / -2);
+      z-index: var(--z-hud);
+      /* clip y no hidden: el foco de un rótulo fuera de la ventana no puede desplazar la pista */
+      overflow: clip;
+      /* El 8 % de cada borde se desvanece */
+      -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+      mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+    }
+
+    #act-n4 .n4-regla-pista {
+      position: absolute;
+      inset: 0 auto 0 0;
+      will-change: transform;
+    }
+
+    /* Marcas, aguja y rótulos caben en los 41 px que hay entre la regla y el borde de arriba del medio */
+    #act-n4 .n4-marca {
+      position: absolute;
+      top: 0;
+      width: 1px;
+      height: 6px;
+      background: var(--color-texto-claro);
+      opacity: 0.5;
+    }
+
+    #act-n4 .n4-marca-capitulo {
+      height: 14px;
+      opacity: 1;
+    }
+
+    #act-n4 .n4-aguja {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      width: 1px;
+      height: 18px;
+      background: var(--color-texto-claro);
+    }
+
+    #act-n4 .n4-rotulo {
+      position: absolute;
+      top: 22px;
+      transform: translateX(-50%);
+      margin: 0;
+      padding: 2px 4px;
+      border-width: 0;
+      background: transparent;
+      color: var(--color-texto-claro);
+      font-family: var(--fuente-texto);
+      font-size: var(--n4-regla-rotulo);
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: var(--tracking-rotulo);
+      font-variant-caps: all-small-caps;
+      text-transform: uppercase;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    #act-n4 .n4-rotulo[aria-current='step'] {
+      text-decoration: underline;
+    }
+
+    #act-n4 .n4-rotulo:disabled {
+      cursor: default;
+    }
+
+    /* El anillo de Landberg: 2,5 rem a 8 rem del borde izquierdo y 5 rem del de abajo */
+    #act-n4 .n4-anillo {
+      position: fixed;
+      left: calc(8 * 1rem);
+      bottom: calc(5 * 1rem);
+      width: calc(2.5 * 1rem);
+      height: calc(2.5 * 1rem);
+      z-index: var(--z-hud);
+    }
+  }
+
+  #act-n4 .n4-anillo-svg {
+    display: block;
     width: 100%;
-    max-width: var(--n4-contenedor-max);
-    margin-left: auto;
-    margin-right: auto;
-    padding-left: var(--espacio-lg);
-    padding-right: var(--espacio-lg);
-    box-sizing: border-box;
+    height: 100%;
+    overflow: visible;
   }
 
-  .n4-columna-fija {
-    display: flex;
-    flex-direction: column;
-    gap: var(--espacio-md);
-    box-sizing: border-box;
+  #act-n4 .n4-anillo-pista,
+  #act-n4 .n4-anillo-arco {
+    stroke-width: var(--n4-trazo);
   }
 
-  .n4-volver {
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-start;
-    min-height: 32px;
-    min-width: 32px;
-    box-sizing: border-box;
-    gap: var(--espacio-2xs);
+  /* La pista, en el gris casi negro (#111111 del token de texto oscuro); el arco, en crema */
+  #act-n4 .n4-anillo-pista {
+    stroke: var(--color-texto-oscuro);
+  }
+
+  #act-n4 .n4-anillo-arco {
+    stroke: var(--color-texto-claro);
+  }
+
+  /* ---------- Texto de los capítulos (rem de Landberg) ---------- */
+  #act-n4 .n4-volver {
+    display: inline-block;
     color: var(--color-texto-claro);
     text-decoration: none;
-    padding: var(--espacio-2xs) 0;
     font-family: var(--fuente-texto);
-    font-size: var(--tamano-rotulo);
-    line-height: var(--linea-rotulo);
-    letter-spacing: var(--tracking-rotulo);
-    font-weight: 600;
-    font-variant-caps: all-small-caps;
-    text-transform: uppercase;
-    transition: color var(--duracion-corta) var(--curva-entrada);
   }
 
-  .n4-volver:hover {
-    color: var(--color-texto-claro);
+  #act-n4 .n4-volver:hover {
     text-decoration: underline;
   }
 
-  .n4-volver:focus-visible {
-    outline: 2px solid var(--color-texto-claro);
-    outline-offset: 2px;
-  }
-
-  .n4-info-fija {
-    display: flex;
-    flex-direction: column;
-    gap: var(--espacio-sm);
-  }
-
-  .n4-disciplina-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--espacio-2xs);
-    color: var(--color-texto-claro);
+  #act-n4 .n4-capitulo-rotulo {
+    margin: 0 0 1rem;
     font-family: var(--fuente-texto);
-    font-size: var(--tamano-rotulo);
-    line-height: var(--linea-rotulo);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.3;
     letter-spacing: var(--tracking-rotulo);
-    font-weight: 600;
-    text-transform: uppercase;
     font-variant-caps: all-small-caps;
-  }
-
-  .n4-acento-marca {
-    width: 8px;
-    height: 8px;
-    background-color: var(--acento-activo);
-    display: inline-block;
-    flex-shrink: 0;
-  }
-
-  .n4-titulo {
-    font-family: var(--fuente-display);
-    font-size: var(--tamano-display-lg);
-    line-height: var(--linea-display-lg);
-    letter-spacing: var(--tracking-display-lg);
-    font-weight: 800;
-    margin: 0;
-    color: var(--color-texto-claro);
-    hyphens: none;
-    overflow-wrap: break-word;
-  }
-
-  .n4-metadatos {
-    margin: var(--espacio-md) 0 0 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--espacio-sm);
-  }
-
-  .n4-meta-item {
-    display: flex;
-    flex-direction: column;
-    gap: var(--espacio-3xs);
-    margin: 0;
-  }
-
-  .n4-meta-item dt {
-    color: var(--color-texto-claro);
-    font-family: var(--fuente-texto);
-    font-size: var(--tamano-rotulo);
-    line-height: var(--linea-rotulo);
-    letter-spacing: var(--tracking-rotulo);
     text-transform: uppercase;
-    font-variant-caps: all-small-caps;
-    font-weight: 600;
+    color: var(--color-texto-claro);
   }
 
-  .n4-meta-item dd {
+  #act-n4 .n4-capitulo-cuerpo {
+    max-width: calc(40 * 1rem);
+    font-size: 1.6rem;
+    line-height: 1.4;
+  }
+
+  #act-n4 .n4-capitulo-cuerpo p {
+    margin: 0 0 1rem;
+  }
+
+  #act-n4 .n4-lista {
     margin: 0;
-    color: var(--color-texto-claro);
-    font-family: var(--fuente-texto);
-    font-size: var(--tamano-texto-sm);
-    line-height: var(--linea-texto-sm);
-  }
-
-  /* Columna derecha de medios y contenido */
-  .n4-columna-derecha {
+    padding-left: 1.4em;
     display: flex;
     flex-direction: column;
-    box-sizing: border-box;
+    gap: 0.6rem;
   }
 
-  .n4-portada-wrap {
-    width: 100%;
-    margin-bottom: var(--espacio-2xl);
-  }
-
-  .n4-portada {
-    width: 100%;
-    height: auto;
-    aspect-ratio: var(--n4-proporcion);
-    object-fit: cover;
-    display: block;
-  }
-
-  .n4-seccion {
-    position: relative;
-    width: 100%;
-    margin-bottom: var(--espacio-2xl);
-  }
-
-  .n4-columna-lectura {
-    position: relative;
-    max-width: 68ch;
-  }
-
-  .n4-seccion h2,
-  :global(.n4-mdx-cuerpo h2) {
-    font-family: var(--fuente-texto);
-    font-size: var(--tamano-display-md);
-    line-height: var(--linea-display-md);
-    letter-spacing: var(--tracking-display-md);
-    font-weight: 600;
-    color: var(--color-texto-claro);
-    margin: 0 0 var(--espacio-sm) 0;
-  }
-
-  .n4-seccion p,
-  :global(.n4-mdx-cuerpo p) {
-    font-family: var(--fuente-texto);
-    font-size: var(--tamano-texto-md);
-    line-height: var(--linea-texto-md);
-    letter-spacing: var(--tracking-texto-md);
-    color: var(--color-texto-claro);
-    margin: 0 0 var(--espacio-sm) 0;
-    max-width: 68ch;
-  }
-
-  .n4-lista-decisiones {
-    list-style: disc;
-    padding-left: var(--espacio-lg);
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--espacio-xs);
-  }
-
-  .n4-lista-decisiones li {
-    font-family: var(--fuente-texto);
-    font-size: var(--tamano-texto-md);
-    line-height: var(--linea-texto-md);
-    color: var(--color-texto-claro);
-  }
-
-  :global(.n4-mdx-cuerpo) {
-    display: flex;
-    flex-direction: column;
-    gap: var(--espacio-2xl);
-  }
-
-  /* Responsive: 1440px y desktop >= 1024px */
-  @media (min-width: 1024px) {
-    .n4-columna-fija {
-      position: fixed;
-      top: var(--espacio-2xl);
-      left: var(--espacio-lg);
-      width: min(34vw, 440px);
-      max-height: calc(100vh - var(--espacio-2xl) * 2);
-      overflow-y: auto;
-      z-index: var(--z-hud);
-    }
-
-    .n4-columna-derecha {
-      margin-left: max(var(--n4-columna-vw), var(--n4-columna-min));
-      width: calc(100% - max(var(--n4-columna-vw), var(--n4-columna-min)));
-      max-width: var(--n4-ancho-max);
-    }
-  }
-
-  /* Responsive: pantallas menores a 1024px (apilado vertical) */
+  /* ---------- Ventana angosta (< 1024 px): página apilada con scroll normal ---------- */
   @media (max-width: 1023px) {
-    .n4-columna-fija {
-      position: static;
-      width: 100%;
-      margin-bottom: var(--espacio-2xl);
+    #act-n4 {
+      padding: var(--espacio-lg) var(--espacio-md) var(--espacio-3xl);
+      min-height: 100vh;
     }
 
-    .n4-columna-derecha {
-      margin-left: 0;
+    #act-n4 .n4-volver {
+      display: inline-block;
+      margin-bottom: var(--espacio-md);
+      font-size: var(--tamano-rotulo);
+      letter-spacing: var(--tracking-rotulo);
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: var(--espacio-2xs) 0;
+    }
+
+    #act-n4 .n4-medios {
+      margin-bottom: var(--espacio-lg);
+    }
+
+    #act-n4 .n4-medio {
+      display: none;
       width: 100%;
+      height: auto;
+      aspect-ratio: var(--n4-proporcion);
+      object-fit: cover;
+    }
+
+    #act-n4 .n4-medio[data-n4-medio='0'] {
+      display: block;
+    }
+
+    #act-n4 .n4-titulo {
+      margin: 0 0 var(--espacio-lg);
+      font-family: var(--fuente-display);
+      font-weight: 800;
+      font-size: var(--tamano-display-lg);
+      line-height: var(--linea-display-lg);
+      letter-spacing: var(--tracking-display-lg);
+      overflow-wrap: break-word;
+    }
+
+    #act-n4 .n4-capitulo {
+      margin-bottom: var(--espacio-xl);
+    }
+
+    #act-n4 .n4-capitulo-rotulo {
+      font-size: var(--tamano-rotulo);
+      margin-bottom: var(--espacio-xs);
+    }
+
+    #act-n4 .n4-capitulo-cuerpo {
+      font-size: var(--tamano-texto-md);
+      line-height: var(--linea-texto-md);
+      max-width: 68ch;
+    }
+
+    #act-n4 .n4-regla,
+    #act-n4 .n4-anillo {
+      display: none;
+    }
+  }
+
+  /* Sin JS en escritorio: los capítulos caen uno bajo otro y el documento se puede leer; los medios,
+     que dependen del scroll virtual, no se muestran */
+  @media (min-width: 1024px) and (scripting: none) {
+    #act-n4 {
+      position: static;
+      overflow: visible;
+      pointer-events: auto;
+      min-height: 100vh;
+      padding: calc(6 * 1rem) calc(9 * 1rem);
+    }
+
+    #act-n4 .n4-columna {
+      position: static;
+    }
+
+    #act-n4 .n4-medios,
+    #act-n4 .n4-regla,
+    #act-n4 .n4-anillo {
+      display: none;
     }
   }
 </style>

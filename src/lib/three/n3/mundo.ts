@@ -11,14 +11,13 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
 import type { Pista, RectTarjeta } from '@/lib/n3/pista';
+import type { RelevoVuelo } from '@/lib/navigation/vuelo';
+import { CAM_Z, FOV, SEMIALTO } from '../camara';
 import { PASE_FRAGMENT, PASE_VERTEX, TARJETA_FRAGMENT, TARJETA_VERTEX } from './glsl';
 import { Piso } from './piso';
 import { dibujarFondo, dibujarOverlay, leerColoresN3, type ColoresN3 } from './textura-tarjeta';
 import { Vuelo } from './vuelo';
 
-// K2: la cámara
-const FOV = 53.4;
-const CAM_Z = 41.18;
 // Muestras del render target del mundo (D4: el antialias de Landberg)
 const MUESTRAS = 4;
 // K11: concavidad del hover (× alto de la tarjeta) y su duración
@@ -258,7 +257,7 @@ export class MundoN3 {
     this.camara.aspect = ww / wh;
     this.camara.updateProjectionMatrix();
     this.camara.updateMatrixWorld(true);
-    this.H = Math.tan((FOV / 2) * (Math.PI / 180)) * CAM_Z;
+    this.H = SEMIALTO;
     this.W = this.H * (ww / wh);
     this.uW.value = this.W;
     const r = this.pista.rects[0];
@@ -358,8 +357,11 @@ export class MundoN3 {
 
   // ---------- Animaciones ----------
 
-  /** Entrada de K19: las tarjetas llegan desde ±0,5 ventanas, escalonadas desde la más cercana al centro. */
-  entrar(): Promise<void> {
+  /**
+   * Entrada de K19: las tarjetas llegan desde ±0,5 ventanas, escalonadas desde la más cercana al centro.
+   * `quieta` es la tarjeta que acaba de volar de regreso desde el caso: se queda en su sitio.
+   */
+  entrar(quieta = -1): Promise<void> {
     const ww = this.pista.ancho;
     this.iniciado = true;
     if (this.reducido()) {
@@ -379,8 +381,14 @@ export class MundoN3 {
     });
     const orden = this.cartas
       .map((_, i) => ({ i, d: Math.abs(this.pista.rects[i].izq + this.pista.rects[i].ancho / 2 - ww / 2) }))
+      .filter(({ i }) => i !== quieta)
       .sort((a, b) => a.d - b.d);
     return new Promise<void>((listo) => {
+      if (orden.length === 0) {
+        this.sucio = true;
+        listo();
+        return;
+      }
       orden.forEach(({ i }, lugar) => {
         const c = this.cartas[i];
         const r = this.pista.rects[i];
@@ -426,6 +434,28 @@ export class MundoN3 {
 
   get vueloTerminado(): boolean {
     return this.vuelo?.terminado === true;
+  }
+
+  /** Progreso 0..1 del vuelo (con la curva «ro»); 0 si no hay vuelo. */
+  get progresoVuelo(): number {
+    return this.vuelo?.p ?? 0;
+  }
+
+  /**
+   * Entrega la textura de la pieza que aterrizó para que el caso la dibuje sin un cuadro negro: sale
+   * de la tarjeta (ya no se libera con ella) y su dueño pasa a ser quien la reciba. Null si la pieza
+   * no tiene una imagen ya cargada (o es un video): el caso carga la suya.
+   */
+  entregarRelevo(indice: number): RelevoVuelo | null {
+    const c = this.cartas[indice];
+    const img = c?.datos.img;
+    if (!c || !img || img.naturalWidth === 0) return null;
+    const tex = c.malla.material.uniforms.u_map.value;
+    if (!(tex instanceof THREE.Texture) || tex instanceof THREE.VideoTexture) return null;
+    const i = c.texturas.indexOf(tex);
+    if (i < 0) return null;
+    c.texturas.splice(i, 1);
+    return { textura: tex, fuente: img.currentSrc || img.src, aspecto: img.naturalWidth / img.naturalHeight };
   }
 
   /** Inicia el vuelo de la tarjeta `indice` hasta `destino` (px CSS). */

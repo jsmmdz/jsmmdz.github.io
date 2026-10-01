@@ -13,15 +13,29 @@ decisiones:
 hallazgos:
   - "[EJEMPLO] Los tiempos menores a 400 ms mantienen la atención del espectador."
 portada: ../../assets/proyectos/ejemplo-motion-portada.jpg
+medios:
+  - src: ../../assets/proyectos/ejemplo-motion-portada.jpg
+    alt: "[EJEMPLO] Portada del caso"
+  - src: ../../assets/disciplinas/motion-textura.webp
+    alt: "[EJEMPLO] Medio del proceso (relleno)"
+  - src: ../../assets/disciplinas/motion-poster.jpg
+    alt: "[EJEMPLO] Medio del resultado (relleno)"
 orden: 1
 ---
 
-## Proceso
+{/* Cada bloque es un capítulo del caso (T31): Proceso, Hallazgos y Resultado, en ese orden. Los otros
+cuatro (idea, problema, rol y aporte, decisiones) salen del encabezado de arriba. */}
+
+<Proceso>
 
 [EJEMPLO] Análisis fotograma a fotograma de las transiciones y ajustes de curvas.
 
-<Hallazgos />
+</Proceso>
 
-## Resultado
+<Hallazgos items={frontmatter.hallazgos} />
+
+<Resultado>
 
 [EJEMPLO] Secuencias animadas integradas con la interacción de usuario.
+
+</Resultado>
