@@ -5,9 +5,10 @@
  * - N2 (Aikawa): el cilindro de tarjetas de vidrio, dibujado directo a pantalla, sin antialias.
  * - N3 (Landberg): el mundo de la disciplina vive en `lib/three/n3/` (la cinta, el piso y el vuelo);
  *   aquí solo se monta, se le da el reloj y se desmonta. No se cambia nada del N2 para eso.
- * - N4 (caso de estudio): el medio del caso vive en `lib/three/n4/`; lo dibuja el controlador del caso
- *   (`lib/n4/caso.ts`) con su propio paso del reloj único. Aquí solo se monta y se desmonta. Mientras
- *   la pieza todavía vuela del N3 al N4 conviven los dos mundos: el N3 se suelta al aterrizar.
+ * - N4 (caso de estudio): la foto, las cortinas y los cristales del caso viven en `lib/three/n4/`; los
+ *   dibuja el controlador del caso (`lib/n4/caso.ts`) con su propio paso del reloj único. Aquí solo se
+ *   monta y se desmonta. Mientras la pieza todavía vuela del N3 al N4 conviven los dos mundos: el N3 se
+ *   suelta al aterrizar.
  * - Un solo reloj: gsap.ticker mueve el render (y Lenis, en el home); no hay rAF propio.
  * - Antialias por nivel (D4): el contexto se crea sin antialias (N2, como Aikawa) y el mundo N3 se
  *   dibuja en un render target de 4 muestras que se copia a pantalla (como Landberg).
@@ -228,7 +229,7 @@ export class ThreeSceneManager {
   }
 
   /**
-   * Monta el medio del caso (N4) sobre el canvas persistente. Devuelve false si no hay WebGL (el caso
+   * Monta el mundo del caso (N4) sobre el canvas persistente. Devuelve false si no hay WebGL (el caso
    * cae al respaldo DOM). Si la pieza todavía vuela desde el N3, ese mundo sigue dibujándola y el caso
    * espera su relevo antes de dibujar.
    */
@@ -251,6 +252,7 @@ export class ThreeSceneManager {
       mundo = new MundoN4(
         this.renderer,
         caso.imagenesDeMedios.map((img) => ({ img })),
+        caso.configMundo(),
       );
     } catch {
       return false;
@@ -261,7 +263,7 @@ export class ThreeSceneManager {
     return true;
   }
 
-  /** Suelta el medio del caso (textura, render target y geometría). */
+  /** Suelta el mundo del caso (texturas, render targets y geometrías). */
   public desmontarN4(): void {
     this.montajeN4++;
     if (this.mundoN4) {

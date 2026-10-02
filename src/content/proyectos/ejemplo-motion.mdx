@@ -3,39 +3,33 @@ slug: ejemplo-motion
 disciplina: motion
 titulo: "[EJEMPLO] Identidad cinética y ritmo visual"
 anio: 2026
-rol: "[EJEMPLO] Diseñador de movimiento y animador"
-idea: "[EJEMPLO] Transmitir peso físico mediante curvas de aceleración calculadas."
-problema: "[EJEMPLO] Evitar movimientos artificiales o desconectados de la interacción."
-aporte: "[EJEMPLO] Calibración de transiciones con curvas bézier y desaceleración fluida."
-decisiones:
-  - que: "[EJEMPLO] Curvas con desaceleración fuerte"
-    porque: "[EJEMPLO] Aportan naturalidad al frenado de elementos visuales."
-hallazgos:
-  - "[EJEMPLO] Los tiempos menores a 400 ms mantienen la atención del espectador."
 portada: ../../assets/proyectos/ejemplo-motion-portada.jpg
-medios:
-  - src: ../../assets/proyectos/ejemplo-motion-portada.jpg
-    alt: "[EJEMPLO] Portada del caso"
-  - src: ../../assets/disciplinas/motion-textura.webp
-    alt: "[EJEMPLO] Medio del proceso (relleno)"
-  - src: ../../assets/disciplinas/motion-poster.jpg
-    alt: "[EJEMPLO] Medio del resultado (relleno)"
+fondo: "#5C3F00"
+historia:
+  - tipo: idea
+    destacado: "[EJEMPLO]"
+    texto: "[EJEMPLO] Una pieza animada que explica una idea compleja en medio minuto."
+    foto: ../../assets/disciplinas/motion-textura.webp
+    alt: "[EJEMPLO] Foto de relleno de la idea"
+  - tipo: problema
+    destacado: "30 s"
+    texto: "[EJEMPLO] Contar mucho en poco tiempo sin saturar al espectador."
+    foto: ../../assets/disciplinas/web-textura.webp
+    alt: "[EJEMPLO] Foto de relleno del problema"
+  - tipo: rol
+    destacado: "1 persona"
+    texto: "[EJEMPLO] Guion, dirección de arte y animación."
+    foto: ../../assets/disciplinas/3d-textura.webp
+    alt: "[EJEMPLO] Foto de relleno del rol"
+  - tipo: proceso
+    destacado: "4 pruebas"
+    texto: "[EJEMPLO] Storyboard, animática y pruebas de ritmo antes del render final."
+    foto: ../../assets/disciplinas/editorial-textura.webp
+    alt: "[EJEMPLO] Foto de relleno del proceso"
+  - tipo: resultado
+    destacado: "+25 %"
+    texto: "[EJEMPLO] Más gente la vio completa que en la versión anterior."
+    foto: ../../assets/disciplinas/videojuegos-textura.webp
+    alt: "[EJEMPLO] Foto de relleno del resultado"
 orden: 1
 ---
-
-{/* Cada bloque es un capítulo del caso (T31): Proceso, Hallazgos y Resultado, en ese orden. Los otros
-cuatro (idea, problema, rol y aporte, decisiones) salen del encabezado de arriba. */}
-
-<Proceso>
-
-[EJEMPLO] Análisis fotograma a fotograma de las transiciones y ajustes de curvas.
-
-</Proceso>
-
-<Hallazgos items={frontmatter.hallazgos} />
-
-<Resultado>
-
-[EJEMPLO] Secuencias animadas integradas con la interacción de usuario.
-
-</Resultado>

@@ -3,39 +3,43 @@ slug: ejemplo-web
 disciplina: web
 titulo: "[EJEMPLO] Plataforma web interactiva"
 anio: 2026
-rol: "[EJEMPLO] Dirección técnica y desarrollo frontend"
-idea: "[EJEMPLO] Construir una experiencia web continua que se sienta como una película."
-problema: "[EJEMPLO] Mantener alto rendimiento de renderizado sin recargas de página."
-aporte: "[EJEMPLO] Arquitectura de capas cinemáticas y sincronización de estado."
-decisiones:
-  - que: "[EJEMPLO] Canvas WebGL único persistente"
-    porque: "[EJEMPLO] Evita recrear el contexto gráfico durante la navegación."
-hallazgos:
-  - "[EJEMPLO] La continuidad espacial mejora la comprensión del contenido."
 portada: ../../assets/proyectos/ejemplo-web-portada.jpg
-medios:
-  - src: ../../assets/proyectos/ejemplo-web-portada.jpg
-    alt: "[EJEMPLO] Portada del caso"
-  - src: ../../assets/disciplinas/web-textura.webp
-    alt: "[EJEMPLO] Medio del proceso (relleno)"
-  - src: ../../assets/disciplinas/web-poster.jpg
-    alt: "[EJEMPLO] Medio del resultado (relleno)"
+fondo: "#710C0C"
+historia:
+  - tipo: idea
+    destacado: "[EJEMPLO]"
+    texto: "[EJEMPLO] Una web que se siente como una película, sin recargas entre escenas."
+    foto: ../../assets/disciplinas/web-textura.webp
+    alt: "[EJEMPLO] Foto de relleno de la idea"
+  - tipo: problema
+    destacado: "73 %"
+    texto: "[EJEMPLO] Mantener el rendimiento de renderizado al pasar de una escena a otra."
+    foto: ../../assets/disciplinas/editorial-poster.jpg
+    alt: "[EJEMPLO] Foto de relleno del problema"
+  - tipo: rol
+    destacado: "1 persona"
+    texto: "[EJEMPLO] Dirección técnica y desarrollo frontend de punta a punta."
+    foto: ../../assets/disciplinas/videojuegos-textura.webp
+    alt: "[EJEMPLO] Foto de relleno del rol"
+  - tipo: decision
+    destacado: "1 canvas"
+    texto: "[EJEMPLO] Un único canvas WebGL persistente evita recrear el contexto gráfico."
+    foto: ../../assets/disciplinas/motion-textura.webp
+    alt: "[EJEMPLO] Foto de relleno de la decisión"
+  - tipo: proceso
+    destacado: "3 ciclos"
+    texto: "[EJEMPLO] Máquina de estados, pruebas continuas y revisión de accesibilidad."
+    foto: ../../assets/disciplinas/3d-textura.webp
+    alt: "[EJEMPLO] Foto de relleno del proceso"
+  - tipo: hallazgo
+    destacado: "2×"
+    texto: "[EJEMPLO] La continuidad espacial ayuda a entender el contenido."
+    foto: ../../assets/disciplinas/editorial-textura.webp
+    alt: "[EJEMPLO] Foto de relleno del hallazgo"
+  - tipo: resultado
+    destacado: "-40 %"
+    texto: "[EJEMPLO] Navegación fluida y tiempos de carga reducidos."
+    foto: ../../assets/disciplinas/videojuegos-poster.jpg
+    alt: "[EJEMPLO] Foto de relleno del resultado"
 orden: 1
 ---
-
-{/* Cada bloque es un capítulo del caso (T31): Proceso, Hallazgos y Resultado, en ese orden. Los otros
-cuatro (idea, problema, rol y aporte, decisiones) salen del encabezado de arriba. */}
-
-<Proceso>
-
-[EJEMPLO] Estructuración de la máquina de estados y pruebas continuas de accesibilidad.
-
-</Proceso>
-
-<Hallazgos items={frontmatter.hallazgos} />
-
-<Resultado>
-
-[EJEMPLO] Sistema funcional con navegación fluida y tiempos de carga reducidos.
-
-</Resultado>

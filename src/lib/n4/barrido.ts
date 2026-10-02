@@ -1,5 +1,5 @@
 /**
- * El texto de cada capítulo entra con el barrido de Zero (ZK3) y sale con un fundido de 0,3 s.
+ * El título del caso entra con el barrido de Zero (ZK3).
  *
  * Zero lo hace en un shader sobre un atlas de imágenes: un progreso `u` de 0 a 1 en 4 s con outExpo,
  * `u′ = 1,3·u`, y una máscara que deja ver el texto de izquierda a derecha con un borde suave y
@@ -13,8 +13,6 @@ import gsap from 'gsap';
 
 /** Duración del barrido de entrada (s), con outExpo. */
 export const DURACION_BARRIDO = 4;
-/** Fundido de salida del capítulo que se va (s). */
-export const DURACION_SALIDA = 0.3;
 // Desenfoque del borde: 0,5 rem al empezar, bajando con el cuadrado de 1 − u
 const DESENFOQUE_REM = 0.5;
 // Medio ancho de la banda suave del borde, en fracciones del ancho del bloque
@@ -25,8 +23,6 @@ const PARADAS = 24;
 const outExpo = (t: number) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
 const suave = (t: number) => t * t * (3 - 2 * t);
 const smoothstep = (a: number, b: number, x: number) => suave(Math.min(1, Math.max(0, (x - a) / (b - a))));
-
-const FOCALIZABLES = 'a[href], button, input, select, textarea, [tabindex], [contenteditable]';
 
 /** Máscara de izquierda a derecha para un progreso `u` (0 todo oculto, 1 todo visible). */
 function mascara(u: number): string {
@@ -71,105 +67,3 @@ export function barrer(el: HTMLElement, retraso: number, remPx: number): gsap.co
     onComplete: () => quitarBarrido(el),
   });
 }
-
-export interface OpcionesTexto {
-  remPx: () => number;
-  reducido: () => boolean;
-}
-
-/** Los bloques de texto de los capítulos: uno visible a la vez, los demás en el mismo sitio, invisibles. */
-export class TextoCapitulos {
-  private activo = -1;
-  private readonly tweens = new Map<HTMLElement, gsap.core.Tween>();
-
-  constructor(
-    private readonly bloques: HTMLElement[],
-    private readonly opc: OpcionesTexto,
-  ) {}
-
-  /** Deja todos los bloques apagados; ninguno recibe foco. */
-  preparar(): void {
-    for (const b of this.bloques) {
-      gsap.set(b, { opacity: 0 });
-      this.ajustarFoco(b, false);
-    }
-  }
-
-  /** Muestra el capítulo `k` con su barrido, `retraso` segundos después de ahora (la entrada). */
-  entrar(k: number, retraso: number): Tween | null {
-    const bloque = this.bloques[k];
-    if (!bloque) return null;
-    this.activo = k;
-    return this.encender(bloque, retraso);
-  }
-
-  /** Cambia al capítulo `k`: el que está sale en 0,3 s y el nuevo entra con el barrido. */
-  cambiar(k: number): void {
-    if (k === this.activo) return;
-    const anterior = this.bloques[this.activo];
-    this.activo = k;
-    if (anterior) this.apagar(anterior);
-    const nuevo = this.bloques[k];
-    if (nuevo) this.encender(nuevo, 0);
-  }
-
-  private encender(bloque: HTMLElement, retraso: number): Tween | null {
-    this.tweens.get(bloque)?.kill();
-    gsap.killTweensOf(bloque);
-    gsap.set(bloque, { opacity: 1 });
-    this.ajustarFoco(bloque, true);
-    if (this.opc.reducido()) {
-      quitarBarrido(bloque);
-      return null;
-    }
-    const t = barrer(bloque, retraso, this.opc.remPx());
-    this.tweens.set(bloque, t);
-    return t;
-  }
-
-  private apagar(bloque: HTMLElement): void {
-    this.tweens.get(bloque)?.kill();
-    this.tweens.delete(bloque);
-    this.ajustarFoco(bloque, false);
-    if (this.opc.reducido()) {
-      gsap.killTweensOf(bloque);
-      gsap.set(bloque, { opacity: 0 });
-      quitarBarrido(bloque);
-      return;
-    }
-    gsap.to(bloque, {
-      opacity: 0,
-      duration: DURACION_SALIDA,
-      ease: suave,
-      overwrite: true,
-      onComplete: () => quitarBarrido(bloque),
-    });
-  }
-
-  /** Lo que no se ve no recibe foco: los controles de un bloque apagado salen del orden de Tab. */
-  private ajustarFoco(bloque: HTMLElement, visible: boolean): void {
-    for (const el of bloque.querySelectorAll<HTMLElement>(FOCALIZABLES)) {
-      if (visible) {
-        if (el.dataset.n4Tab !== undefined) {
-          if (el.dataset.n4Tab === '') el.removeAttribute('tabindex');
-          else el.setAttribute('tabindex', el.dataset.n4Tab);
-          delete el.dataset.n4Tab;
-        }
-      } else if (el.dataset.n4Tab === undefined) {
-        el.dataset.n4Tab = el.getAttribute('tabindex') ?? '';
-        el.setAttribute('tabindex', '-1');
-      }
-    }
-  }
-
-  /** Suelta los tweens y deja los bloques como el HTML los trajo. */
-  destruir(): void {
-    for (const b of this.bloques) {
-      this.tweens.get(b)?.kill();
-      gsap.killTweensOf(b);
-    }
-    this.tweens.clear();
-  }
-}
-
-type Tween = gsap.core.Tween;

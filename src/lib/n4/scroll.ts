@@ -1,35 +1,47 @@
 /**
- * Scroll virtual del caso (ZK1 y ZK2 de la ficha de Zero).
+ * Scroll virtual del caso (ZK1 y ZK2 de la ficha de Zero) con los pasos de la historia (T32).
  *
  * El documento del N4 no se desplaza. Dos números mandan: el objetivo (adónde quiere ir el caso) y la
  * posición (dónde está), en px virtuales. La rueda y el teclado mueven el objetivo; la posición lo
  * persigue con un damp normalizado por el delta de tiempo, `1 − e^(−k·dt)` con k = 4,67 s⁻¹ (0,075 por
- * cuadro a 60 fps). Cada capítulo ocupa 1,75 alturas de ventana de recorrido. No hay
- * `requestAnimationFrame` propio: `update(dt)` lo llama el reloj único.
+ * cuadro a 60 fps). El dedo (un toque arrastrado, con eventos de puntero) mueve el objetivo 1 a 1 con los px del gesto. No hay `requestAnimationFrame` propio: `update(dt)` lo llama el reloj único.
+ *
+ * Tramos: P = 0,5 alturas de ventana. El título ocupa [0, P); el cristal k cruza el centro de la
+ * pantalla en `cₖ = (k + 1,5)·P`. El objetivo se acota a [0, c_{N−1}]: el caso termina con el último
+ * cristal al centro.
  */
 
 // Damp de Zero: 0,075 por cuadro a 60 fps
 const K_DAMP = 4.67;
-// Tramo de cada capítulo, en alturas de ventana (el capítulo 1 de Zero: 175 vh)
-const TRAMO_POR_ALTO = 1.75;
+/** Tramo de cada paso, en alturas de ventana (P). */
+export const TRAMO_POR_ALTO = 0.5;
 // Rueda: ±500 por evento y 0,35 px virtuales por unidad
 const TOPE_RUEDA = 500;
 const POR_RUEDA = 0.35;
 // A menos de medio píxel, la posición se asienta exacta
 const UMBRAL_ASENTADO = 0.5;
-// Ancla de cada capítulo: cae después del fundido del medio
-const ANCLA_EN_TRAMO = 0.2;
-// Flechas ↓/↑
+// Flechas ↓/↑: una décima del tramo
 const PASO_FLECHA = 0.1;
+
+/** Posición (px virtuales) en la que el cristal k cruza el centro, con `tramo` = P. */
+export const centroDelPaso = (k: number, tramo: number) => (k + 1.5) * tramo;
+
+/** Paso activo: −1 durante el título; si no, `min(N − 1, floor(pos / P) − 1)`. */
+export function pasoEn(pos: number, tramo: number, n: number): number {
+  if (tramo <= 0 || pos < tramo) return -1;
+  return Math.min(n - 1, Math.floor(pos / tramo) - 1);
+}
 
 export interface OpcionesScrollCaso {
   alto: () => number;
-  /** Cantidad de capítulos. */
-  capitulos: () => number;
+  /** Cantidad de pasos de la historia. */
+  pasos: () => number;
   /** Las entradas se ignoran (mientras vuela la pieza). */
   bloqueado: () => boolean;
   /** Si el foco está en un control propio, las teclas no mueven el caso. */
   focoEnControl: () => boolean;
+  /** Si el destino de un toque es un enlace, botón o campo: el gesto no mueve el caso y el toque llega al control. */
+  esControl: (destino: EventTarget | null) => boolean;
 }
 
 export class ScrollCaso {
@@ -37,53 +49,52 @@ export class ScrollCaso {
   pos = 0;
   /** Objetivo (px virtuales). */
   objetivo = 0;
+  /** `clientY` del dedo en el evento anterior; null si no hay un gesto de un dedo que mueva el caso. */
+  private yDedo: number | null = null;
+  private idDedo: number | null = null;
+  /** Los dedos que están sobre la pantalla (por `pointerId`). */
+  private readonly dedos = new Set<number>();
 
   constructor(private readonly opc: OpcionesScrollCaso) {}
 
-  /** Tramo de un capítulo (px virtuales). */
+  /** P: tramo de un paso (px virtuales). */
   get tramo(): number {
     return TRAMO_POR_ALTO * Math.max(1, this.opc.alto());
   }
 
-  /** Recorrido total del caso. */
-  get total(): number {
-    return this.opc.capitulos() * this.tramo;
+  /** Donde termina el caso: el último cristal al centro. */
+  get final(): number {
+    return centroDelPaso(Math.max(1, this.opc.pasos()) - 1, this.tramo);
   }
 
-  /** Capítulo en el que está la posición: `min(n − 1, floor(pos / L))`. */
-  get capitulo(): number {
-    return Math.min(this.opc.capitulos() - 1, Math.max(0, Math.floor(this.pos / this.tramo)));
+  /** Paso en el que está la posición. */
+  get paso(): number {
+    return pasoEn(this.pos, this.tramo, this.opc.pasos());
   }
 
-  /** Avance 0..1 del caso completo. */
+  /** Avance 0..1 del caso completo: `pos / c_{N−1}`. */
   get progreso(): number {
-    return this.total > 0 ? Math.min(1, Math.max(0, this.pos / this.total)) : 0;
+    return this.final > 0 ? Math.min(1, Math.max(0, this.pos / this.final)) : 0;
   }
 
-  /** Dónde queda el capítulo k al saltar a él: k·L + 0,2·L (el primero, en 0). */
-  ancla(k: number): number {
-    return k <= 0 ? 0 : k * this.tramo + ANCLA_EN_TRAMO * this.tramo;
-  }
-
-  /** Salta (con la inercia de siempre) al ancla del capítulo k. */
-  irAlCapitulo(k: number): void {
-    const n = this.opc.capitulos();
-    this.objetivo = this.acotar(this.ancla(Math.min(n - 1, Math.max(0, k))));
-  }
-
-  /** Ancla del capítulo siguiente; en el último, el final del caso. */
-  private siguiente(actual: number): void {
-    if (actual >= this.opc.capitulos() - 1) this.objetivo = this.total;
-    else this.irAlCapitulo(actual + 1);
+  /** Las anclas de AvPág y RePág: 0 y el centro de cada cristal. */
+  private anclas(): number[] {
+    const n = Math.max(1, this.opc.pasos());
+    return [0, ...Array.from({ length: n }, (_, k) => centroDelPaso(k, this.tramo))];
   }
 
   private acotar(v: number): number {
-    return Math.min(this.total, Math.max(0, v));
+    return Math.min(this.final, Math.max(0, v));
   }
 
-  /** Engancha rueda y teclado; todo se suelta con la señal. */
+  /** Engancha rueda, dedo y teclado; todo se suelta con la señal. */
   conectar(signal: AbortSignal): void {
     window.addEventListener('wheel', this.alRueda, { passive: false, signal });
+    window.addEventListener('pointerdown', this.alTocar, { signal });
+    window.addEventListener('pointermove', this.alArrastrar, { signal });
+    window.addEventListener('pointerup', this.alSoltar, { signal });
+    window.addEventListener('pointercancel', this.alSoltar, { signal });
+    window.addEventListener('touchmove', this.alMoverToque, { passive: false, signal });
     window.addEventListener('keydown', this.alTecla, { signal });
   }
 
@@ -116,24 +127,62 @@ export class ScrollCaso {
     this.objetivo = this.acotar(this.objetivo + delta * POR_RUEDA);
   };
 
+  /**
+   * El dedo se lee con eventos de puntero (`pointerType === 'touch'`) y no con `touchmove`: Chrome no
+   * entrega `touchmove` a la página en los gestos sintéticos (CDP) ni cuando el gesto ya es un desplazamiento,
+   * y los de puntero llegan siempre mientras `touch-action` no deje al navegador desplazar. Así se cuenta una
+   * sola vez cada movimiento. Un dedo sobre algo que no es un control empieza el gesto; dos o más dedos son
+   * el zoom del navegador y no mueven el caso.
+   */
+  private alTocar = (e: PointerEvent): void => {
+    if (e.pointerType !== 'touch') return;
+    this.dedos.add(e.pointerId);
+    const solo = this.dedos.size === 1 && !this.opc.esControl(e.target);
+    this.idDedo = solo ? e.pointerId : null;
+    this.yDedo = solo ? e.clientY : null;
+  };
+
+  /** Arrastrar hacia arriba avanza. Sin inercia propia: la suavidad ya la da el damp de `update`. */
+  private alArrastrar = (e: PointerEvent): void => {
+    if (e.pointerType !== 'touch' || e.pointerId !== this.idDedo || this.yDedo === null) return;
+    const delta = this.yDedo - e.clientY;
+    this.yDedo = e.clientY;
+    if (this.opc.bloqueado()) return;
+    this.objetivo = this.acotar(this.objetivo + delta);
+  };
+
+  /** Al levantar o cancelar el gesto termina; el dedo que queda de un zoom no reanuda el avance. */
+  private alSoltar = (e: PointerEvent): void => {
+    if (e.pointerType !== 'touch') return;
+    this.dedos.delete(e.pointerId);
+    this.idDedo = null;
+    this.yDedo = null;
+  };
+
+  /** El documento no se desplaza: con un solo dedo, el navegador no debe robar el gesto (borde elástico, recarga). */
+  private alMoverToque = (e: TouchEvent): void => {
+    if (this.yDedo !== null && e.touches.length === 1 && e.cancelable) e.preventDefault();
+  };
+
+  /** Las teclas parten siempre del objetivo (no de la posición): varias pulsaciones seguidas se suman. */
   private alTecla = (e: KeyboardEvent): void => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (this.opc.bloqueado() || this.opc.focoEnControl()) return;
-    const n = this.opc.capitulos();
-    const actual = Math.min(n - 1, Math.max(0, Math.floor(this.objetivo / this.tramo)));
+    const anclas = this.anclas();
+    const siguiente = () => anclas.find((a) => a > this.objetivo + UMBRAL_ASENTADO) ?? this.final;
+    const anterior = () => [...anclas].reverse().find((a) => a < this.objetivo - UMBRAL_ASENTADO) ?? 0;
     switch (e.key) {
       case 'PageDown':
         e.preventDefault();
-        this.siguiente(actual);
+        this.objetivo = siguiente();
         break;
       case ' ':
         e.preventDefault();
-        if (e.shiftKey) this.irAlCapitulo(actual - 1);
-        else this.siguiente(actual);
+        this.objetivo = e.shiftKey ? anterior() : siguiente();
         break;
       case 'PageUp':
         e.preventDefault();
-        this.irAlCapitulo(actual - 1);
+        this.objetivo = anterior();
         break;
       case 'Home':
         e.preventDefault();
@@ -141,7 +190,7 @@ export class ScrollCaso {
         break;
       case 'End':
         e.preventDefault();
-        this.objetivo = this.total;
+        this.objetivo = this.final;
         break;
       case 'ArrowDown':
         e.preventDefault();

@@ -33,6 +33,9 @@ const APAGADO_TARJETAS = 0.3;
 const APAGADO_PISO = 0.45;
 // Esquina de la tarjeta (2 rem)
 const ESQUINA_REM = 2;
+// Cuánto reacciona la cinta al scroll frente a Landberg: torsión, ola y rear-up con un 25 % menos
+// (autor, 2026-10-01). La forma en reposo y la velocidad (data-velocidad, la inercia) no cambian.
+const INTENSIDAD_SCROLL = 0.75;
 // Toda espera tiene salida: si una portada no carga en este tiempo, se sigue con el color de respaldo
 const TIEMPO_MAX_CARGA_MS = 6000;
 
@@ -308,7 +311,7 @@ export class MundoN3 {
     const ww = this.pista.ancho;
     const wh = this.pista.alto;
     const vuelo = this.vuelo;
-    this.uV.value = vuelo ? vuelo.velocidad0 : velocidad;
+    this.uV.value = (vuelo ? vuelo.velocidad0 : velocidad) * INTENSIDAD_SCROLL;
     this.piso.sincronizar();
     for (let i = 0; i < this.cartas.length; i++) {
       const c = this.cartas[i];

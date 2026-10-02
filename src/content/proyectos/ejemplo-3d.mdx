@@ -3,39 +3,38 @@ slug: ejemplo-3d
 disciplina: 3d
 titulo: "[EJEMPLO] Modelado y optimización en tiempo real"
 anio: 2026
-rol: "[EJEMPLO] Artista 3D y optimización de geometría"
-idea: "[EJEMPLO] Crear un personaje digital representativo con múltiples atuendos."
-problema: "[EJEMPLO] Reducir el recuento poligonal y el peso de texturas en navegador."
-aporte: "[EJEMPLO] Retopología manual y horneado de mapas de normales optimizados."
-decisiones:
-  - que: "[EJEMPLO] Texturas en formato WebP comprimido"
-    porque: "[EJEMPLO] Reducen el ancho de banda sin perder fidelidad visual."
-hallazgos:
-  - "[EJEMPLO] Las texturas a 1k o 2k garantizan 60 fps en escritorio estándar."
 portada: ../../assets/proyectos/ejemplo-3d-portada.jpg
-medios:
-  - src: ../../assets/proyectos/ejemplo-3d-portada.jpg
-    alt: "[EJEMPLO] Portada del caso"
-  - src: ../../assets/disciplinas/3d-textura.webp
-    alt: "[EJEMPLO] Medio del proceso (relleno)"
-  - src: ../../assets/disciplinas/3d-poster.jpg
-    alt: "[EJEMPLO] Medio del resultado (relleno)"
+fondo: "#023A1F"
+historia:
+  - tipo: idea
+    destacado: "[EJEMPLO]"
+    texto: "[EJEMPLO] Prendas digitales que se ven y se mueven como las reales."
+    foto: ../../assets/disciplinas/3d-textura.webp
+    alt: "[EJEMPLO] Foto de relleno de la idea"
+  - tipo: problema
+    destacado: "5 telas"
+    texto: "[EJEMPLO] Que cada tela se comporte distinto sin pesar de más."
+    foto: ../../assets/disciplinas/editorial-textura.webp
+    alt: "[EJEMPLO] Foto de relleno del problema"
+  - tipo: rol
+    destacado: "1 persona"
+    texto: "[EJEMPLO] Modelado, simulación de tela y texturizado."
+    foto: ../../assets/disciplinas/web-textura.webp
+    alt: "[EJEMPLO] Foto de relleno del rol"
+  - tipo: decision
+    destacado: "PBR"
+    texto: "[EJEMPLO] Materiales físicos para que la luz se lea igual en cualquier escena."
+    foto: ../../assets/disciplinas/motion-textura.webp
+    alt: "[EJEMPLO] Foto de relleno de la decisión"
+  - tipo: proceso
+    destacado: "6 tomas"
+    texto: "[EJEMPLO] Simulación, ajuste y render de cada prenda desde varios ángulos."
+    foto: ../../assets/disciplinas/videojuegos-textura.webp
+    alt: "[EJEMPLO] Foto de relleno del proceso"
+  - tipo: resultado
+    destacado: "12 prendas"
+    texto: "[EJEMPLO] Una colección completa lista para usar en cualquier escena."
+    foto: ../../assets/disciplinas/editorial-poster.jpg
+    alt: "[EJEMPLO] Foto de relleno del resultado"
 orden: 1
 ---
-
-{/* Cada bloque es un capítulo del caso (T31): Proceso, Hallazgos y Resultado, en ese orden. Los otros
-cuatro (idea, problema, rol y aporte, decisiones) salen del encabezado de arriba. */}
-
-<Proceso>
-
-[EJEMPLO] Modelado modular, configuración de rig y pruebas de render en tiempo real.
-
-</Proceso>
-
-<Hallazgos items={frontmatter.hallazgos} />
-
-<Resultado>
-
-[EJEMPLO] Modelos 3D integrados y optimizados para visualización fluida.
-
-</Resultado>

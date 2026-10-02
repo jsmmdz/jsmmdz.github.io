@@ -1,23 +1,19 @@
 ---
 /**
- * Acto N4 — el caso de estudio (T31): la exposición por capítulos de Zero en dos columnas, con la regla
- * de capítulos de Zero arriba y el anillo y la curvatura de Landberg.
+ * Acto N4 — el caso de estudio como plantilla (T32): la historia contada en cristales de vidrio 3D por la
+ * mitad izquierda y, a la derecha, la foto de cada paso que se funde con la siguiente al ritmo del scroll
+ * (la sección roja de Zero). Un caso se arma solo con su frontmatter (`historia` y `fondo`).
  *
- * A la izquierda, el título y el capítulo activo (idea, problema, rol y aporte, decisiones, proceso,
- * hallazgos, resultado); a la derecha, el medio del capítulo. El documento no se desplaza: el scroll es
- * virtual (`lib/n4/scroll.ts`). Con WebGL el medio lo dibuja el canvas persistente y las imágenes de
- * aquí son su respaldo; sin WebGL el medio es la imagen. El DOM del N4 es transparente sobre el canvas.
- * Bajo 1024 px es una página apilada con scroll normal (el responsive queda fuera del MVP).
+ * El documento no se desplaza: el scroll es virtual (`lib/n4/scroll.ts`). Con WebGL, los cristales, su
+ * texto impreso, las cortinas del fondo y la foto los dibuja el canvas persistente; lo de aquí es su
+ * copia para lectores de pantalla (el `h2`, el destacado y el texto de cada paso, transparentes y que
+ * siguen la caja proyectada de su cristal) y las fotos de respaldo. Sin WebGL, la historia se lee en HTML.
+ * El DOM del N4 es transparente sobre el canvas: el fondo lo pone la escena.
  */
 import type { CollectionEntry } from 'astro:content';
-import { render } from 'astro:content';
-import Capitulo from '@/components/n4/Capitulo.astro';
-import Hallazgos from '@/components/n4/Hallazgos.astro';
-import Proceso from '@/components/n4/Proceso.astro';
-import Resultado from '@/components/n4/Resultado.astro';
 import { conBase } from '@/lib/rutas';
 import { variablesCssPortada } from '@/lib/n4/portada';
-import { CAPITULOS, mediosPorCapitulo, PX_POR_CAPITULO, PX_POR_MARCA, type MedioCaso } from '@/lib/n4/capitulos';
+import { NOMBRE_TIPO, type MedioCaso } from '@/lib/n4/historia';
 
 interface Props {
   proyecto: CollectionEntry<'proyectos'>;
@@ -28,18 +24,11 @@ const { proyecto, disciplina } = Astro.props;
 const datos = proyecto.data;
 const discSlug = disciplina?.slug ?? 'web';
 const mundoUrl = conBase(`${discSlug}/`);
-const { Content } = await render(proyecto);
 
-// Un medio por capítulo: los del caso, el último repetido si faltan; sin `medios`, la portada
+// Las fotos: la portada (medio −1, donde aterriza el vuelo) y la de cada paso
 const portada: MedioCaso = { src: datos.portada.src, ancho: datos.portada.width, alto: datos.portada.height, alt: `Portada de ${datos.titulo}` };
-const medios = mediosPorCapitulo(
-  datos.medios?.map((m) => ({ src: m.src.src, ancho: m.src.width, alto: m.src.height, alt: m.alt, video: m.video })),
-  portada,
-);
-
-// La regla de capítulos: una marca cada 0,1 alturas de ventana de scroll
-const marcas = Array.from({ length: Math.ceil((CAPITULOS.length * PX_POR_CAPITULO) / PX_POR_MARCA) + 1 }, (_, i) => i * PX_POR_MARCA);
-const anchoPista = CAPITULOS.length * PX_POR_CAPITULO;
+const fotos: MedioCaso[] = datos.historia.map((p) => ({ src: p.foto.src, ancho: p.foto.width, alto: p.foto.height, alt: p.alt }));
+const medios = [portada, ...fotos];
 ---
 
 <article
@@ -48,69 +37,42 @@ const anchoPista = CAPITULOS.length * PX_POR_CAPITULO;
   data-level="N4"
   data-discipline={discSlug}
   data-project={datos.slug}
+  data-fondo={datos.fondo}
   data-aspecto-portada={portada.ancho / portada.alto}
-  style={variablesCssPortada()}
+  style={`${variablesCssPortada()}; --n4-fondo: ${datos.fondo}`}
 >
-  <!-- Los medios de cada capítulo, en el rectángulo del medio. Con WebGL quedan ocultos tras el canvas. -->
-  <div class="n4-medios" role="group" aria-label="Medios del caso">
-    {medios.map((m, k) => (
+  <a href={mundoUrl} data-n4-volver class="n4-volver"><span class="n4-flecha" aria-hidden="true">&larr;</span> Volver</a>
+
+  <!-- Las fotos, en el rectángulo de la derecha: la portada (medio −1) y la de cada paso. Con WebGL quedan ocultas tras el canvas. -->
+  <div class="n4-medios" role="group" aria-label="Fotos del caso">
+    {medios.map((m, i) => (
       <img
         class="n4-medio"
-        data-n4-medio={k}
-        data-video={m.video ? m.video : undefined}
+        data-n4-medio={i - 1}
         src={m.src}
         width={m.ancho}
         height={m.alto}
         alt={m.alt}
         loading="eager"
         decoding="async"
-        fetchpriority={k === 0 ? 'high' : 'auto'}
+        fetchpriority={i === 0 ? 'high' : 'auto'}
         draggable="false"
       />
     ))}
   </div>
 
-  <!-- Columna izquierda: el título y el capítulo activo -->
-  <div class="n4-columna">
-    <h1 class="n4-titulo">{datos.titulo}</h1>
-    <div class="n4-capitulos">
-      <Capitulo k={0} titulo={CAPITULOS[0]}>
-        <p>{datos.idea}</p>
-      </Capitulo>
-      <Capitulo k={1} titulo={CAPITULOS[1]}>
-        <p>{datos.problema}</p>
-      </Capitulo>
-      <Capitulo k={2} titulo={CAPITULOS[2]}>
-        <p><strong>Rol:</strong> {datos.rol}</p>
-        <p><strong>Aporte:</strong> {datos.aporte}</p>
-      </Capitulo>
-      <Capitulo k={3} titulo={CAPITULOS[3]}>
-        <ul class="n4-lista">
-          {datos.decisiones.map((d) => (
-            <li>
-              <strong>{d.que}:</strong> {d.porque}
-            </li>
-          ))}
-        </ul>
-      </Capitulo>
-      <!-- Proceso, Hallazgos y Resultado salen del cuerpo MDX, cada uno como su capítulo -->
-      <Content components={{ Proceso, Hallazgos, Resultado }} />
-    </div>
-  </div>
+  <h1 class="n4-titulo">{datos.titulo}</h1>
 
-  <a href={mundoUrl} data-n4-volver class="n4-volver"><span class="n4-flecha" aria-hidden="true">&larr;</span> Volver</a>
-
-  <!-- La regla de capítulos de Zero: la pista se traslada bajo la aguja; cada rótulo salta a su capítulo -->
-  <nav class="n4-regla" aria-label="Capítulos" data-n4-regla>
-    <div class="n4-regla-pista" data-n4-regla-pista style={`width: ${anchoPista}px`}>
-      {marcas.map((x) => <i class="n4-marca" style={`left: ${x}px`}></i>)}
-      {CAPITULOS.map((_, k) => <i class="n4-marca n4-marca-capitulo" style={`left: ${k * PX_POR_CAPITULO}px`}></i>)}
-      {CAPITULOS.map((nombre, k) => (
-        <button type="button" class="n4-rotulo" data-n4-rotulo={k} style={`left: ${k * PX_POR_CAPITULO}px`}>{nombre}</button>
-      ))}
-    </div>
-    <span class="n4-aguja" aria-hidden="true"></span>
-  </nav>
+  <!-- La historia completa, en orden: con WebGL es transparente y su caja sigue a su cristal -->
+  <ol class="n4-historia" data-n4-historia aria-label="Historia del caso">
+    {datos.historia.map((p, k) => (
+      <li class="n4-paso" data-n4-paso={k} data-tipo={p.tipo}>
+        <h2 class="n4-paso-tipo">{NOMBRE_TIPO[p.tipo]}</h2>
+        {p.destacado && <p class="n4-paso-destacado">{p.destacado}</p>}
+        <p class="n4-paso-texto">{p.texto}</p>
+      </li>
+    ))}
+  </ol>
 
   <!-- El anillo de progreso de Landberg: abajo a la izquierda, con arco desde las 12 h -->
   <div class="n4-anillo" data-n4-anillo aria-hidden="true">
@@ -125,7 +87,6 @@ const anchoPista = CAPITULOS.length * PX_POR_CAPITULO;
   import { isTransitionBeforePreparationEvent, navigate } from 'astro:transitions/client';
   import { transicionConRespaldo } from '@/lib/navigation/instancia';
   import { CasoN4 } from '@/lib/n4/caso';
-  import { N4_MEDIO } from '@/lib/n4/portada';
   import type { ThreeSceneManager } from '@/lib/three/scene-manager';
 
   // Un solo arranque por visita: los listeners cuelgan de este controlador y se sueltan al irse
@@ -177,7 +138,7 @@ const anchoPista = CAPITULOS.length * PX_POR_CAPITULO;
     const casoActual = new CasoN4(act, { contenedor });
     caso = casoActual;
 
-    // «← Volver» y Esc: salen al mundo. Con la pieza llegada volando, el plano vuela de regreso (1,0 s)
+    // «← Volver» y Esc: salen al mundo. Con la pieza llegada volando, la foto vuela de regreso (1,0 s)
     // antes de que la página cambie; si no, sale con la bisagra negra de siempre
     const salir = () => {
       if (saliendo || !volverBtn) return;
@@ -223,14 +184,12 @@ const anchoPista = CAPITULOS.length * PX_POR_CAPITULO;
     );
 
     casoActual.iniciar();
-    // Ventana angosta: página apilada, sin WebGL
-    if (window.innerWidth < N4_MEDIO.anchoMinEscritorioPx) return;
     if (!contenedor) {
       casoActual.sinWebgl();
       return;
     }
 
-    // Three.js y el medio del caso se cargan aparte: nada de eso entra en el JS inicial del home
+    // Three.js y las fotos del caso se cargan aparte: nada de eso entra en el JS inicial del home
     import('@/lib/three/scene-manager')
       .then(async ({ getThreeSceneManager }) => {
         if (signal.aborted) return;
@@ -260,30 +219,39 @@ const anchoPista = CAPITULOS.length * PX_POR_CAPITULO;
 </script>
 
 <style is:global>
-  /* En escritorio el N4 usa el rem de Landberg (1 rem = 0,667 vw), como el N3: las medidas de la ficha
-     (x 9 rem, y 6 rem, 70 rem…) valen en cualquier ancho. El documento no se desplaza. */
-  @media (min-width: 1024px) {
+  /* El documento del N4 no se desplaza: el scroll es virtual. En escritorio usa el rem de Landberg
+     (1 rem = 0,667 vw), como el N3: las medidas de la ficha (x 9 rem, y 6 rem, 70 rem…) valen en cualquier
+     ancho. */
+  @media (scripting: enabled) {
     html:has(#act-n4) {
-      font-size: clamp(5px, 0.6667vw, 20px);
       overflow: hidden;
+      /* El dedo mueve el caso (scroll.ts): el navegador no roba el gesto para desplazar; el zoom con dos dedos se deja */
+      touch-action: pinch-zoom;
     }
   }
 
-  /* Medidas propias del N4 que no son rem: la regla de Zero (px) y el trazo del anillo */
+  @media (min-width: 1024px) {
+    html:has(#act-n4) {
+      font-size: clamp(5px, 0.6667vw, 20px);
+    }
+  }
+
+  /* Medidas propias del N4 que no son rem: el trazo del anillo y el foco */
   #act-n4 {
-    --n4-regla-ancho: 300px;
-    --n4-regla-alto: 60px;
-    --n4-regla-arriba: 16px;
-    --n4-regla-rotulo: 12px;
     --n4-trazo: 2px;
     --n4-foco: 2px;
-    position: relative;
+    /* El centro de la meseta en vertical: en escritorio, el de la ventana; en angosto lo escribe el controlador */
+    --n4-meseta-y: 50%;
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
     box-sizing: border-box;
     color: var(--color-texto-claro);
     font-family: var(--fuente-texto);
     font-size: 1rem;
     line-height: 1.4;
-    /* Transparente: el negro lo pone la escena (así el vuelo y el medio en WebGL se ven a través) */
+    /* Transparente: el fondo (negro o las cortinas del caso) lo pone la escena */
     background: transparent;
   }
 
@@ -292,176 +260,139 @@ const anchoPista = CAPITULOS.length * PX_POR_CAPITULO;
     outline-offset: var(--n4-foco);
   }
 
-  /* ---------- Escritorio: dos columnas sobre una página que no se desplaza ---------- */
-  @media (min-width: 1024px) {
-    #act-n4 {
-      position: fixed;
-      inset: 0;
-      overflow: hidden;
-      pointer-events: none;
-    }
+  #act-n4 a,
+  #act-n4 button {
+    pointer-events: auto;
+  }
 
-    #act-n4 a,
-    #act-n4 button {
-      pointer-events: auto;
+  /* Con JS y antes de arrancar, lo que entra animado está oculto: así no hay un destello previo */
+  @media (scripting: enabled) {
+    #act-n4:not(.n4-iniciado) :is(.n4-titulo, .n4-volver) {
+      opacity: 0;
     }
+  }
 
-    /* Con JS y antes de arrancar, lo que entra animado está oculto: así no hay un destello previo */
-    @media (scripting: enabled) {
-      #act-n4:not(.n4-iniciado) :is(.n4-titulo, .n4-capitulo, .n4-volver, .n4-regla) {
-        opacity: 0;
-      }
-    }
+  /* ---------- La foto: el mismo rectángulo en el CSS, en el vuelo del N3 y en el mundo WebGL ---------- */
+  #act-n4 .n4-medios {
+    pointer-events: none;
+  }
 
-    /* El medio: x 63 rem, y 6 rem, 70 rem de ancho y 16:10. No se desplaza: cambia en su sitio. */
-    #act-n4 .n4-medio {
-      position: absolute;
-      left: calc(var(--n4-medio-x) * 1rem);
-      top: calc(var(--n4-medio-y) * 1rem);
-      width: calc(var(--n4-medio-ancho) * 1rem);
-      height: auto;
-      aspect-ratio: var(--n4-proporcion);
-      object-fit: cover;
-      display: block;
-      pointer-events: none;
-    }
+  #act-n4 .n4-medio {
+    position: absolute;
+    height: auto;
+    aspect-ratio: var(--n4-proporcion);
+    object-fit: cover;
+    display: block;
+    pointer-events: none;
+  }
 
-    /* Con WebGL el plano del canvas dibuja el medio; la imagen queda detrás como respaldo */
-    #act-n4.n4-con-webgl .n4-medio {
-      opacity: 0 !important;
-    }
+  /* Con WebGL el plano del canvas dibuja la foto; la imagen queda detrás como respaldo */
+  #act-n4.n4-con-webgl .n4-medio {
+    opacity: 0 !important;
+  }
 
-    /* La columna del texto: en x 9 rem; el título a 6 rem del borde y el capítulo a 2 rem debajo */
-    #act-n4 .n4-columna {
-      position: absolute;
-      left: calc(9 * 1rem);
-      top: calc(6 * 1rem);
-      width: calc(44 * 1rem);
-    }
+  /* ---------- El título: la frase grande inicial de Zero, centrada en la meseta ---------- */
+  #act-n4 .n4-titulo {
+    position: absolute;
+    margin: 0;
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    /* El tamaño exacto lo mide `lib/n4/titulo.ts` (el mayor que quepa en 44 rem, hasta 4,5 rem) */
+    font-size: 2rem;
+    line-height: 1.15;
+    letter-spacing: var(--tracking-display-lg);
+    color: var(--color-texto-claro);
+    top: var(--n4-meseta-y);
+    transform: translateY(-50%);
+  }
 
-    #act-n4 .n4-titulo {
-      margin: 0;
-      font-family: var(--fuente-display);
-      font-weight: 800;
-      /* El tamaño exacto lo mide `lib/n4/titulo.ts` (el mayor que quepa en 44 rem, hasta 4,5 rem) */
-      font-size: 2rem;
-      line-height: 1.15;
-      letter-spacing: var(--tracking-display-lg);
-      white-space: nowrap;
-      color: var(--color-texto-claro);
-    }
+  /* ---------- La historia: la copia de cada cristal ---------- */
+  #act-n4 .n4-historia {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
 
-    @media (scripting: enabled) {
-      /* Los siete capítulos ocupan el mismo sitio; se ve uno a la vez */
-      #act-n4 .n4-capitulos {
-        display: grid;
-        grid-template-columns: minmax(0, calc(40 * 1rem));
-        margin-top: calc(2 * 1rem);
-        max-height: calc(100svh - 24rem);
-        overflow: clip;
-      }
+  /* Con WebGL: transparente, de tamaño fijo, y el controlador la mueve y la escala sobre la caja de su
+     cristal (por defecto, fuera de la pantalla). Nunca recibe clics ni foco. */
+  #act-n4 .n4-paso {
+    position: absolute;
+    left: 0;
+    top: 0;
+    box-sizing: border-box;
+    width: calc(40 * 1rem);
+    height: calc(30 * 1rem);
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transform-origin: 0 0;
+    transform: translate3d(0, 150vh, 0);
+  }
 
-      #act-n4 .n4-capitulo {
-        grid-area: 1 / 1;
-        pointer-events: none;
-      }
-    }
+  #act-n4 .n4-paso-tipo {
+    margin: 0 0 0.6rem;
+    font-family: var(--fuente-texto);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: var(--tracking-rotulo);
+    text-transform: uppercase;
+    color: var(--color-texto-claro);
+  }
 
-    /* «← Volver»: en el sitio del «VOLVER» del mundo (x 8 rem, y 4 rem) */
-    #act-n4 .n4-volver {
-      position: fixed;
-      left: calc(8 * 1rem);
-      top: calc(4 * 1rem);
-      z-index: var(--z-hud);
-      font-size: 1rem;
-      line-height: 1;
-      font-weight: 500;
-      text-transform: uppercase;
-    }
+  #act-n4 .n4-paso-destacado {
+    margin: 0 0 0.8rem;
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    font-size: 4rem;
+    line-height: 1.05;
+    color: var(--color-texto-claro);
+  }
 
-    /* La regla de Zero: 300 × 60 px, centrada, a 16 px del borde de arriba */
-    #act-n4 .n4-regla {
-      position: fixed;
-      top: var(--n4-regla-arriba);
-      left: 50%;
-      width: var(--n4-regla-ancho);
-      height: var(--n4-regla-alto);
-      margin-left: calc(var(--n4-regla-ancho) / -2);
-      z-index: var(--z-hud);
-      /* clip y no hidden: el foco de un rótulo fuera de la ventana no puede desplazar la pista */
-      overflow: clip;
-      /* El 8 % de cada borde se desvanece */
-      -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
-      mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
-    }
+  #act-n4 .n4-paso-texto {
+    margin: 0;
+    font-size: 1.8rem;
+    line-height: 1.35;
+    color: var(--color-texto-claro);
+  }
 
-    #act-n4 .n4-regla-pista {
-      position: absolute;
-      inset: 0 auto 0 0;
-      will-change: transform;
-    }
+  /* Sin WebGL: la historia se lee en HTML, un paso a la vez, al centro de la columna y con el fundido de
+     las fotos; el fondo es el color plano del caso */
+  #act-n4.n4-sin-webgl {
+    background: var(--n4-fondo);
+  }
 
-    /* Marcas, aguja y rótulos caben en los 41 px que hay entre la regla y el borde de arriba del medio */
-    #act-n4 .n4-marca {
-      position: absolute;
-      top: 0;
-      width: 1px;
-      height: 6px;
-      background: var(--color-texto-claro);
-      opacity: 0.5;
-    }
+  #act-n4.n4-sin-webgl .n4-paso {
+    left: calc(31.5 * 1rem - 20 * 1rem);
+    top: var(--n4-meseta-y);
+    height: auto;
+    overflow: visible;
+    transform: translateY(-50%);
+  }
 
-    #act-n4 .n4-marca-capitulo {
-      height: 14px;
-      opacity: 1;
-    }
+  /* ---------- «← Volver» ---------- */
+  #act-n4 .n4-volver {
+    position: fixed;
+    display: inline-block;
+    z-index: var(--z-hud);
+    color: var(--color-texto-claro);
+    font-family: var(--fuente-texto);
+    font-weight: 500;
+    line-height: 1;
+    text-decoration: none;
+    text-transform: uppercase;
+  }
 
-    #act-n4 .n4-aguja {
-      position: absolute;
-      left: 50%;
-      top: 0;
-      width: 1px;
-      height: 18px;
-      background: var(--color-texto-claro);
-    }
+  #act-n4 .n4-volver:hover {
+    text-decoration: underline;
+  }
 
-    #act-n4 .n4-rotulo {
-      position: absolute;
-      top: 22px;
-      transform: translateX(-50%);
-      margin: 0;
-      padding: 2px 4px;
-      border-width: 0;
-      background: transparent;
-      color: var(--color-texto-claro);
-      font-family: var(--fuente-texto);
-      font-size: var(--n4-regla-rotulo);
-      font-weight: 600;
-      line-height: 1;
-      letter-spacing: var(--tracking-rotulo);
-      font-variant-caps: all-small-caps;
-      text-transform: uppercase;
-      white-space: nowrap;
-      cursor: pointer;
-    }
-
-    #act-n4 .n4-rotulo[aria-current='step'] {
-      text-decoration: underline;
-    }
-
-    #act-n4 .n4-rotulo:disabled {
-      cursor: default;
-    }
-
-    /* El anillo de Landberg: 2,5 rem a 8 rem del borde izquierdo y 5 rem del de abajo */
-    #act-n4 .n4-anillo {
-      position: fixed;
-      left: calc(8 * 1rem);
-      bottom: calc(5 * 1rem);
-      width: calc(2.5 * 1rem);
-      height: calc(2.5 * 1rem);
-      z-index: var(--z-hud);
-    }
+  /* ---------- El anillo de Landberg ---------- */
+  #act-n4 .n4-anillo {
+    position: fixed;
+    z-index: var(--z-hud);
   }
 
   #act-n4 .n4-anillo-svg {
@@ -485,129 +416,122 @@ const anchoPista = CAPITULOS.length * PX_POR_CAPITULO;
     stroke: var(--color-texto-claro);
   }
 
-  /* ---------- Texto de los capítulos (rem de Landberg) ---------- */
-  #act-n4 .n4-volver {
-    display: inline-block;
-    color: var(--color-texto-claro);
-    text-decoration: none;
-    font-family: var(--fuente-texto);
+  /* ---------- Escritorio (desde 1024 px): rem de Landberg ---------- */
+  @media (min-width: 1024px) {
+    /* La foto: x 63 rem, y 6 rem, 70 rem de ancho y 16:10. No se desplaza: cambia en su sitio. */
+    #act-n4 .n4-medio {
+      left: calc(var(--n4-medio-x) * 1rem);
+      top: calc(var(--n4-medio-y) * 1rem);
+      width: calc(var(--n4-medio-ancho) * 1rem);
+    }
+
+    /* El título: en x 9 rem, centrado en vertical, en una sola línea */
+    #act-n4 .n4-titulo {
+      left: calc(9 * 1rem);
+      white-space: nowrap;
+    }
+
+    /* «← Volver»: en el sitio del «VOLVER» del mundo (x 8 rem, y 4 rem) */
+    #act-n4 .n4-volver {
+      left: calc(8 * 1rem);
+      top: calc(4 * 1rem);
+      font-size: 1rem;
+    }
+
+    /* El anillo: 2,5 rem a 8 rem del borde izquierdo y 5 rem del de abajo */
+    #act-n4 .n4-anillo {
+      left: calc(8 * 1rem);
+      bottom: calc(5 * 1rem);
+      width: calc(2.5 * 1rem);
+      height: calc(2.5 * 1rem);
+    }
   }
 
-  #act-n4 .n4-volver:hover {
-    text-decoration: underline;
-  }
-
-  #act-n4 .n4-capitulo-rotulo {
-    margin: 0 0 1rem;
-    font-family: var(--fuente-texto);
-    font-size: 1rem;
-    font-weight: 600;
-    line-height: 1.3;
-    letter-spacing: var(--tracking-rotulo);
-    font-variant-caps: all-small-caps;
-    text-transform: uppercase;
-    color: var(--color-texto-claro);
-  }
-
-  #act-n4 .n4-capitulo-cuerpo {
-    max-width: calc(40 * 1rem);
-    font-size: 1.6rem;
-    line-height: 1.4;
-  }
-
-  #act-n4 .n4-capitulo-cuerpo p {
-    margin: 0 0 1rem;
-  }
-
-  #act-n4 .n4-lista {
-    margin: 0;
-    padding-left: 1.4em;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-  }
-
-  /* ---------- Ventana angosta (< 1024 px): página apilada con scroll normal ---------- */
+  /* ---------- Angosto (< 1024 px): la misma escena, con la foto arriba y los cristales debajo ---------- */
   @media (max-width: 1023px) {
     #act-n4 {
-      padding: var(--espacio-lg) var(--espacio-md) var(--espacio-3xl);
-      min-height: 100vh;
-    }
-
-    #act-n4 .n4-volver {
-      display: inline-block;
-      margin-bottom: var(--espacio-md);
-      font-size: var(--tamano-rotulo);
-      letter-spacing: var(--tracking-rotulo);
-      font-weight: 600;
-      text-transform: uppercase;
-      padding: var(--espacio-2xs) 0;
-    }
-
-    #act-n4 .n4-medios {
-      margin-bottom: var(--espacio-lg);
+      /* ancho = min(ancho de la ventana − 32, 0,4·alto·1,6); 16:10 */
+      --n4-foto-ancho: min(calc(100vw - 32px), calc(0.64 * 100svh));
     }
 
     #act-n4 .n4-medio {
-      display: none;
-      width: 100%;
-      height: auto;
-      aspect-ratio: var(--n4-proporcion);
-      object-fit: cover;
+      width: var(--n4-foto-ancho);
+      left: calc((100vw - var(--n4-foto-ancho)) / 2);
+      top: 64px;
     }
 
-    #act-n4 .n4-medio[data-n4-medio='0'] {
-      display: block;
-    }
-
+    /* El título se centra en el espacio de debajo de la foto y puede ocupar más de una línea */
     #act-n4 .n4-titulo {
-      margin: 0 0 var(--espacio-lg);
-      font-family: var(--fuente-display);
-      font-weight: 800;
-      font-size: var(--tamano-display-lg);
-      line-height: var(--linea-display-lg);
-      letter-spacing: var(--tracking-display-lg);
+      left: 16px;
+      right: 16px;
+      font-size: clamp(1.4rem, 6vw, 2.4rem);
       overflow-wrap: break-word;
     }
 
-    #act-n4 .n4-capitulo {
-      margin-bottom: var(--espacio-xl);
+    /* «← Volver» arriba a la izquierda (16 px, 16 px); el área de toque crece sin mover el texto */
+    #act-n4 .n4-volver {
+      left: 16px;
+      top: 16px;
+      font-size: 0.9rem;
     }
 
-    #act-n4 .n4-capitulo-rotulo {
-      font-size: var(--tamano-rotulo);
-      margin-bottom: var(--espacio-xs);
+    #act-n4 .n4-volver::after {
+      content: '';
+      position: absolute;
+      inset: -12px -12px -12px -12px;
     }
 
-    #act-n4 .n4-capitulo-cuerpo {
-      font-size: var(--tamano-texto-md);
-      line-height: var(--linea-texto-md);
-      max-width: 68ch;
-    }
-
-    #act-n4 .n4-regla,
     #act-n4 .n4-anillo {
-      display: none;
+      left: 16px;
+      bottom: 16px;
+      width: 40px;
+      height: 40px;
+    }
+
+    #act-n4 .n4-paso-destacado {
+      font-size: 2.6rem;
+    }
+
+    #act-n4 .n4-paso-texto {
+      font-size: 1.2rem;
+    }
+
+    #act-n4.n4-sin-webgl .n4-paso {
+      left: 16px;
+      width: calc(100vw - 32px);
     }
   }
 
-  /* Sin JS en escritorio: los capítulos caen uno bajo otro y el documento se puede leer; los medios,
-     que dependen del scroll virtual, no se muestran */
-  @media (min-width: 1024px) and (scripting: none) {
+  /* Sin JS: la historia se lee como una página corrida sobre el color del caso; la foto, que depende del
+     scroll virtual, no se muestra */
+  @media (scripting: none) {
     #act-n4 {
       position: static;
       overflow: visible;
       pointer-events: auto;
       min-height: 100vh;
       padding: calc(6 * 1rem) calc(9 * 1rem);
+      background: var(--n4-fondo);
     }
 
-    #act-n4 .n4-columna {
+    #act-n4 .n4-titulo,
+    #act-n4 .n4-volver {
       position: static;
+      transform: none;
+      white-space: normal;
+    }
+
+    #act-n4 .n4-paso {
+      position: static;
+      width: auto;
+      height: auto;
+      overflow: visible;
+      opacity: 1;
+      transform: none;
+      margin-top: calc(3 * 1rem);
     }
 
     #act-n4 .n4-medios,
-    #act-n4 .n4-regla,
     #act-n4 .n4-anillo {
       display: none;
     }

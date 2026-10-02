@@ -1,5 +1,6 @@
 import { defineCollection, reference, z } from 'astro:content';
 import { glob } from 'astro/loaders';
+import { esquemaProyecto } from './lib/n4/contrato';
 
 export const collections = {
   disciplinas: defineCollection({
@@ -33,43 +34,8 @@ export const collections = {
       pattern: '**/*.mdx',
       base: './src/content/proyectos',
     }),
-    schema: ({ image }) =>
-      z.object({
-        slug: z.string(),
-        disciplina: reference('disciplinas'),
-        titulo: z.string().trim().min(1, 'titulo es obligatorio'),
-        anio: z.coerce.number().int(),
-        rol: z.string().trim().min(1, 'rol es obligatorio'),
-        idea: z.string().trim().min(1, 'idea es obligatoria'),
-        problema: z.string().trim().min(1, 'problema es obligatorio'),
-        aporte: z.string().trim().min(1, 'aporte es obligatorio'),
-        decisiones: z
-          .array(
-            z.object({
-              que: z.string().trim().min(1, 'que es obligatorio'),
-              porque: z.string().trim().min(1, 'porque es obligatorio'),
-            })
-          )
-          .min(1, 'decisiones debe tener al menos un elemento'),
-        hallazgos: z.array(z.string()),
-        portada: image(),
-        // Portada en video (opcional): ruta relativa a /media, MP4. La tarjeta del N3 lo usa como
-        // textura y deja la imagen de portada como póster y como respaldo si el video falla.
-        video: z.string().trim().min(1).optional(),
-        // Medios del caso (opcional, T31): el medio k es el del capítulo k (idea, problema, rol y aporte,
-        // decisiones, proceso, hallazgos, resultado). Si faltan, se repite el último; sin este campo,
-        // todos son la portada. Conviene que el primero sea la portada: es donde aterriza el vuelo.
-        medios: z
-          .array(
-            z.object({
-              src: image(),
-              alt: z.string(),
-              video: z.string().trim().min(1).optional(),
-            })
-          )
-          .max(7, 'medios admite a lo sumo 7 (uno por capítulo)')
-          .optional(),
-        orden: z.coerce.number().int(),
-      }),
+    // El caso es una lista de pasos con tipo y un color de fondo (T32): las reglas viven en
+    // `lib/n4/contrato.ts`, que también importan las pruebas.
+    schema: ({ image }) => esquemaProyecto(image, reference('disciplinas')),
   }),
 };

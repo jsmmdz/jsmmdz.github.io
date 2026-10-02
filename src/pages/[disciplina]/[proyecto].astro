@@ -26,7 +26,7 @@ const { proyecto, disciplina } = Astro.props;
 
 <FilmLayout
   title={`${proyecto.data.titulo} — ${disciplina?.nombre ?? 'Caso de estudio'}`}
-  description={proyecto.data.idea}
+  description={proyecto.data.historia[0].texto}
   initialLevel="N4"
   initialDiscipline={disciplina?.slug ?? 'web'}
   initialProject={proyecto.data.slug}
