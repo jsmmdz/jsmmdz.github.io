@@ -27,7 +27,8 @@ import { barrer, quitarBarrido } from './barrido';
 import { opacidadDelPaso } from './cristales';
 import { disposicion, TITULO_ANCHO_REM, TITULO_TAMANO_REM, type Disposicion } from './geometria';
 import { TIPOS_PASO, type PasoVista } from './historia';
-import { estadoDelMedio } from './medios';
+import { estadoDelMedio, mezclaDelLimite } from './medios';
+import { tramoDePaleta } from './paleta';
 import { N4_MEDIO } from './portada';
 import { ScrollCaso } from './scroll';
 import { ajustarTitulo, fuenteDelTituloLista } from './titulo';
@@ -65,6 +66,9 @@ export interface OpcionesCaso {
 export class CasoN4 {
   private readonly control = new AbortController();
   private readonly pasosDom: HTMLElement[];
+  /** La copia de cada color de la paleta del design system (vacía si el caso no la trae). */
+  private readonly coloresDom: HTMLElement[];
+  private readonly paletaDom: HTMLElement | null;
   private readonly titulo: HTMLElement | null;
   /** Las fotos: la portada (medio −1) y la de cada paso, en ese orden. */
   private readonly medios: HTMLImageElement[];
@@ -77,6 +81,8 @@ export class CasoN4 {
   private readonly cajasEscritas: string[] = [];
   /** El tamaño fijo (CSS) de la copia de cada paso: se mide al montar y al cambiar la ventana, no por cuadro. */
   private tamanosCopia: Array<{ w: number; h: number }> = [];
+  private tamanosColor: Array<{ w: number; h: number }> = [];
+  private readonly cajasColorEscritas: string[] = [];
   /** Lo que animan los fundidos de entrada y de salida: la opacidad de las cortinas y de los cristales. */
   private readonly alfas = { fondo: 0, cristales: 1 };
   private readonly raton = { x: 0, y: 0, objX: 0, objY: 0 };
@@ -108,6 +114,8 @@ export class CasoN4 {
     private readonly opc: OpcionesCaso,
   ) {
     this.pasosDom = Array.from(act.querySelectorAll<HTMLElement>('[data-n4-paso]'));
+    this.coloresDom = Array.from(act.querySelectorAll<HTMLElement>('[data-n4-color]'));
+    this.paletaDom = act.querySelector<HTMLElement>('[data-n4-paleta]');
     this.titulo = act.querySelector<HTMLElement>('h1');
     this.medios = Array.from(act.querySelectorAll<HTMLImageElement>('img[data-n4-medio]')).sort((a, b) => Number(a.dataset.n4Medio) - Number(b.dataset.n4Medio));
     this.volver = act.querySelector<HTMLElement>('a[data-n4-volver]');
@@ -115,6 +123,7 @@ export class CasoN4 {
     this.scroll = new ScrollCaso({
       alto: () => window.innerHeight,
       pasos: () => Math.max(1, this.pasosDom.length),
+      extra: () => (this.coloresDom.length > 0 ? 1 : 0),
       bloqueado: () => this.volando || this.enVueloDeIda,
       focoEnControl: () => document.activeElement?.closest(CONTROLES) != null,
       esControl: (destino) => destino instanceof Element && destino.closest(CONTROLES) != null,
@@ -160,6 +169,8 @@ export class CasoN4 {
       pasos,
       fondo: [canal(0), canal(1), canal(2)],
       colorTexto: estilo.getPropertyValue('--color-texto-claro').trim() || estilo.color,
+      colorOscuro: estilo.getPropertyValue('--color-texto-oscuro').trim() || 'black',
+      paleta: this.coloresDom.map((li) => li.dataset.hex ?? ''),
     };
   }
 
@@ -310,8 +321,9 @@ export class CasoN4 {
     this.mundo = null;
     this.conWebgl = false;
     terminarVueloIda();
-    for (const li of this.pasosDom) li.style.removeProperty('transform');
+    for (const li of [...this.pasosDom, ...this.coloresDom]) li.style.removeProperty('transform');
     this.cajasEscritas.length = 0;
+    this.cajasColorEscritas.length = 0;
     // Sin escena, el fondo es el color plano del caso y el título se ve de una vez
     this.alfas.fondo = 1;
     this.fondoListo = true;
@@ -475,6 +487,19 @@ export class CasoN4 {
         li.style.transform = v;
       }
     });
+    // La copia de cada color de la paleta sigue la caja de su cristal, igual que los pasos
+    if (this.tamanosColor.length !== this.coloresDom.length) this.tamanosColor = this.coloresDom.map((li) => ({ w: li.offsetWidth || 1, h: li.offsetHeight || 1 }));
+    this.coloresDom.forEach((li, i) => {
+      const c = mundo.cajasPaleta[i];
+      if (!c) return;
+      const { w: w0, h: h0 } = this.tamanosColor[i];
+      const v = c.opacidad > 0 ? `translate3d(${c.x.toFixed(2)}px, ${c.y.toFixed(2)}px, 0) scale(${(c.ancho / w0).toFixed(4)}, ${(c.alto / h0).toFixed(4)})` : '';
+      if (this.cajasColorEscritas[i] !== v) {
+        this.cajasColorEscritas[i] = v;
+        if (v) li.style.transform = v;
+        else li.style.removeProperty('transform');
+      }
+    });
   }
 
   private medirCopias(): void {
@@ -493,10 +518,16 @@ export class CasoN4 {
       if (m.style.opacity !== s) m.style.opacity = s;
     });
     if (!this.conWebgl) {
+      // Con paleta, la historia tiene un tramo más: el último paso también sale
+      const tramos = n + (this.coloresDom.length > 0 ? 1 : 0);
       this.pasosDom.forEach((li, k) => {
-        const s = String(Math.round(opacidadDelPaso(k, this.scroll.pos, this.scroll.tramo, n) * 1000) / 1000);
+        const s = String(Math.round(opacidadDelPaso(k, this.scroll.pos, this.scroll.tramo, tramos) * 1000) / 1000);
         if (li.style.opacity !== s) li.style.opacity = s;
       });
+      if (this.paletaDom) {
+        const s = String(Math.round(mezclaDelLimite(tramoDePaleta(n), this.scroll.pos, this.scroll.tramo) * 1000) / 1000);
+        if (this.paletaDom.style.opacity !== s) this.paletaDom.style.opacity = s;
+      }
     }
   }
 
@@ -544,7 +575,9 @@ export class CasoN4 {
     this.ajustarTitulo();
     this.anillo?.medir();
     this.cajasEscritas.length = 0;
+    this.cajasColorEscritas.length = 0;
     this.tamanosCopia = [];
+    this.tamanosColor = [];
     this.medirMundo();
     this.alCambiarPosicion();
     this.publicar(false);

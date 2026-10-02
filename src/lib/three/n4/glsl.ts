@@ -138,6 +138,10 @@ void main() {
  * viñeta que oscurece las esquinas hasta × 0,35 sin tocar el centro, grano de ±4 de luma que cambia por
  * cuadro y un vaivén lento (≤ 1 % del ancho, periodo de 5 s). Ningún píxel pasa de luma 80 (Rec. 709).
  * Los colores son los ya codificados, como en el resto del mundo.
+ *
+ * La luz late como en Zero (pulido de T32, medido en la grabación el 2026-10-02): los haces no se mueven
+ * de lugar; su brillo late cada ≈ 0,6 s con ± 15 % y, de vez en cuando, un haz se enciende fuerte unos
+ * instantes. Con movimiento reducido no late.
  */
 export const FONDO_FRAGMENT = /* glsl */ `
 uniform vec3 u_fondo;
@@ -167,7 +171,13 @@ void main() {
   // haces claros angostos, a × 1,5
   float haz = pow(smoothstep(0.25, 0.95, f), 1.4);
   float pliegue = smoothstep(0.15, 0.95, -f);
-  float k = 1.0 + 0.5 * haz - 0.4 * pliegue;
+  // El latido: tres senos de periodos que no se repiten entre sí (0,6, 0,37 y 2,3 s), ± 15 % en total
+  float t = u_tiempo;
+  float latido = 0.09 * sin(TAU * t / 0.6) + 0.04 * sin(TAU * t / 0.37 + 1.3) + 0.02 * sin(TAU * t / 2.3 + 0.4);
+  // El destello: cada haz (uno por periodo de 10 % del ancho) se enciende un instante cada ≈ 14 s, a destiempo
+  float idHaz = floor(x * 10.0 + 0.7 / TAU + 0.25);
+  float destello = pow(max(0.0, sin(t * 0.45 + hash(vec2(idHaz, 3.7)) * TAU)), 24.0);
+  float k = 1.0 + 0.5 * haz * (1.0 + u_mov * (latido * 2.0 + 1.6 * destello)) - 0.4 * pliegue + u_mov * latido * 0.9;
 
   // Viñeta: 0 en el centro, 1 en las esquinas
   float r = length((vUv - 0.5) * vec2(u_aspecto, 1.0)) / length(vec2(u_aspecto, 1.0) * 0.5);
@@ -252,7 +262,7 @@ const vec3 FRESNEL_COLOR = vec3(0.92, 0.95, 1.0);
 const float VELO = 0.09;
 const vec3 VELO_COLOR = vec3(1.0, 0.93, 0.94);
 const float TORNASOL = 0.1;
-const float PARED_CLARA = 0.45;
+const float PARED_CLARA = 0.3;
 const float ARCOIRIS_CUERPO = 0.2;
 
 // El color de la escena visto a través del cristal, con la dispersión por canal
@@ -296,10 +306,27 @@ vec3 vidrio(vec2 uv, vec2 nxy, float escarcha) {
 }
 `;
 
+/**
+ * La máscara de tinte de los cristales de la paleta (el design system): el color de cada uno, premultiplicado
+ * por su opacidad. Los demás cristales no la tocan.
+ */
+export const TINTE_FRAGMENT = /* glsl */ `
+uniform vec3 u_color;
+uniform float u_alfa;
+void main() {
+  gl_FragColor = vec4(u_color * u_alfa, u_alfa);
+}
+`;
+
 /** El pase de composición de los cristales de frente: nítidos, con brillo de arista. */
 export const CRISTALES_FRAGMENT = /* glsl */ `
 ${REFRACCION}
+uniform sampler2D tTinte;
+uniform float u_conTinte;
 varying vec2 vUv;
+
+// Cuánto toma el vidrio el color de su paleta: casi todo, para que el color se lea fiel
+const float TINTE = 0.82;
 
 vec2 normalCruda(vec2 uv) {
   return texture2D(tMascara, uv).rg * 2.0 - 1.0;
@@ -315,6 +342,16 @@ void main() {
   vec2 nxy = m.rg / m.a * 2.0 - 1.0;
   float escarcha = m.b / m.a;
   vec3 c = vidrio(vUv, nxy, escarcha);
+  // El cristal de la paleta toma su color, con la luz de la escena refractada para que siga siendo vidrio
+  if (u_conTinte > 0.5) {
+    vec4 t = texture2D(tTinte, vUv);
+    if (t.a > 0.004) {
+      vec3 color = t.rgb / t.a;
+      float luz = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      vec3 vidrioColor = color * (0.85 + 0.5 * (luz - 0.3)) + fresnel(nxy) * FRESNEL_COLOR * 0.5;
+      c = mix(c, vidrioColor, TINTE * clamp(t.a / m.a, 0.0, 1.0));
+    }
+  }
   // Brillo de arista: el gradiente de las normales vecinas (la orilla y las grietas entre facetas)
   vec2 gx = abs(normalCruda(vUv + vec2(u_px.x, 0.0)) - normalCruda(vUv - vec2(u_px.x, 0.0)));
   vec2 gy = abs(normalCruda(vUv + vec2(0.0, u_px.y)) - normalCruda(vUv - vec2(0.0, u_px.y)));

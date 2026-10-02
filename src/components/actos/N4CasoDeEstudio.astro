@@ -29,6 +29,8 @@ const mundoUrl = conBase(`${discSlug}/`);
 const portada: MedioCaso = { src: datos.portada.src, ancho: datos.portada.width, alto: datos.portada.height, alt: `Portada de ${datos.titulo}` };
 const fotos: MedioCaso[] = datos.historia.map((p) => ({ src: p.foto.src, ancho: p.foto.width, alto: p.foto.height, alt: p.alt }));
 const medios = [portada, ...fotos];
+// La exposición del design system (opcional): 5 colores al final del caso
+const paleta = datos.paleta ?? [];
 ---
 
 <article
@@ -73,6 +75,21 @@ const medios = [portada, ...fotos];
       </li>
     ))}
   </ol>
+
+  <!-- La paleta del design system: con WebGL, cada color es un cristal teñido y esta copia (transparente) sigue su caja; sin WebGL se ven las muestras -->
+  {paleta.length > 0 && (
+    <section class="n4-paleta" data-n4-paleta aria-label="Paleta de color">
+      <h2 class="n4-paleta-titulo">Paleta</h2>
+      <ul class="n4-colores">
+        {paleta.map((hex, i) => (
+          <li class="n4-color" data-n4-color={i} data-hex={hex} style={`--n4-color: ${hex}`}>
+            <span class="n4-color-muestra" aria-hidden="true"></span>
+            <span class="n4-color-hex">{hex.toUpperCase()}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
 
   <!-- El anillo de progreso de Landberg: abajo a la izquierda, con arco desde las 12 h -->
   <div class="n4-anillo" data-n4-anillo aria-hidden="true">
@@ -372,6 +389,78 @@ const medios = [portada, ...fotos];
     transform: translateY(-50%);
   }
 
+  /* ---------- La paleta del design system ---------- */
+  #act-n4 .n4-paleta-titulo {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  #act-n4 .n4-colores {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Con WebGL: como la copia de cada paso, transparente y sobre la caja de su cristal */
+  #act-n4 .n4-color {
+    position: absolute;
+    left: 0;
+    top: 0;
+    box-sizing: border-box;
+    width: calc(12 * 1rem);
+    height: calc(9 * 1rem);
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
+    transform-origin: 0 0;
+    transform: translate3d(0, 150vh, 0);
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    font-size: 1.6rem;
+    color: var(--color-texto-claro);
+  }
+
+  #act-n4 .n4-color-muestra {
+    display: none;
+  }
+
+  /* Sin WebGL: las cinco muestras en fila al centro de la columna, con su hexadecimal debajo */
+  #act-n4.n4-sin-webgl .n4-paleta {
+    position: absolute;
+    left: calc(31.5 * 1rem - 25 * 1rem);
+    top: var(--n4-meseta-y);
+    width: calc(50 * 1rem);
+    transform: translateY(-50%);
+    opacity: 0;
+  }
+
+  #act-n4.n4-sin-webgl .n4-colores {
+    display: flex;
+    gap: calc(1 * 1rem);
+  }
+
+  #act-n4.n4-sin-webgl .n4-color {
+    position: static;
+    flex: 1;
+    width: auto;
+    height: auto;
+    opacity: 1;
+    transform: none;
+    font-size: 1.1rem;
+  }
+
+  #act-n4.n4-sin-webgl .n4-color-muestra {
+    display: block;
+    aspect-ratio: 1;
+    margin-bottom: 0.5rem;
+    border-radius: 0.5rem;
+    background: var(--n4-color);
+  }
+
   /* ---------- «← Volver» ---------- */
   #act-n4 .n4-volver {
     position: fixed;
@@ -496,7 +585,8 @@ const medios = [portada, ...fotos];
       font-size: 1.2rem;
     }
 
-    #act-n4.n4-sin-webgl .n4-paso {
+    #act-n4.n4-sin-webgl .n4-paso,
+    #act-n4.n4-sin-webgl .n4-paleta {
       left: 16px;
       width: calc(100vw - 32px);
     }
@@ -521,7 +611,8 @@ const medios = [portada, ...fotos];
       white-space: normal;
     }
 
-    #act-n4 .n4-paso {
+    #act-n4 .n4-paso,
+    #act-n4 .n4-color {
       position: static;
       width: auto;
       height: auto;

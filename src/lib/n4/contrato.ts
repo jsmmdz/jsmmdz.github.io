@@ -14,6 +14,8 @@ export const MAX_PALABRAS_TEXTO = 20;
 export const MAX_CARACTERES_DESTACADO = 12;
 export const MIN_PASOS = 4;
 export const MAX_PASOS = 9;
+/** Colores de la sección del design system: exactamente 5 (autor, 2026-10-02). */
+export const COLORES_PALETA = 5;
 
 /** Contraste mínimo del crema sobre el fondo del caso (WCAG AA para texto). */
 export const CONTRASTE_MINIMO = 4.5;
@@ -86,6 +88,12 @@ export function esquemaProyecto<I extends z.ZodTypeAny, D extends z.ZodTypeAny =
         .min(MIN_PASOS, `historia debe tener al menos ${MIN_PASOS} pasos`)
         .max(MAX_PASOS, `historia admite a lo sumo ${MAX_PASOS} pasos`),
       orden: z.coerce.number().int(),
+      // La exposición del design system (opcional, autor, 2026-10-02): 5 cristales del color de la paleta
+      // al final del caso, cada uno con su hexadecimal. Sin el campo, la sección no existe.
+      paleta: z
+        .array(z.string().regex(HEX, 'paleta: cada color debe ser #RRGGBB'))
+        .length(COLORES_PALETA, `paleta debe tener exactamente ${COLORES_PALETA} colores`)
+        .optional(),
     })
     .superRefine((caso, ctx) => {
       const pasos = caso.historia;

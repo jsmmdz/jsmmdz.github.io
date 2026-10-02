@@ -23,6 +23,7 @@ import { formaCristal, type FormaCristal } from '@/lib/n4/forma';
 import type { Disposicion } from '@/lib/n4/geometria';
 import type { PasoVista } from '@/lib/n4/historia';
 import { mezclaDelLimite } from '@/lib/n4/medios';
+import { opacidadPaleta, poseColor, tintaSobre } from '@/lib/n4/paleta';
 import { CAM_Z, FOV, SEMIALTO } from '../camara';
 import { PASE_FRAGMENT, PASE_VERTEX } from '../n3/glsl';
 import {
@@ -36,6 +37,7 @@ import {
   PANTALLA_VERTEX,
   TEXTO_FRAGMENT,
   TEXTO_VERTEX,
+  TINTE_FRAGMENT,
 } from './glsl';
 import { dibujarTextoCristal, fuentesDelTextoListas } from './texto';
 
@@ -47,7 +49,7 @@ const ESQUINA_REM = 2;
 const TIEMPO_MAX_CARGA_MS = 6000;
 const TIEMPO_MAX_PRECALENTAR_MS = 4000;
 // Capas de la cámara: cada pase dibuja solo las suyas
-const CAPA = { foto: 0, cristales: 1, esquirlas: 2, texto: 3 } as const;
+const CAPA = { foto: 0, cristales: 1, esquirlas: 2, texto: 3, tinte: 4 } as const;
 // Desenfoque de lente de las esquirlas de fondo (K6): máximo 16 px, radio de foco 0,3, caída 0,3
 const DESENFOQUE_MAX_PX = 16;
 const FOCO = 0.3;
@@ -56,6 +58,9 @@ const CAIDA = 0.3;
 const SEMILLA_CRISTAL = 101;
 const PASO_SEMILLA = 17;
 const SEMILLA_ESQUIRLA = 5003;
+const SEMILLA_COLOR = 9001;
+// Los cristales de la paleta van delante de los de la historia
+const Z_PALETA = 0.4;
 // Separación mínima en z entre cristales (unidades del mundo): el siguiente va delante del anterior
 const Z_ENTRE_CRISTALES = 0.05;
 // Cuánto corre el paralaje de ratón a un cristal: fracción del alto de la ventana por unidad de |z|
@@ -116,6 +121,10 @@ export interface ConfigMundo {
   fondo: [number, number, number];
   /** El crema del texto (el token de texto claro). */
   colorTexto: string;
+  /** El oscuro para el hexadecimal sobre un color claro de la paleta. */
+  colorOscuro: string;
+  /** La paleta del design system (5 colores `#RRGGBB`), si el caso la trae. */
+  paleta: string[];
 }
 
 /** La caja proyectada de un cristal en la ventana (px) y su opacidad. */
@@ -139,6 +148,8 @@ interface Cristal {
   /** Los vértices del contorno (x, y, z) delante y detrás, para la caja proyectada. */
   puntos: Float32Array;
   texto: { malla: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>; textura: THREE.CanvasTexture } | null;
+  /** Solo los de la paleta: la malla hija que pinta su color en la máscara de tinte. */
+  tinte?: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
 }
 
 interface PasePantalla {
@@ -174,6 +185,12 @@ function textura(fuente: TexImageSource): THREE.Texture {
 
 const clave = (img: HTMLImageElement) => img.currentSrc || img.src;
 
+/** `#RRGGBB` a canales de 0 a 1, sin convertir (el mundo trabaja con el color ya codificado). */
+function hexACanales(hex: string): [number, number, number] {
+  const h = /^#([0-9a-f]{6})$/i.exec(hex)?.[1] ?? '000000';
+  return [0, 1, 2].map((k) => parseInt(h.slice(2 * k, 2 * k + 2), 16) / 255) as [number, number, number];
+}
+
 function geometriaDeForma(forma: FormaCristal): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(forma.posiciones, 3));
@@ -205,6 +222,8 @@ export class MundoN4 {
   animado = false;
   /** La caja proyectada de cada cristal, en el orden de la historia. */
   readonly cajas: CajaCristal[];
+  /** La caja proyectada de cada cristal de la paleta. */
+  readonly cajasPaleta: CajaCristal[];
 
   private readonly escena = new THREE.Scene();
   private readonly camara = new THREE.PerspectiveCamera(FOV, 1, 0.1, 2000);
@@ -220,6 +239,7 @@ export class MundoN4 {
   private readonly paseEsquirlas: PasePantalla;
   private readonly cristales: Cristal[] = [];
   private readonly esquirlas: Cristal[] = [];
+  private readonly colores: Cristal[] = [];
   private readonly imagenes = new Map<string, Imagen>();
   private readonly claves: string[];
   private readonly fuentes: HTMLImageElement[];
@@ -227,6 +247,7 @@ export class MundoN4 {
   private rtMascaraFrente: THREE.WebGLRenderTarget | null = null;
   private rtMascaraFondo: THREE.WebGLRenderTarget | null = null;
   private rtEsquirlas: THREE.WebGLRenderTarget | null = null;
+  private rtTinte: THREE.WebGLRenderTarget | null = null;
   private readonly tam = new THREE.Vector2();
   private readonly punto = new THREE.Vector3();
   private readonly colorLimpio = new THREE.Color();
@@ -239,6 +260,7 @@ export class MundoN4 {
   private ultimoEstado: EstadoMundo | null = null;
   private hayCristales = false;
   private hayEsquirlas = false;
+  private hayColores = false;
   private destruido = false;
 
   constructor(
@@ -301,7 +323,7 @@ export class MundoN4 {
     );
     this.paseCopia = this.crearPase(PASE_VERTEX, PASE_FRAGMENT, { tMundo: { value: this.vacia } });
     const comunes = { tEscena: { value: this.vacia }, tMascara: { value: this.vacia }, u_px: { value: new THREE.Vector2(1, 1) } };
-    this.paseCristales = this.crearPase(PANTALLA_VERTEX, CRISTALES_FRAGMENT, { ...comunes });
+    this.paseCristales = this.crearPase(PANTALLA_VERTEX, CRISTALES_FRAGMENT, { ...comunes, tTinte: { value: this.vacia }, u_conTinte: { value: 0 } });
     this.paseEsquirlas = this.crearPase(PANTALLA_VERTEX, ESQUIRLAS_FRAGMENT, {
       ...comunes,
       u_aspecto: { value: 1 },
@@ -319,6 +341,25 @@ export class MundoN4 {
     ESQUIRLAS.forEach((_, j) => {
       this.esquirlas.push(this.crearCristal(formaCristal(SEMILLA_ESQUIRLA + j * 13, { grosor: 0.07 }), 100 + j, CAPA.esquirlas));
     });
+    // La paleta del design system: un cristal por color, con una malla hija que pinta su color
+    config.paleta.forEach((hex, i) => {
+      const c = this.crearCristal(formaCristal(SEMILLA_COLOR + i * 31, { lados: 5 + (i % 2) }), 200 + i, CAPA.cristales);
+      const material = new THREE.ShaderMaterial({
+        uniforms: { u_color: { value: new THREE.Vector3(...hexACanales(hex)) }, u_alfa: { value: 1 } },
+        vertexShader: MASCARA_VERTEX,
+        fragmentShader: TINTE_FRAGMENT,
+        side: THREE.DoubleSide,
+        blending: THREE.NoBlending,
+        toneMapped: false,
+      });
+      const tinte = new THREE.Mesh(c.malla.geometry, material);
+      tinte.frustumCulled = false;
+      tinte.layers.set(CAPA.tinte);
+      c.malla.add(tinte);
+      c.tinte = tinte;
+      this.colores.push(c);
+    });
+    this.cajasPaleta = config.paleta.map(() => ({ x: 0, y: 0, ancho: 0, alto: 0, opacidad: 0 }));
   }
 
   private crearPase(vertex: string, fragment: string, uniforms: Record<string, THREE.IUniform>): PasePantalla {
@@ -401,35 +442,12 @@ export class MundoN4 {
     if (this.destruido) return;
     this.config.pasos.forEach((paso, k) => {
       const c = this.cristales[k];
-      if (!c || c.texto) return;
-      const a = c.forma.areaTexto;
-      const lienzo = dibujarTextoCristal(paso, a.ancho / a.alto, this.config.colorTexto);
-      const tex = new THREE.CanvasTexture(lienzo);
-      tex.colorSpace = THREE.NoColorSpace;
-      tex.premultiplyAlpha = true;
-      tex.minFilter = THREE.LinearMipmapLinearFilter;
-      tex.magFilter = THREE.LinearFilter;
-      tex.generateMipmaps = true;
-      tex.anisotropy = 4;
-      tex.needsUpdate = true;
-      const material = new THREE.ShaderMaterial({
-        uniforms: { u_mapa: { value: tex }, u_alfa: { value: 1 } },
-        vertexShader: TEXTO_VERTEX,
-        fragmentShader: TEXTO_FRAGMENT,
-        transparent: true,
-        premultipliedAlpha: true,
-        depthTest: false,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        toneMapped: false,
-      });
-      const plano = new THREE.Mesh(new THREE.PlaneGeometry(a.ancho, a.alto), material);
-      plano.position.set(a.cx, a.cy, c.forma.grosor / 2 + 0.002);
-      plano.renderOrder = 10 + k;
-      plano.frustumCulled = false;
-      plano.layers.set(CAPA.texto);
-      c.malla.add(plano);
-      c.texto = { malla: plano, textura: tex };
+      if (c) this.imprimir(c, paso, this.config.colorTexto, 10 + k);
+    });
+    // La paleta: solo el hexadecimal, en crema o en oscuro según lo que contraste más con su color
+    this.config.paleta.forEach((hex, i) => {
+      const c = this.colores[i];
+      if (c) this.imprimir(c, { tipo: 'resultado', destacado: hex.toUpperCase(), texto: '' }, tintaSobre(hex, this.config.colorTexto, this.config.colorOscuro), 30 + i);
     });
     // El shader del texto se compila ahora, no con el primer cristal que entra
     try {
@@ -438,6 +456,39 @@ export class MundoN4 {
       // se compila al dibujar
     }
     this.sucio = true;
+  }
+
+  /** Imprime un texto en un cristal: un plano hijo con la textura de canvas, encima de la refracción. */
+  private imprimir(c: Cristal, paso: PasoVista, color: string, orden: number): void {
+    if (c.texto) return;
+    const a = c.forma.areaTexto;
+    const lienzo = dibujarTextoCristal(paso, a.ancho / a.alto, color);
+    const tex = new THREE.CanvasTexture(lienzo);
+    tex.colorSpace = THREE.NoColorSpace;
+    tex.premultiplyAlpha = true;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = true;
+    tex.anisotropy = 4;
+    tex.needsUpdate = true;
+    const material = new THREE.ShaderMaterial({
+      uniforms: { u_mapa: { value: tex }, u_alfa: { value: 1 } },
+      vertexShader: TEXTO_VERTEX,
+      fragmentShader: TEXTO_FRAGMENT,
+      transparent: true,
+      premultipliedAlpha: true,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    });
+    const plano = new THREE.Mesh(new THREE.PlaneGeometry(a.ancho, a.alto), material);
+    plano.position.set(a.cx, a.cy, c.forma.grosor / 2 + 0.002);
+    plano.renderOrder = orden;
+    plano.frustumCulled = false;
+    plano.layers.set(CAPA.texto);
+    c.malla.add(plano);
+    c.texto = { malla: plano, textura: tex };
   }
 
   /**
@@ -530,11 +581,13 @@ export class MundoN4 {
     this.rtMascaraFrente = encajar(this.rtMascaraFrente, MUESTRAS, true);
     this.rtMascaraFondo = encajar(this.rtMascaraFondo, MUESTRAS, true);
     this.rtEsquirlas = encajar(this.rtEsquirlas, 0, false);
+    // La máscara de tinte solo existe si el caso trae paleta
+    if (this.colores.length > 0) this.rtTinte = encajar(this.rtTinte, MUESTRAS, true);
     this.paseCristales.material.uniforms.u_px.value.set(1 / ancho, 1 / alto);
     this.paseEsquirlas.material.uniforms.u_px.value.set(1 / ancho, 1 / alto);
     // El desenfoque está en px CSS: en la máscara hay `ratio` píxeles por cada uno
     this.paseEsquirlas.material.uniforms.u_desenfoque.value = DESENFOQUE_MAX_PX * (ancho / this.ww);
-    return { escena: this.rtEscena, frente: this.rtMascaraFrente, fondo: this.rtMascaraFondo, esquirlas: this.rtEsquirlas };
+    return { escena: this.rtEscena, frente: this.rtMascaraFrente, fondo: this.rtMascaraFondo, esquirlas: this.rtEsquirlas, tinte: this.rtTinte };
   }
 
   // ---------- Cuadro ----------
@@ -609,6 +662,7 @@ export class MundoN4 {
     c.malla.scale.setScalar(anchoPx * upx);
     c.malla.material.uniforms.u_alfa.value = alfa;
     if (c.texto) c.texto.malla.material.uniforms.u_alfa.value = alfa;
+    if (c.tinte) c.tinte.material.uniforms.u_alfa.value = alfa;
     c.malla.updateMatrixWorld(true);
     let x0 = Infinity;
     let x1 = -Infinity;
@@ -629,6 +683,8 @@ export class MundoN4 {
 
   private actualizarCristales(e: EstadoMundo, d: Disposicion): void {
     const n = this.cristales.length;
+    // Con paleta, la historia tiene un tramo más después: el último paso también sale (movimiento reducido)
+    const tramos = n + (this.colores.length > 0 ? 1 : 0);
     let alguno = false;
     this.cristales.forEach((c, k) => {
       const reducido = e.reducido;
@@ -640,7 +696,7 @@ export class MundoN4 {
       const para = reducido ? 0 : PARALAJE * d.alto * prof;
       const cx = d.columnaX + X_CRISTAL[k % X_CRISTAL.length] * d.escalaX - e.raton.x * para;
       const cy = d.mesetaY - altura - e.raton.y * para;
-      const alfa = e.alfaCristales * (reducido ? opacidadDelPaso(k, e.pos, e.tramo, n) : 1);
+      const alfa = e.alfaCristales * (reducido ? opacidadDelPaso(k, e.pos, e.tramo, tramos) : 1);
       const giro: [number, number, number] = [giroBase[0] + extra[0], giroBase[1] + extra[1], giroBase[2] + extra[2]];
       const caja = this.colocar(c, cx, cy, d.anchoCristal, Z_ENTRE_CRISTALES * (k % X_CRISTAL.length), giro, alfa);
       const dentro = caja.x + caja.ancho > 0 && caja.x < this.ww && caja.y + caja.alto > 0 && caja.y < this.wh;
@@ -648,7 +704,21 @@ export class MundoN4 {
       if (c.malla.visible) alguno = true;
       this.cajas[k] = { ...caja, opacidad: alfa };
     });
-    this.hayCristales = alguno;
+    // La paleta: sube en cascada en el tramo que sigue a la historia y se queda agrupada
+    let algunColor = false;
+    const alfaPaleta = e.alfaCristales * opacidadPaleta(n, e.pos, e.tramo, e.reducido);
+    this.colores.forEach((c, i) => {
+      const p = poseColor(i, n, e.pos, e.tramo, d, e.reducido);
+      const extra = e.reducido ? ([0, 0, 0] as const) : girarBalanceo(c.balanceo, e.tiempo);
+      const giro: [number, number, number] = [p.giro[0] + extra[0] * 0.6, p.giro[1] + extra[1] * 0.6, p.giro[2] + extra[2] * 0.6];
+      const caja = this.colocar(c, p.cx, p.cy, p.ancho, Z_PALETA, giro, alfaPaleta);
+      const dentro = caja.x + caja.ancho > 0 && caja.x < this.ww && caja.y + caja.alto > 0 && caja.y < this.wh;
+      c.malla.visible = alfaPaleta > 0.002 && dentro;
+      if (c.malla.visible) algunColor = true;
+      this.cajasPaleta[i] = { ...caja, opacidad: c.malla.visible ? alfaPaleta : 0 };
+    });
+    this.hayColores = algunColor;
+    this.hayCristales = alguno || algunColor;
   }
 
   private actualizarEsquirlas(e: EstadoMundo, d: Disposicion): void {
@@ -716,8 +786,18 @@ export class MundoN4 {
       r.clear();
       this.camara.layers.set(CAPA.cristales);
       r.render(this.escena, this.camara);
-      r.setClearColor(this.colorLimpio, 1);
+      // La máscara de tinte de la paleta (solo si se ve algún color)
       const u = this.paseCristales.material.uniforms;
+      u.u_conTinte.value = 0;
+      if (this.hayColores && rt.tinte) {
+        r.setRenderTarget(rt.tinte);
+        r.clear();
+        this.camara.layers.set(CAPA.tinte);
+        r.render(this.escena, this.camara);
+        u.tTinte.value = rt.tinte.texture;
+        u.u_conTinte.value = 1;
+      }
+      r.setClearColor(this.colorLimpio, 1);
       u.tEscena.value = escena;
       u.tMascara.value = rt.frente.texture;
       r.setRenderTarget(null);
@@ -771,9 +851,10 @@ export class MundoN4 {
     this.destruido = true;
     for (const { tex } of this.imagenes.values()) tex.dispose();
     this.imagenes.clear();
-    for (const c of [...this.cristales, ...this.esquirlas]) {
+    for (const c of [...this.cristales, ...this.esquirlas, ...this.colores]) {
       c.malla.geometry.dispose();
       c.malla.material.dispose();
+      c.tinte?.material.dispose();
       if (c.texto) {
         c.texto.textura.dispose();
         c.texto.malla.geometry.dispose();
@@ -782,6 +863,7 @@ export class MundoN4 {
     }
     this.cristales.length = 0;
     this.esquirlas.length = 0;
+    this.colores.length = 0;
     this.material.dispose();
     this.oclusor.material.dispose();
     this.geometria.dispose();
@@ -790,7 +872,7 @@ export class MundoN4 {
       p.geometria.dispose();
       p.material.dispose();
     }
-    for (const rt of [this.rtEscena, this.rtMascaraFrente, this.rtMascaraFondo, this.rtEsquirlas]) rt?.dispose();
-    this.rtEscena = this.rtMascaraFrente = this.rtMascaraFondo = this.rtEsquirlas = null;
+    for (const rt of [this.rtEscena, this.rtMascaraFrente, this.rtMascaraFondo, this.rtEsquirlas, this.rtTinte]) rt?.dispose();
+    this.rtEscena = this.rtMascaraFrente = this.rtMascaraFondo = this.rtEsquirlas = this.rtTinte = null;
   }
 }

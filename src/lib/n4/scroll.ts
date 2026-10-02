@@ -7,7 +7,7 @@
  * cuadro a 60 fps). El dedo (un toque arrastrado, con eventos de puntero) mueve el objetivo 1 a 1 con los px del gesto. No hay `requestAnimationFrame` propio: `update(dt)` lo llama el reloj único.
  *
  * Tramos: P = 0,5 alturas de ventana. El título ocupa [0, P); el cristal k cruza el centro de la
- * pantalla en `cₖ = (k + 1,5)·P`. El objetivo se acota a [0, c_{N−1}]: el caso termina con el último
+ * pantalla en `cₖ = (k + 1,5)·P`. El objetivo se acota a [0, c_{N−1}] (o hasta el tramo de la paleta, si el caso la trae): termina con el último
  * cristal al centro.
  */
 
@@ -36,6 +36,8 @@ export interface OpcionesScrollCaso {
   alto: () => number;
   /** Cantidad de pasos de la historia. */
   pasos: () => number;
+  /** Tramos que van después de la historia (la paleta del design system: 0 o 1). */
+  extra?: () => number;
   /** Las entradas se ignoran (mientras vuela la pieza). */
   bloqueado: () => boolean;
   /** Si el foco está en un control propio, las teclas no mueven el caso. */
@@ -62,9 +64,14 @@ export class ScrollCaso {
     return TRAMO_POR_ALTO * Math.max(1, this.opc.alto());
   }
 
-  /** Donde termina el caso: el último cristal al centro. */
+  /** Tramos después de la historia. */
+  private get extra(): number {
+    return Math.max(0, this.opc.extra?.() ?? 0);
+  }
+
+  /** Donde termina el caso: el último cristal (o el último tramo extra, la paleta) al centro. */
   get final(): number {
-    return centroDelPaso(Math.max(1, this.opc.pasos()) - 1, this.tramo);
+    return centroDelPaso(Math.max(1, this.opc.pasos()) - 1 + this.extra, this.tramo);
   }
 
   /** Paso en el que está la posición. */
@@ -79,7 +86,7 @@ export class ScrollCaso {
 
   /** Las anclas de AvPág y RePág: 0 y el centro de cada cristal. */
   private anclas(): number[] {
-    const n = Math.max(1, this.opc.pasos());
+    const n = Math.max(1, this.opc.pasos()) + this.extra;
     return [0, ...Array.from({ length: n }, (_, k) => centroDelPaso(k, this.tramo))];
   }
 
