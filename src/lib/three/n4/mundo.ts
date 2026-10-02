@@ -21,7 +21,7 @@ import type { RelevoVuelo } from '@/lib/navigation/vuelo';
 import { alturaDelCristal, balanceoDelCristal, girarBalanceo, giroDelCristal, giroEnReposo, opacidadDelPaso, PROFUNDIDAD_CRISTAL, X_CRISTAL, type Balanceo } from '@/lib/n4/cristales';
 import { formaCristal, type FormaCristal } from '@/lib/n4/forma';
 import type { Disposicion } from '@/lib/n4/geometria';
-import type { PasoVista } from '@/lib/n4/historia';
+import { NOMBRE_TIPO, type PasoVista } from '@/lib/n4/historia';
 import { mezclaDelLimite } from '@/lib/n4/medios';
 import { opacidadPaleta, poseColor, tintaSobre } from '@/lib/n4/paleta';
 import { CAM_Z, FOV, SEMIALTO } from '../camara';
@@ -442,7 +442,7 @@ export class MundoN4 {
     if (this.destruido) return;
     this.config.pasos.forEach((paso, k) => {
       const c = this.cristales[k];
-      if (c) this.imprimir(c, paso, this.config.colorTexto, 10 + k);
+      if (c) this.imprimir(c, paso, this.config.colorTexto, 10 + k, NOMBRE_TIPO[paso.tipo]);
     });
     // La paleta: solo el hexadecimal, en crema o en oscuro según lo que contraste más con su color
     this.config.paleta.forEach((hex, i) => {
@@ -459,10 +459,10 @@ export class MundoN4 {
   }
 
   /** Imprime un texto en un cristal: un plano hijo con la textura de canvas, encima de la refracción. */
-  private imprimir(c: Cristal, paso: PasoVista, color: string, orden: number): void {
+  private imprimir(c: Cristal, paso: PasoVista, color: string, orden: number, rotulo?: string): void {
     if (c.texto) return;
     const a = c.forma.areaTexto;
-    const lienzo = dibujarTextoCristal(paso, a.ancho / a.alto, color);
+    const lienzo = dibujarTextoCristal(paso, a.ancho / a.alto, color, rotulo);
     const tex = new THREE.CanvasTexture(lienzo);
     tex.colorSpace = THREE.NoColorSpace;
     tex.premultiplyAlpha = true;

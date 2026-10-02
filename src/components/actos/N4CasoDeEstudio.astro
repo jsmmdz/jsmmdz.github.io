@@ -79,7 +79,7 @@ const paleta = datos.paleta ?? [];
   <!-- La paleta del design system: con WebGL, cada color es un cristal teñido y esta copia (transparente) sigue su caja; sin WebGL se ven las muestras -->
   {paleta.length > 0 && (
     <section class="n4-paleta" data-n4-paleta aria-label="Paleta de color">
-      <h2 class="n4-paleta-titulo">Paleta</h2>
+      <h2 class="n4-paleta-titulo" data-n4-paleta-titulo>Design system</h2>
       <ul class="n4-colores">
         {paleta.map((hex, i) => (
           <li class="n4-color" data-n4-color={i} data-hex={hex} style={`--n4-color: ${hex}`}>
@@ -390,13 +390,28 @@ const paleta = datos.paleta ?? [];
   }
 
   /* ---------- La paleta del design system ---------- */
+  /* El título de la sección: con WebGL lo pone el controlador justo encima del grupo de cristales */
   #act-n4 .n4-paleta-titulo {
     position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
+    left: 0;
+    top: 0;
+    margin: 0;
+    font-family: var(--fuente-display);
+    font-size: 2.2rem;
+    font-weight: 800;
+    line-height: 1.1;
     white-space: nowrap;
+    color: var(--color-texto-claro);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate3d(0, 150vh, 0);
+  }
+
+  #act-n4.n4-sin-webgl .n4-paleta-titulo {
+    position: static;
+    margin-bottom: 1rem;
+    opacity: 1;
+    transform: none;
   }
 
   #act-n4 .n4-colores {
@@ -612,7 +627,8 @@ const paleta = datos.paleta ?? [];
     }
 
     #act-n4 .n4-paso,
-    #act-n4 .n4-color {
+    #act-n4 .n4-color,
+    #act-n4 .n4-paleta-titulo {
       position: static;
       width: auto;
       height: auto;

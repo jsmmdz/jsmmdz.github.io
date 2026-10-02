@@ -69,6 +69,8 @@ export class CasoN4 {
   /** La copia de cada color de la paleta del design system (vacía si el caso no la trae). */
   private readonly coloresDom: HTMLElement[];
   private readonly paletaDom: HTMLElement | null;
+  private readonly tituloPaleta: HTMLElement | null;
+  private tituloPaletaEscrito = '';
   private readonly titulo: HTMLElement | null;
   /** Las fotos: la portada (medio −1) y la de cada paso, en ese orden. */
   private readonly medios: HTMLImageElement[];
@@ -116,6 +118,7 @@ export class CasoN4 {
     this.pasosDom = Array.from(act.querySelectorAll<HTMLElement>('[data-n4-paso]'));
     this.coloresDom = Array.from(act.querySelectorAll<HTMLElement>('[data-n4-color]'));
     this.paletaDom = act.querySelector<HTMLElement>('[data-n4-paleta]');
+    this.tituloPaleta = act.querySelector<HTMLElement>('[data-n4-paleta-titulo]');
     this.titulo = act.querySelector<HTMLElement>('h1');
     this.medios = Array.from(act.querySelectorAll<HTMLImageElement>('img[data-n4-medio]')).sort((a, b) => Number(a.dataset.n4Medio) - Number(b.dataset.n4Medio));
     this.volver = act.querySelector<HTMLElement>('a[data-n4-volver]');
@@ -500,6 +503,26 @@ export class CasoN4 {
         else li.style.removeProperty('transform');
       }
     });
+    // «Design system»: encima del grupo, alineado con su borde izquierdo; aparece con el tramo de la paleta
+    if (this.tituloPaleta) {
+      const visibles = mundo.cajasPaleta.filter((c) => c.opacidad > 0);
+      const alfa = visibles.length > 0 ? mezclaDelLimite(tramoDePaleta(this.pasosDom.length), this.scroll.pos, this.scroll.tramo) : 0;
+      const x = visibles.length ? Math.min(...visibles.map((c) => c.x)) : 0;
+      const y = visibles.length ? Math.min(...visibles.map((c) => c.y)) : 0;
+      const v = alfa > 0 ? `${x.toFixed(1)}|${(y - 4 * this.remPx()).toFixed(1)}|${alfa.toFixed(3)}` : '';
+      if (v !== this.tituloPaletaEscrito) {
+        this.tituloPaletaEscrito = v;
+        const el = this.tituloPaleta;
+        if (v) {
+          const [tx, ty, ta] = v.split('|');
+          el.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
+          el.style.opacity = ta;
+        } else {
+          el.style.removeProperty('transform');
+          el.style.removeProperty('opacity');
+        }
+      }
+    }
   }
 
   private medirCopias(): void {
@@ -576,6 +599,7 @@ export class CasoN4 {
     this.anillo?.medir();
     this.cajasEscritas.length = 0;
     this.cajasColorEscritas.length = 0;
+    this.tituloPaletaEscrito = '';
     this.tamanosCopia = [];
     this.tamanosColor = [];
     this.medirMundo();
