@@ -4,6 +4,25 @@
  * Garantiza salida con tiempo máximo de 6 s y gestión silenciosa de fallas de red.
  */
 
+/**
+ * Descarga archivos que se usarán después (los clips del outfit del N2), uno tras otro y con
+ * prioridad baja. No cuenta en el progreso del preloader ni lo demora: solo los deja en la caché
+ * HTTP, de donde los toma el <video> al reproducirlos. Con «ahorro de datos» no descarga nada.
+ */
+export async function precargarEnSegundoPlano(urls: readonly string[]): Promise<void> {
+  const conexion = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+  if (conexion?.saveData) return;
+  for (const url of urls) {
+    try {
+      const respuesta = await fetch(url, { priority: 'low' });
+      // Se lee el cuerpo entero para que la entrada quede completa en la caché.
+      await respuesta.blob();
+    } catch {
+      // Sin red: el clip se pide al reproducirse, como antes.
+    }
+  }
+}
+
 export interface OpcionesPrecarga {
   imagenes: readonly string[];
   videoUrl?: string;

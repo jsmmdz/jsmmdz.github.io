@@ -704,7 +704,11 @@ const primeraDisciplina = metadatosDisciplinas[0];
 
       sceneManager.rotateN2ToAngle(angleDegrees, () => {
         actualizarControlUI(disciplinaActiva);
-        fijarVideoReposo(disciplinaActiva);
+        // El clip del outfit (2,1–2,6 s) dura más que el giro (0,8 s): si todavía suena, se deja
+        // terminar. Fijar el reposo aquí lo pausaba y lo saltaba a su último cuadro, que de todos
+        // modos es el reposo (autor, 2026-10-03).
+        const clipSonando = videoElement && !videoElement.paused && !videoElement.ended && !videoElement.error;
+        if (!clipSonando) fijarVideoReposo(disciplinaActiva);
         raiz.dataset.n2Estado = 'reposo';
         const nav = obtenerNavegacion();
         nav.completeTransition();
