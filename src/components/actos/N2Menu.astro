@@ -608,6 +608,37 @@ const primeraDisciplina = metadatosDisciplinas[0];
       }
     };
 
+    // Al cambiar el src, el navegador pinta el poster un cuadro mientras carga el clip nuevo, y se
+    // notaba como un destello de otra disciplina (autor, 2026-10-03). Por eso el cuadro que se ve se
+    // congela en un lienzo encima del video hasta que el clip nuevo pinta su primer cuadro.
+    const congelarCuadro = () => {
+      if (!videoElement || videoElement.readyState < 2 || !videoElement.videoWidth) return null;
+      let lienzo = capaVideo?.querySelector<HTMLCanvasElement>('canvas[data-n2-congelado]') ?? null;
+      if (!lienzo) {
+        lienzo = document.createElement('canvas');
+        lienzo.dataset.n2Congelado = '';
+        lienzo.className = 'n2-transition-video';
+        videoElement.after(lienzo);
+      }
+      lienzo.width = videoElement.videoWidth;
+      lienzo.height = videoElement.videoHeight;
+      lienzo.getContext('2d')?.drawImage(videoElement, 0, 0);
+      lienzo.hidden = false;
+      return lienzo;
+    };
+
+    const soltarAlPrimerCuadro = (lienzo: HTMLCanvasElement | null) => {
+      if (!lienzo || !videoElement) return;
+      const soltar = () => {
+        lienzo.hidden = true;
+      };
+      if (typeof videoElement.requestVideoFrameCallback === 'function') {
+        videoElement.requestVideoFrameCallback(soltar);
+      } else {
+        videoElement.addEventListener('playing', soltar, { once: true });
+      }
+    };
+
     const actualizarControlUI = (slug: DisciplineSlug) => {
       const meta = metaMap.get(slug);
       if (!meta) return;
@@ -708,7 +739,13 @@ const primeraDisciplina = metadatosDisciplinas[0];
         // terminar. Fijar el reposo aquí lo pausaba y lo saltaba a su último cuadro, que de todos
         // modos es el reposo (autor, 2026-10-03).
         const clipSonando = videoElement && !videoElement.paused && !videoElement.ended && !videoElement.error;
-        if (!clipSonando) fijarVideoReposo(disciplinaActiva);
+        if (!clipSonando) {
+          fijarVideoReposo(disciplinaActiva);
+        } else {
+          // El poster sigue a la disciplina activa, como cuando aquí se fijaba el reposo.
+          const meta = metaMap.get(disciplinaActiva);
+          if (meta?.posterSrc) videoElement.poster = meta.posterSrc;
+        }
         raiz.dataset.n2Estado = 'reposo';
         const nav = obtenerNavegacion();
         nav.completeTransition();
@@ -745,11 +782,13 @@ const primeraDisciplina = metadatosDisciplinas[0];
       };
 
       if (videoElement && clipApropiado) {
+        const congelado = congelarCuadro();
         videoElement.pause();
         videoElement.muted = true;
         videoElement.defaultMuted = true;
         videoElement.src = clipApropiado;
         videoElement.currentTime = 0;
+        soltarAlPrimerCuadro(congelado);
         videoElement.addEventListener('playing', sincronizar, { once: true });
         const playPromise = videoElement.play();
         if (playPromise) {
