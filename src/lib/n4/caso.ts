@@ -27,10 +27,10 @@ import { barrer, quitarBarrido } from './barrido';
 import { opacidadDelPaso } from './cristales';
 import { disposicion, TITULO_ANCHO_REM, TITULO_TAMANO_REM, type Disposicion } from './geometria';
 import { TIPOS_PASO, type PasoVista } from './historia';
-import { estadoDelMedio, mezclaDelLimite } from './medios';
-import { tramoDePaleta } from './paleta';
+import { posHistoria, presenciaDS, totalTramos, tramoDelPaso } from './design-system';
+import { estadoDelMedio } from './medios';
 import { N4_MEDIO } from './portada';
-import { ScrollCaso } from './scroll';
+import { pasoEn, ScrollCaso } from './scroll';
 import { ajustarTitulo, fuenteDelTituloLista } from './titulo';
 
 // La entrada, contada desde el clic que abrió el caso (K14 y ZK3): el título desde 0,44 s; «← Volver»
@@ -66,11 +66,15 @@ export interface OpcionesCaso {
 export class CasoN4 {
   private readonly control = new AbortController();
   private readonly pasosDom: HTMLElement[];
-  /** La copia de cada color de la paleta del design system (vacía si el caso no la trae). */
+  /** El design system (antes del resultado), si el caso lo trae: la sección, su título, cada color y las fuentes. */
+  private readonly dsDom: HTMLElement | null;
+  private readonly tituloDS: HTMLElement | null;
   private readonly coloresDom: HTMLElement[];
-  private readonly paletaDom: HTMLElement | null;
-  private readonly tituloPaleta: HTMLElement | null;
-  private tituloPaletaEscrito = '';
+  private readonly fuentesDom: HTMLElement | null;
+  private readonly fuentesLis: HTMLElement[];
+  private tituloDSEscrito = '';
+  private cajaFuentesEscrita = '';
+  private tamanoFuentes: { w: number; h: number } | null = null;
   private readonly titulo: HTMLElement | null;
   /** Las fotos: la portada (medio −1) y la de cada paso, en ese orden. */
   private readonly medios: HTMLImageElement[];
@@ -116,9 +120,11 @@ export class CasoN4 {
     private readonly opc: OpcionesCaso,
   ) {
     this.pasosDom = Array.from(act.querySelectorAll<HTMLElement>('[data-n4-paso]'));
+    this.dsDom = act.querySelector<HTMLElement>('[data-n4-ds]');
+    this.tituloDS = act.querySelector<HTMLElement>('[data-n4-ds-titulo]');
     this.coloresDom = Array.from(act.querySelectorAll<HTMLElement>('[data-n4-color]'));
-    this.paletaDom = act.querySelector<HTMLElement>('[data-n4-paleta]');
-    this.tituloPaleta = act.querySelector<HTMLElement>('[data-n4-paleta-titulo]');
+    this.fuentesDom = act.querySelector<HTMLElement>('[data-n4-fuentes]');
+    this.fuentesLis = Array.from(act.querySelectorAll<HTMLElement>('[data-n4-fuente]'));
     this.titulo = act.querySelector<HTMLElement>('h1');
     this.medios = Array.from(act.querySelectorAll<HTMLImageElement>('img[data-n4-medio]')).sort((a, b) => Number(a.dataset.n4Medio) - Number(b.dataset.n4Medio));
     this.volver = act.querySelector<HTMLElement>('a[data-n4-volver]');
@@ -126,7 +132,7 @@ export class CasoN4 {
     this.scroll = new ScrollCaso({
       alto: () => window.innerHeight,
       pasos: () => Math.max(1, this.pasosDom.length),
-      extra: () => (this.coloresDom.length > 0 ? 1 : 0),
+      extra: () => (this.dsDom ? 1 : 0),
       bloqueado: () => this.volando || this.enVueloDeIda,
       focoEnControl: () => document.activeElement?.closest(CONTROLES) != null,
       esControl: (destino) => destino instanceof Element && destino.closest(CONTROLES) != null,
@@ -153,6 +159,16 @@ export class CasoN4 {
     return window.innerWidth < N4_MEDIO.anchoMinEscritorioPx;
   }
 
+  /** La posición de la historia sin el tramo del design system (la foto y el paso activo salen de ella). */
+  private posHistoria(): number {
+    return posHistoria(this.scroll.pos, this.scroll.tramo, this.pasosDom.length, this.dsDom !== null);
+  }
+
+  /** Cuánto se ve el design system (0 a 1). */
+  private presenciaDS(): number {
+    return presenciaDS(this.scroll.pos, this.scroll.tramo, this.pasosDom.length, this.dsDom !== null);
+  }
+
   /** Las fotos de respaldo (la portada y una por paso), de donde el mundo WebGL saca sus texturas. */
   get imagenesDeMedios(): HTMLImageElement[] {
     return this.medios;
@@ -173,7 +189,12 @@ export class CasoN4 {
       fondo: [canal(0), canal(1), canal(2)],
       colorTexto: estilo.getPropertyValue('--color-texto-claro').trim() || estilo.color,
       colorOscuro: estilo.getPropertyValue('--color-texto-oscuro').trim() || 'black',
-      paleta: this.coloresDom.map((li) => li.dataset.hex ?? ''),
+      designSystem: this.dsDom
+        ? {
+            paleta: this.coloresDom.map((li) => li.dataset.hex ?? ''),
+            fuentes: this.fuentesLis.map((li) => ({ nombre: li.dataset.nombre ?? '', uso: li.dataset.uso ?? '' })),
+          }
+        : null,
     };
   }
 
@@ -324,7 +345,7 @@ export class CasoN4 {
     this.mundo = null;
     this.conWebgl = false;
     terminarVueloIda();
-    for (const li of [...this.pasosDom, ...this.coloresDom]) li.style.removeProperty('transform');
+    for (const li of [...this.pasosDom, ...this.coloresDom, ...(this.fuentesDom ? [this.fuentesDom] : [])]) li.style.removeProperty('transform');
     this.cajasEscritas.length = 0;
     this.cajasColorEscritas.length = 0;
     // Sin escena, el fondo es el color plano del caso y el título se ve de una vez
@@ -395,7 +416,7 @@ export class CasoN4 {
   }
 
   private estadoMundo(): EstadoMundo {
-    const m = estadoDelMedio(this.scroll.pos, this.scroll.tramo, this.pasosDom.length);
+    const m = estadoDelMedio(this.posHistoria(), this.scroll.tramo, this.pasosDom.length);
     return {
       medio: m.medio,
       mezcla: m.mezcla,
@@ -503,16 +524,29 @@ export class CasoN4 {
         else li.style.removeProperty('transform');
       }
     });
-    // «Design system»: encima del grupo, alineado con su borde izquierdo; aparece con el tramo de la paleta
-    if (this.tituloPaleta) {
-      const visibles = mundo.cajasPaleta.filter((c) => c.opacidad > 0);
-      const alfa = visibles.length > 0 ? mezclaDelLimite(tramoDePaleta(this.pasosDom.length), this.scroll.pos, this.scroll.tramo) : 0;
-      const x = visibles.length ? Math.min(...visibles.map((c) => c.x)) : 0;
+    // Las tipografías: su copia sigue la caja de su cristal
+    if (this.fuentesDom) {
+      const c = mundo.cajaFuentes;
+      if (!this.tamanoFuentes) this.tamanoFuentes = { w: this.fuentesDom.offsetWidth || 1, h: this.fuentesDom.offsetHeight || 1 };
+      const { w: w0, h: h0 } = this.tamanoFuentes;
+      const v = c.opacidad > 0 ? `translate3d(${c.x.toFixed(2)}px, ${c.y.toFixed(2)}px, 0) scale(${(c.ancho / w0).toFixed(4)}, ${(c.alto / h0).toFixed(4)})` : '';
+      if (v !== this.cajaFuentesEscrita) {
+        this.cajaFuentesEscrita = v;
+        if (v) this.fuentesDom.style.transform = v;
+        else this.fuentesDom.style.removeProperty('transform');
+      }
+    }
+    // «Design system»: encima de la sección, alineado con el borde izquierdo de la paleta; aparece con ella
+    if (this.tituloDS) {
+      const visibles = [...mundo.cajasPaleta, mundo.cajaFuentes].filter((c) => c.opacidad > 0);
+      const alfa = visibles.length > 0 ? this.presenciaDS() : 0;
+      const colores = mundo.cajasPaleta.filter((c) => c.opacidad > 0);
+      const x = colores.length ? Math.min(...colores.map((c) => c.x)) : 0;
       const y = visibles.length ? Math.min(...visibles.map((c) => c.y)) : 0;
-      const v = alfa > 0 ? `${x.toFixed(1)}|${(y - 4 * this.remPx()).toFixed(1)}|${alfa.toFixed(3)}` : '';
-      if (v !== this.tituloPaletaEscrito) {
-        this.tituloPaletaEscrito = v;
-        const el = this.tituloPaleta;
+      const v = alfa > 0 ? `${x.toFixed(1)}|${(y - 5 * this.remPx()).toFixed(1)}|${alfa.toFixed(3)}` : '';
+      if (v !== this.tituloDSEscrito) {
+        this.tituloDSEscrito = v;
+        const el = this.tituloDS;
         if (v) {
           const [tx, ty, ta] = v.split('|');
           el.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
@@ -532,35 +566,43 @@ export class CasoN4 {
   /** Respaldo sin WebGL: la foto base opaca y la siguiente encima, y cada paso con la opacidad de su fundido. */
   private aplicarRespaldoDom(): void {
     const n = this.pasosDom.length;
-    const { medio, mezcla } = estadoDelMedio(this.scroll.pos, this.scroll.tramo, n);
+    const ds = this.dsDom !== null;
+    const { medio, mezcla } = estadoDelMedio(this.posHistoria(), this.scroll.tramo, n);
+    const visible = 1 - this.presenciaDS();
     this.medios.forEach((m, i) => {
-      // La imagen i es el medio i − 1 (la portada es el medio −1)
+      // La imagen i es el medio i − 1 (la portada es el medio −1); se desvanece con el design system
       const k = i - 1;
-      const v = k === medio ? 1 : k === medio + 1 ? mezcla : 0;
+      const v = (k === medio ? 1 : k === medio + 1 ? mezcla : 0) * visible;
       const s = String(Math.round(v * 1000) / 1000);
       if (m.style.opacity !== s) m.style.opacity = s;
     });
     if (!this.conWebgl) {
-      // Con paleta, la historia tiene un tramo más: el último paso también sale
-      const tramos = n + (this.coloresDom.length > 0 ? 1 : 0);
+      // Con design system, el resultado se corre un tramo y la sección tiene el suyo
+      const tramos = totalTramos(n, ds);
       this.pasosDom.forEach((li, k) => {
-        const s = String(Math.round(opacidadDelPaso(k, this.scroll.pos, this.scroll.tramo, tramos) * 1000) / 1000);
+        const s = String(Math.round(opacidadDelPaso(tramoDelPaso(k, n, ds), this.scroll.pos, this.scroll.tramo, tramos) * 1000) / 1000);
         if (li.style.opacity !== s) li.style.opacity = s;
       });
-      if (this.paletaDom) {
-        const s = String(Math.round(mezclaDelLimite(tramoDePaleta(n), this.scroll.pos, this.scroll.tramo) * 1000) / 1000);
-        if (this.paletaDom.style.opacity !== s) this.paletaDom.style.opacity = s;
+      if (this.dsDom) {
+        const s = String(Math.round((1 - visible) * 1000) / 1000);
+        if (this.dsDom.style.opacity !== s) this.dsDom.style.opacity = s;
       }
     }
   }
 
   /** Escribe los `data-*` del caso solo cuando cambian (con la escena quieta no hay escrituras). */
   private publicar(forzar: boolean): void {
-    const { medio, mezcla } = estadoDelMedio(this.scroll.pos, this.scroll.tramo, this.pasosDom.length);
+    const posH = this.posHistoria();
+    const { medio, mezcla } = estadoDelMedio(posH, this.scroll.tramo, this.pasosDom.length);
     const valores: Record<string, string> = {
       posicion: this.scroll.pos.toFixed(2),
       objetivo: this.scroll.objetivo.toFixed(2),
-      paso: String(this.scroll.paso),
+      paso: String(pasoEn(posH, this.scroll.tramo, this.pasosDom.length)),
+      ds: this.presenciaDS().toFixed(3),
+      // La transición entre fotos (1 si no hay ninguna en curso)
+      transicion: (this.mundo?.progresoTransicion ?? 1).toFixed(3),
+      // Cuánto se inclina la foto con el scroll (rad)
+      giro: (this.mundo?.giroFoto ?? 0).toFixed(3),
       progreso: this.scroll.progreso.toFixed(4),
       medio: String(medio),
       mezcla: mezcla.toFixed(3),
@@ -599,7 +641,9 @@ export class CasoN4 {
     this.anillo?.medir();
     this.cajasEscritas.length = 0;
     this.cajasColorEscritas.length = 0;
-    this.tituloPaletaEscrito = '';
+    this.tituloDSEscrito = '';
+    this.cajaFuentesEscrita = '';
+    this.tamanoFuentes = null;
     this.tamanosCopia = [];
     this.tamanosColor = [];
     this.medirMundo();

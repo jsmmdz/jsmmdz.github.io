@@ -16,6 +16,13 @@ export const MIN_PASOS = 4;
 export const MAX_PASOS = 9;
 /** Colores de la sección del design system: exactamente 5 (autor, 2026-10-02). */
 export const COLORES_PALETA = 5;
+/** Fuentes de la sección del design system: de 1 a 3, cada una con su archivo .woff2 en `public/`. */
+export const MIN_FUENTES = 1;
+export const MAX_FUENTES = 3;
+/** Palabras del uso de una fuente («Títulos», «Texto corrido»…). */
+export const MAX_PALABRAS_USO = 4;
+// Ruta relativa dentro de `sitio/public/`, sin subir de carpeta ni empezar en «/»
+const ARCHIVO_FUENTE = /^(?!\/)(?!.*\.\.)[\w\-./]+\.woff2$/;
 
 /** Contraste mínimo del crema sobre el fondo del caso (WCAG AA para texto). */
 export const CONTRASTE_MINIMO = 4.5;
@@ -88,11 +95,29 @@ export function esquemaProyecto<I extends z.ZodTypeAny, D extends z.ZodTypeAny =
         .min(MIN_PASOS, `historia debe tener al menos ${MIN_PASOS} pasos`)
         .max(MAX_PASOS, `historia admite a lo sumo ${MAX_PASOS} pasos`),
       orden: z.coerce.number().int(),
-      // La exposición del design system (opcional, autor, 2026-10-02): 5 cristales del color de la paleta
-      // al final del caso, cada uno con su hexadecimal. Sin el campo, la sección no existe.
-      paleta: z
-        .array(z.string().regex(HEX, 'paleta: cada color debe ser #RRGGBB'))
-        .length(COLORES_PALETA, `paleta debe tener exactamente ${COLORES_PALETA} colores`)
+      // La exposición del design system (opcional, autor, 2026-10-02): a pantalla completa, antes del
+      // resultado; la paleta a la izquierda (5 cristales teñidos con su hexadecimal) y las tipografías a la
+      // derecha, en un cristal grande, escritas en su fuente real. Sin el campo, la sección no existe.
+      designSystem: z
+        .object({
+          paleta: z
+            .array(z.string().regex(HEX, 'designSystem.paleta: cada color debe ser #RRGGBB'))
+            .length(COLORES_PALETA, `designSystem.paleta debe tener exactamente ${COLORES_PALETA} colores`),
+          fuentes: z
+            .array(
+              z.object({
+                nombre: z.string().trim().min(1, 'designSystem.fuentes: falta el nombre'),
+                uso: z
+                  .string()
+                  .trim()
+                  .min(1, 'designSystem.fuentes: falta el uso')
+                  .refine((t) => palabras(t) <= MAX_PALABRAS_USO, `designSystem.fuentes: el uso pasa de ${MAX_PALABRAS_USO} palabras`),
+                archivo: z.string().regex(ARCHIVO_FUENTE, 'designSystem.fuentes: el archivo debe ser un .woff2 dentro de public/ (ruta relativa)'),
+              }),
+            )
+            .min(MIN_FUENTES, `designSystem.fuentes debe tener al menos ${MIN_FUENTES} fuente`)
+            .max(MAX_FUENTES, `designSystem.fuentes admite a lo sumo ${MAX_FUENTES} fuentes`),
+        })
         .optional(),
     })
     .superRefine((caso, ctx) => {

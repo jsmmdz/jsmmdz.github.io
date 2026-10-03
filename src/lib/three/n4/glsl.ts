@@ -52,6 +52,13 @@ uniform float u_W;
 uniform float u_sheetP;
 uniform float u_shade;
 uniform float u_scrim;
+// Se desvanece mientras se ve el design system (pantalla completa)
+uniform float u_visible;
+// El tornasol interactivo de la foto (autor, 2026-10-02): una franja suave de arcoíris que sigue al ratón
+// (−1 a 1 desde el centro) y al giro de la foto con el scroll; se apaga al volar de regreso
+uniform vec2 u_raton;
+uniform vec2 u_giro;
+uniform float u_tornasol;
 
 varying vec2 vUv;
 varying vec3 vMundo;
@@ -118,7 +125,17 @@ void main() {
   float prof = clamp((D - vOla) / (2.0 * D), 0.0, 1.0);
   col = mix(col, BRUMA_COLOR, BRUMA_FUERZA * prof * u_shade);
 
-  gl_FragColor = vec4(col, alfa);
+  // Tornasol: una película delgada cuyo tono recorre el espectro en diagonal; solo se ve en una franja
+  // ancha y suave que se corre con el ratón y con el giro, y suma poco (como un reflejo sobre papel brillante)
+  float diag = dot(vUv - 0.5, vec2(0.8, 0.6));
+  float centro = 0.45 * u_raton.x + 0.3 * u_raton.y + 2.5 * (u_giro.y - u_giro.x);
+  float franja = exp(-pow((diag - centro) * 4.5, 2.0));
+  vec3 pelicula = 0.5 + 0.5 * cos(6.2831853 * (diag * 2.2 + centro * 0.8 + vec3(0.0, 0.33, 0.67)));
+  // ± u_tornasol de tono y un leve brillo: no cambia los colores de la foto, solo los irisa
+  // Pesa más en lo claro que en lo oscuro, como un reflejo real
+  float luzFoto = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  col += ((pelicula - 0.5) + 0.25) * franja * u_tornasol * (0.25 + luzFoto) * (1.0 - u_shade);
+  gl_FragColor = vec4(col, alfa * u_visible);
 }
 `;
 
@@ -142,6 +159,14 @@ void main() {
  * La luz late como en Zero (pulido de T32, medido en la grabación el 2026-10-02): los haces no se mueven
  * de lugar; su brillo late cada ≈ 0,6 s con ± 15 % y, de vez en cuando, un haz se enciende fuerte unos
  * instantes. Con movimiento reducido no late.
+ *
+ * La caída (autor, 2026-10-02: «como si estuvieras cayendo», más dinámica y cinematográfica): las cortinas
+ * siguen en su sitio, pero todo lo que tienen encima sube. La tela tiene vetas largas que suben, por los
+ * haces pasan destellos hacia arriba (las luces que se dejan atrás al caer) y el aire lleva partículas que
+ * se estiran con la velocidad. `u_caida` es cuánto se ha caído, en alturas de pantalla: siempre hacia abajo,
+ * la base constante más la rapidez del scroll (hacia adelante o hacia atrás). `u_rapidez` (0 a 1) cuánto se
+ * acelera ahora: alarga la cola de las partículas y sube un poco los destellos; la forma de la tela no cambia.
+ * Con movimiento reducido no hay caída.
  */
 export const FONDO_FRAGMENT = /* glsl */ `
 uniform vec3 u_fondo;
@@ -150,6 +175,8 @@ uniform float u_tiempo;
 uniform float u_cuadro;
 uniform float u_aspecto;
 uniform float u_mov;
+uniform float u_caida;
+uniform float u_rapidez;
 
 varying vec2 vUv;
 
@@ -160,6 +187,30 @@ float hash(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
   p += dot(p, p + 45.32);
   return fract(p.x * p.y);
+}
+
+// Ruido de valor suave
+float ruido(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
+// Partículas que suben, estiradas en vertical según la velocidad (la estela de la caída). \`escala\` es la
+// densidad de la capa y \`vel\`, cuánto más rápido que la caída sube (las cercanas, más).
+float estelas(vec2 uv, float aspecto, float caida, float escala, float vel, float largo, float semilla) {
+  vec2 p = vec2(uv.x * aspecto, uv.y - caida * vel) * escala;
+  vec2 celda = floor(p);
+  vec2 dentro = fract(p) - 0.5;
+  float h = hash(celda + semilla);
+  vec2 sitio = vec2(hash(celda + semilla + 3.1), hash(celda + semilla + 7.7)) - 0.5;
+  vec2 d = dentro - sitio * 0.6;
+  // Una gota alargada hacia abajo: la cola queda atrás (abajo) porque la partícula sube
+  float cola = clamp(-d.y / largo, 0.0, 1.0);
+  float ancho = 1.0 - smoothstep(0.01, 0.03, abs(d.x));
+  float cuerpo = (1.0 - smoothstep(0.0, largo, max(-d.y, 0.0))) * step(d.y, 0.03);
+  return step(0.84, h) * ancho * cuerpo * (1.0 - 0.7 * cola) * (0.4 + 0.6 * hash(celda + 1.3));
 }
 
 void main() {
@@ -179,11 +230,27 @@ void main() {
   float destello = pow(max(0.0, sin(t * 0.45 + hash(vec2(idHaz, 3.7)) * TAU)), 24.0);
   float k = 1.0 + 0.5 * haz * (1.0 + u_mov * (latido * 2.0 + 1.6 * destello)) - 0.4 * pliegue + u_mov * latido * 0.9;
 
+  // La caída. y sube con la caída (vUv.y es 0 abajo y 1 arriba): lo que está en y − caída sube en pantalla
+  float caida = u_caida * u_mov;
+  float rapidez = u_rapidez * u_mov;
+  // Vetas de la tela que suben: ruido estirado en vertical. Su forma no cambia con la velocidad (si cambiara,
+  // el patrón se estiraría mientras sube y se vería como un zoom): solo cambia lo rápido que sube
+  float veta = ruido(vec2(x * 38.0, (vUv.y - caida) * 5.0));
+  k *= 0.82 + 0.36 * veta * u_mov + (1.0 - u_mov) * 0.18;
+  // Destellos que suben por los haces: un tramo claro por haz, a destiempo, cada ≈ 1,2 alturas de caída
+  float fase = fract((vUv.y - caida * 1.4) * 1.2 + hash(vec2(idHaz, 9.1)));
+  float tramoLuz = smoothstep(0.0, 0.2, fase) * (1.0 - smoothstep(0.25, 0.55, fase));
+  k += 0.7 * haz * tramoLuz * u_mov * (0.7 + 0.5 * rapidez);
+
   // Viñeta: 0 en el centro, 1 en las esquinas
   float r = length((vUv - 0.5) * vec2(u_aspecto, 1.0)) / length(vec2(u_aspecto, 1.0) * 0.5);
   float vineta = 1.0 - 0.65 * smoothstep(0.55, 1.0, r);
 
   vec3 col = u_fondo * k * vineta;
+  // Las partículas del aire: dos capas, las cercanas más grandes, más rápidas y más largas con la velocidad
+  float largo = 0.08 + 0.25 * rapidez;
+  float motas = estelas(vUv, u_aspecto, caida, 9.0, 1.6, largo, 1.0) + 0.6 * estelas(vUv, u_aspecto, caida, 16.0, 1.15, largo * 0.7, 5.0);
+  col += vec3(1.0, 0.9, 0.88) * motas * 0.16 * u_mov;
   // Grano de ±4 de luma
   col += (hash(gl_FragCoord.xy + u_cuadro * 17.0) - 0.5) * 2.0 * (4.0 / 255.0);
   // Tope de luma: ni el haz más claro pasa de 79

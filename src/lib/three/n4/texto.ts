@@ -130,3 +130,67 @@ export function dibujarTextoCristal(paso: PasoVista, proporcion: number, color: 
   }
   return lienzo;
 }
+
+/** Una fuente del design system del caso: `familia` es la de su `@font-face` (ver `design-system.ts`). */
+export interface FuenteDS {
+  familia: string;
+  nombre: string;
+  uso: string;
+}
+
+/**
+ * El cristal de las tipografías del design system (autor, 2026-10-02): el rótulo «TIPOGRAFÍA» arriba y, por
+ * cada fuente, una fila con «Aa» grande y su nombre escritos en esa fuente, y su uso debajo en Space
+ * Grotesk. Las filas se reparten el alto; todo cabe a lo ancho.
+ */
+export function dibujarFuentes(fuentes: FuenteDS[], proporcion: number, color: string): HTMLCanvasElement {
+  const W = ANCHO_TEXTURA;
+  const H = Math.round(W / proporcion);
+  const lienzo = document.createElement('canvas');
+  lienzo.width = W;
+  lienzo.height = H;
+  const ctx = lienzo.getContext('2d');
+  if (!ctx || fuentes.length === 0) return lienzo;
+  ctx.fillStyle = color;
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  const margen = 0.03 * W;
+
+  // El rótulo, como el de los pasos
+  const fsR = Math.min(0.085 * H, 0.05 * W);
+  ctx.font = `600 ${fsR}px ${FUENTE_TEXTO}`;
+  ctx.letterSpacing = `${(0.12 * fsR).toFixed(1)}px`;
+  ctx.globalAlpha = 0.85;
+  ctx.fillText('TIPOGRAFÍA', margen, margen + fsR);
+  ctx.globalAlpha = 1;
+  ctx.letterSpacing = '0px';
+
+  // Las filas: «Aa» a la izquierda y, a su derecha, el nombre (en su fuente) y el uso
+  const arriba = margen + fsR * 2.2;
+  const fila = (H - arriba - margen) / fuentes.length;
+  fuentes.forEach((f, i) => {
+    const y0 = arriba + i * fila;
+    const familia = `"${f.familia}", ${FUENTE_TEXTO}`;
+    const fsA = Math.min(0.92 * fila, 0.3 * W);
+    ctx.font = `${fsA}px ${familia}`;
+    const anchoA = ctx.measureText('Aa').width;
+    const xTexto = margen + anchoA + 0.04 * W;
+    const libre = W - margen - xTexto;
+    // El nombre, lo más grande que quepa en lo que deja «Aa», sin pasar de 0,32 de la fila
+    let fsN = 0.42 * fila;
+    ctx.font = `${fsN}px ${familia}`;
+    const anchoN = ctx.measureText(f.nombre).width;
+    if (anchoN > libre) fsN *= libre / anchoN;
+    const fsU = Math.min(0.2 * fila, 0.05 * W);
+    ctx.font = `${fsA}px ${familia}`;
+    const base = y0 + fila * 0.5 + fsA * 0.36;
+    ctx.fillText('Aa', margen, base);
+    ctx.font = `${fsN}px ${familia}`;
+    ctx.fillText(f.nombre, xTexto, y0 + fila * 0.5);
+    ctx.font = `500 ${fsU}px ${FUENTE_TEXTO}`;
+    ctx.globalAlpha = 0.8;
+    ctx.fillText(f.uso, xTexto, y0 + fila * 0.5 + fsU * 1.6);
+    ctx.globalAlpha = 1;
+  });
+  return lienzo;
+}

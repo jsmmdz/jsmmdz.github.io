@@ -20,10 +20,11 @@ import * as THREE from 'three';
 import type { RelevoVuelo } from '@/lib/navigation/vuelo';
 import { alturaDelCristal, balanceoDelCristal, girarBalanceo, giroDelCristal, giroEnReposo, opacidadDelPaso, PROFUNDIDAD_CRISTAL, X_CRISTAL, type Balanceo } from '@/lib/n4/cristales';
 import { formaCristal, type FormaCristal } from '@/lib/n4/forma';
+import { formaMarco } from '@/lib/n4/marco';
 import type { Disposicion } from '@/lib/n4/geometria';
 import { NOMBRE_TIPO, type PasoVista } from '@/lib/n4/historia';
 import { mezclaDelLimite } from '@/lib/n4/medios';
-import { opacidadPaleta, poseColor, tintaSobre } from '@/lib/n4/paleta';
+import { familiaFuente, opacidadDS, poseColor, poseFuentes, presenciaDS, tintaSobre, totalTramos, tramoDelPaso } from '@/lib/n4/design-system';
 import { CAM_Z, FOV, SEMIALTO } from '../camara';
 import { PASE_FRAGMENT, PASE_VERTEX } from '../n3/glsl';
 import {
@@ -39,7 +40,7 @@ import {
   TEXTO_VERTEX,
   TINTE_FRAGMENT,
 } from './glsl';
-import { dibujarTextoCristal, fuentesDelTextoListas } from './texto';
+import { dibujarFuentes, dibujarTextoCristal, fuentesDelTextoListas } from './texto';
 
 // Muestras de los render targets (D4: el antialias de Landberg, como el N3)
 const MUESTRAS = 4;
@@ -59,12 +60,42 @@ const SEMILLA_CRISTAL = 101;
 const PASO_SEMILLA = 17;
 const SEMILLA_ESQUIRLA = 5003;
 const SEMILLA_COLOR = 9001;
-// Los cristales de la paleta van delante de los de la historia
+const SEMILLA_FUENTES = 9301;
+// Los cristales del design system van delante de los de la historia
 const Z_PALETA = 0.4;
+// El marco de cristal de la foto (autor, 2026-10-02): 2 rem de vidrio alrededor (13 px en angosto)
+const MARCO_REM = 2;
+const MARCO_ANGOSTO_PX = 13;
+// La transición entre fotos (autor, 2026-10-02): la que se va se aleja hacia el fondo de la escena mientras la
+// nueva sale desde atrás, en 0,9 s (≤ 1 s). FONDO_TRANSICION es la z del fondo: a esa distancia la foto se ve
+// a ≈ 72 % de su tamaño (perspectiva de la cámara)
+const DURACION_TRANSICION = 0.9;
+const FONDO_TRANSICION = -16;
+const acotar01 = (v: number) => Math.min(1, Math.max(0, v));
+// La foto se inclina un poco al hacer scroll (autor, 2026-10-02): hasta 0,1 rad hacia atrás y 0,06 de lado con
+// la rapidez plena, según el sentido del scroll, y vuelve suave (constante de tiempo de 0,3 s)
+const GIRO_FOTO_X = 0.1;
+const GIRO_FOTO_Y = 0.06;
+const TAU_GIRO = 0.3;
+// Cuánto suma el tornasol interactivo de la foto (sutil)
+const TORNASOL_FOTO = 0.12;
+const entrarSuave = (v: number) => v * v * v;
+const salirSuave = (v: number) => 1 - (1 - v) ** 3;
+// Toda espera tiene salida: sin las fuentes del caso a tiempo, se dibujan con las de respaldo
+const ESPERA_FUENTES_CASO_MS = 2500;
 // Separación mínima en z entre cristales (unidades del mundo): el siguiente va delante del anterior
 const Z_ENTRE_CRISTALES = 0.05;
 // Cuánto corre el paralaje de ratón a un cristal: fracción del alto de la ventana por unidad de |z|
 const PARALAJE = 0.05;
+// La caída (autor, 2026-10-02), en alturas de pantalla y siempre hacia abajo: una base constante (lo que
+// lleva la cortina sube 0,35 alturas por segundo) más la rapidez del scroll en cualquier dirección (0,6
+// alturas por cada altura de scroll; los cristales, más cerca, suben una). La velocidad del scroll se
+// suaviza para que la caída acelere y frene sin saltos. La rapidez (0 a 1) alarga las estelas.
+const CAIDA_POR_SEGUNDO = 0.35;
+const CAIDA_POR_ALTO = 0.6;
+// Alturas de scroll por segundo con las que la rapidez llega a 1, y el suavizado (constante de tiempo, s)
+const RAPIDEZ_PLENA = 2.5;
+const TAU_RAPIDEZ = 0.35;
 // Cuánto suben las esquirlas de fondo por px de scroll: la mitad que los cristales (K6: 1,584 contra 2,64)
 const VELOCIDAD_ESQUIRLAS = 0.6;
 
@@ -123,8 +154,8 @@ export interface ConfigMundo {
   colorTexto: string;
   /** El oscuro para el hexadecimal sobre un color claro de la paleta. */
   colorOscuro: string;
-  /** La paleta del design system (5 colores `#RRGGBB`), si el caso la trae. */
-  paleta: string[];
+  /** El design system del caso (antes del resultado), si lo trae: 5 colores y de 1 a 3 fuentes. */
+  designSystem: { paleta: string[]; fuentes: Array<{ nombre: string; uso: string }> } | null;
 }
 
 /** La caja proyectada de un cristal en la ventana (px) y su opacidad. */
@@ -222,8 +253,9 @@ export class MundoN4 {
   animado = false;
   /** La caja proyectada de cada cristal, en el orden de la historia. */
   readonly cajas: CajaCristal[];
-  /** La caja proyectada de cada cristal de la paleta. */
+  /** La caja proyectada de cada cristal de la paleta y la del cristal de las tipografías. */
   readonly cajasPaleta: CajaCristal[];
+  cajaFuentes: CajaCristal = { x: 0, y: 0, ancho: 0, alto: 0, opacidad: 0 };
 
   private readonly escena = new THREE.Scene();
   private readonly camara = new THREE.PerspectiveCamera(FOV, 1, 0.1, 2000);
@@ -232,6 +264,16 @@ export class MundoN4 {
   private readonly vacia = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
   private readonly material: THREE.ShaderMaterial;
   private readonly malla: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
+  /** La segunda foto, la que entra durante la transición (la primera es la que se va o la que está). */
+  private readonly materialB: THREE.ShaderMaterial;
+  private readonly mallaB: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
+  /** El marco de cristal de cada foto (comparten geometría; se rehace si cambia el tamaño de la foto). */
+  private marcos: Array<THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>> = [];
+  private marcoClave = '';
+  private hayMarco = false;
+  /** La imagen que se muestra (0 es la portada) y la transición en curso, si hay. */
+  private mostrada: number | null = null;
+  private transicion: { desde: number; hacia: number; inicio: number; t: number } | null = null;
   private readonly oclusor: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   private readonly fondo: PasePantalla;
   private readonly paseCopia: PasePantalla;
@@ -240,6 +282,7 @@ export class MundoN4 {
   private readonly cristales: Cristal[] = [];
   private readonly esquirlas: Cristal[] = [];
   private readonly colores: Cristal[] = [];
+  private cristalFuentes: Cristal | null = null;
   private readonly imagenes = new Map<string, Imagen>();
   private readonly claves: string[];
   private readonly fuentes: HTMLImageElement[];
@@ -261,6 +304,12 @@ export class MundoN4 {
   private hayCristales = false;
   private hayEsquirlas = false;
   private hayColores = false;
+  /** La caída acumulada (alturas), la velocidad del scroll suavizada (alturas/s) y el cuadro anterior. */
+  private caida = 0;
+  private velScroll = 0;
+  /** La velocidad del scroll con su signo, suavizada (alturas por segundo): inclina la foto. */
+  private velFirmada = 0;
+  private caidaPrevia: { pos: number; tiempo: number } | null = null;
   private destruido = false;
 
   constructor(
@@ -288,6 +337,10 @@ export class MundoN4 {
         u_sheetP: { value: 0 },
         u_shade: { value: 0 },
         u_scrim: { value: 0 },
+        u_visible: { value: 1 },
+        u_raton: { value: new THREE.Vector2() },
+        u_giro: { value: new THREE.Vector2() },
+        u_tornasol: { value: TORNASOL_FOTO },
       },
       vertexShader: MEDIO_VERTEX,
       fragmentShader: MEDIO_FRAGMENT,
@@ -301,6 +354,12 @@ export class MundoN4 {
     this.malla.frustumCulled = false; // la deformación ocurre en el shader
     this.malla.layers.set(CAPA.foto);
     this.escena.add(this.malla);
+    this.materialB = this.material.clone();
+    this.mallaB = new THREE.Mesh(this.geometria, this.materialB);
+    this.mallaB.frustumCulled = false;
+    this.mallaB.layers.set(CAPA.foto);
+    this.mallaB.visible = false;
+    this.escena.add(this.mallaB);
 
     // El oclusor: la misma foto, solo en profundidad, para que tape las esquirlas de fondo
     this.oclusor = new THREE.Mesh(this.geometria, new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.DoubleSide }));
@@ -319,6 +378,8 @@ export class MundoN4 {
         u_cuadro: { value: 0 },
         u_aspecto: { value: 1 },
         u_mov: { value: 1 },
+        u_caida: { value: 0 },
+        u_rapidez: { value: 0 },
       },
     );
     this.paseCopia = this.crearPase(PASE_VERTEX, PASE_FRAGMENT, { tMundo: { value: this.vacia } });
@@ -341,8 +402,16 @@ export class MundoN4 {
     ESQUIRLAS.forEach((_, j) => {
       this.esquirlas.push(this.crearCristal(formaCristal(SEMILLA_ESQUIRLA + j * 13, { grosor: 0.07 }), 100 + j, CAPA.esquirlas));
     });
-    // La paleta del design system: un cristal por color, con una malla hija que pinta su color
-    config.paleta.forEach((hex, i) => {
+    // El design system: un cristal por color, con una malla hija que pinta su color, y uno para las tipografías
+    const ds = config.designSystem;
+    if (ds) {
+      // Para las tipografías, la forma (de 12 semillas fijas) que deja más área de texto: siempre la misma
+      const formas = Array.from({ length: 12 }, (_, j) => formaCristal(SEMILLA_FUENTES + j * 7, { lados: 6 }));
+      const area = (f: FormaCristal) => (f.areaTexto.ancho * f.areaTexto.alto) / Math.max(f.alto, 0.01);
+      const mejor = formas.reduce((m, f) => (area(f) > area(m) ? f : m), formas[0]);
+      this.cristalFuentes = this.crearCristal(mejor, 300, CAPA.cristales);
+    }
+    (ds?.paleta ?? []).forEach((hex, i) => {
       const c = this.crearCristal(formaCristal(SEMILLA_COLOR + i * 31, { lados: 5 + (i % 2) }), 200 + i, CAPA.cristales);
       const material = new THREE.ShaderMaterial({
         uniforms: { u_color: { value: new THREE.Vector3(...hexACanales(hex)) }, u_alfa: { value: 1 } },
@@ -359,7 +428,7 @@ export class MundoN4 {
       c.tinte = tinte;
       this.colores.push(c);
     });
-    this.cajasPaleta = config.paleta.map(() => ({ x: 0, y: 0, ancho: 0, alto: 0, opacidad: 0 }));
+    this.cajasPaleta = (ds?.paleta ?? []).map(() => ({ x: 0, y: 0, ancho: 0, alto: 0, opacidad: 0 }));
   }
 
   private crearPase(vertex: string, fragment: string, uniforms: Record<string, THREE.IUniform>): PasePantalla {
@@ -445,7 +514,28 @@ export class MundoN4 {
       if (c) this.imprimir(c, paso, this.config.colorTexto, 10 + k, NOMBRE_TIPO[paso.tipo]);
     });
     // La paleta: solo el hexadecimal, en crema o en oscuro según lo que contraste más con su color
-    this.config.paleta.forEach((hex, i) => {
+    const ds = this.config.designSystem;
+    if (ds && this.cristalFuentes) {
+      // Las tipografías se escriben en su fuente real: se espera (con tope) a que el navegador las cargue
+      const familias = ds.fuentes.map((_, i) => familiaFuente(i));
+      try {
+        await Promise.race([
+          Promise.all(familias.map((f) => document.fonts.load(`100px "${f}"`))),
+          new Promise<void>((listo) => window.setTimeout(listo, ESPERA_FUENTES_CASO_MS)),
+        ]);
+      } catch {
+        // sin las fuentes del caso se dibujan con las de respaldo
+      }
+      if (this.destruido) return;
+      const a = this.cristalFuentes.forma.areaTexto;
+      const lienzo = dibujarFuentes(
+        ds.fuentes.map((f, i) => ({ ...f, familia: familias[i] })),
+        a.ancho / a.alto,
+        this.config.colorTexto,
+      );
+      this.imprimirLienzo(this.cristalFuentes, lienzo, 40);
+    }
+    (ds?.paleta ?? []).forEach((hex, i) => {
       const c = this.colores[i];
       if (c) this.imprimir(c, { tipo: 'resultado', destacado: hex.toUpperCase(), texto: '' }, tintaSobre(hex, this.config.colorTexto, this.config.colorOscuro), 30 + i);
     });
@@ -462,7 +552,13 @@ export class MundoN4 {
   private imprimir(c: Cristal, paso: PasoVista, color: string, orden: number, rotulo?: string): void {
     if (c.texto) return;
     const a = c.forma.areaTexto;
-    const lienzo = dibujarTextoCristal(paso, a.ancho / a.alto, color, rotulo);
+    this.imprimirLienzo(c, dibujarTextoCristal(paso, a.ancho / a.alto, color, rotulo), orden);
+  }
+
+  /** Pone un lienzo ya dibujado en el área de texto del cristal. */
+  private imprimirLienzo(c: Cristal, lienzo: HTMLCanvasElement, orden: number): void {
+    if (c.texto) return;
+    const a = c.forma.areaTexto;
     const tex = new THREE.CanvasTexture(lienzo);
     tex.colorSpace = THREE.NoColorSpace;
     tex.premultiplyAlpha = true;
@@ -544,6 +640,7 @@ export class MundoN4 {
     this.ww = Math.max(1, disp.ancho);
     this.wh = Math.max(1, disp.alto);
     this.rect = disp.foto;
+    this.rehacerMarcos(disp);
     // El renderer ya se redimensionó por su cuenta o lo hace ahora
     const contenedor = this.renderer.domElement.parentElement;
     if (contenedor) {
@@ -561,6 +658,48 @@ export class MundoN4 {
     this.paseEsquirlas.material.uniforms.u_aspecto.value = this.ww / this.wh;
     this.asegurarRT();
     this.sucio = true;
+  }
+
+  /** El marco de cristal de las dos fotos, a la medida de la foto (en px; el mundo lo escala). */
+  private rehacerMarcos(disp: Disposicion): void {
+    const margen = disp.angosto ? MARCO_ANGOSTO_PX : MARCO_REM * disp.remPx;
+    const clave = `${Math.round(this.rect.width)}x${Math.round(this.rect.height)}x${margen.toFixed(1)}`;
+    if (clave === this.marcoClave || this.rect.width < 2 || this.rect.height < 2) return;
+    this.marcoClave = clave;
+    const forma = formaMarco(this.rect.width, this.rect.height, margen);
+    const geometria = new THREE.BufferGeometry();
+    geometria.setAttribute('position', new THREE.BufferAttribute(forma.posiciones, 3));
+    geometria.setAttribute('normal', new THREE.BufferAttribute(forma.normales, 3));
+    if (this.marcos.length === 0) {
+      for (let i = 0; i < 2; i++) {
+        const material = new THREE.ShaderMaterial({
+          uniforms: { u_alfa: { value: 0 } },
+          vertexShader: MASCARA_VERTEX,
+          fragmentShader: MASCARA_FRAGMENT,
+          side: THREE.DoubleSide,
+          blending: THREE.NoBlending,
+          toneMapped: false,
+        });
+        const m = new THREE.Mesh(geometria, material);
+        m.frustumCulled = false;
+        m.layers.set(CAPA.cristales);
+        m.visible = false;
+        this.escena.add(m);
+        this.marcos.push(m);
+      }
+    } else {
+      this.marcos[0].geometry.dispose();
+      for (const m of this.marcos) m.geometry = geometria;
+    }
+    this.sucio = true;
+  }
+
+  /** Cuánto está inclinada la foto por el scroll (rad, el giro en x). */
+  giroFoto = 0;
+
+  /** Progreso 0..1 de la transición entre fotos (1 si no hay ninguna en curso). */
+  get progresoTransicion(): number {
+    return this.transicion ? this.transicion.t : 1;
   }
 
   private nuevoRT(ancho: number, alto: number, muestras: number, profundidad: boolean): THREE.WebGLRenderTarget {
@@ -616,40 +755,145 @@ export class MundoN4 {
     u.u_mov.value = e.reducido ? 0 : 1;
     u.u_tiempo.value = e.reducido ? 0 : e.tiempo;
     u.u_cuadro.value = e.reducido ? 0 : e.cuadro;
+    // La caída se acumula cuadro a cuadro: base + rapidez del scroll (con movimiento reducido no se cae)
+    const alto = Math.max(1, this.wh);
+    const previa = this.caidaPrevia;
+    const dt = previa ? e.tiempo - previa.tiempo : 0;
+    if (previa && dt > 0) {
+      const firmada = (e.pos - previa.pos) / alto / dt;
+      const vel = Math.abs(firmada);
+      this.velScroll += (vel - this.velScroll) * (1 - Math.exp(-dt / TAU_RAPIDEZ));
+      this.velFirmada += (firmada - this.velFirmada) * (1 - Math.exp(-dt / TAU_GIRO));
+      this.caida += dt * (CAIDA_POR_SEGUNDO + CAIDA_POR_ALTO * this.velScroll);
+    }
+    this.caidaPrevia = { pos: e.pos, tiempo: e.tiempo };
+    u.u_caida.value = e.reducido ? 0 : this.caida;
+    u.u_rapidez.value = e.reducido ? 0 : Math.min(1, this.velScroll / RAPIDEZ_PLENA);
   }
 
   private actualizarFoto(e: EstadoMundo): void {
     const u = this.material.uniforms;
+    const uB = this.materialB.uniforms;
     const regreso = this.regreso;
     const r: RectPlano = regreso ? this.rectDelRegreso(regreso) : this.rect;
     const p = regreso ? regreso.p : 0;
-
-    // Fotos: la base y la siguiente (el medio −1 es la imagen 0); al volar de regreso, la que se veía se
-    // funde con la portada
-    const base = regreso ? regreso.desde : e.medio + 1;
-    const alterno = regreso ? 0 : Math.min(this.claves.length - 1, e.medio + 2);
-    const a = this.imagen(base) ?? this.imagen(0);
-    const b = this.imagen(alterno) ?? a;
-    u.u_map0.value = a?.tex ?? this.vacia;
-    u.u_map1.value = b?.tex ?? this.vacia;
-    u.u_aspect0.value = a?.aspecto ?? 1;
-    u.u_aspect1.value = b?.aspecto ?? 1;
-    u.u_mezcla.value = regreso ? (regreso.desde === 0 ? 0 : p) : e.mezcla;
 
     // Pose: el rectángulo en px pasa a unidades del mundo en z = 0 (K2)
     const cx = ((r.x + r.width / 2 - this.ww / 2) / (this.ww / 2)) * this.W;
     const cy = ((this.wh / 2 - (r.y + r.height / 2)) / (this.wh / 2)) * SEMIALTO;
     const sx = (r.width / this.ww) * 2 * this.W;
     const sy = (r.height / this.wh) * 2 * SEMIALTO;
-    this.malla.position.set(cx, cy, 0);
-    this.malla.scale.set(sx, sy, 1);
-    this.oclusor.position.copy(this.malla.position);
-    this.oclusor.scale.copy(this.malla.scale);
-    u.u_planeAspect.value = r.width / r.height;
-    u.u_corner.value = regreso ? (ESQUINA_REM * regreso.remPx * p) / r.height : 0;
-    u.u_sheetP.value = p;
-    u.u_shade.value = p;
-    u.u_scrim.value = p;
+    for (const m of [u, uB]) {
+      m.u_planeAspect.value = r.width / r.height;
+      m.u_corner.value = regreso ? (ESQUINA_REM * regreso.remPx * p) / r.height : 0;
+      m.u_sheetP.value = p;
+      m.u_shade.value = p;
+      m.u_scrim.value = p;
+      m.u_mezcla.value = 0;
+    }
+    // El giro con el scroll y el tornasol que sigue al ratón (nada de esto al volar de regreso ni en reducido)
+    const v = regreso || e.reducido ? 0 : Math.max(-1, Math.min(1, this.velFirmada / RAPIDEZ_PLENA));
+    const giroX = -GIRO_FOTO_X * v;
+    const giroY = GIRO_FOTO_Y * v;
+    this.giroFoto = giroX;
+    for (const m of [u, uB]) {
+      m.u_raton.value.set(e.reducido ? 0 : e.raton.x, e.reducido ? 0 : e.raton.y);
+      m.u_giro.value.set(giroX, giroY);
+      m.u_tornasol.value = regreso ? 0 : TORNASOL_FOTO;
+    }
+    const ponerImagen = (m: typeof u, k: number) => {
+      const img = this.imagen(k) ?? this.imagen(0);
+      m.u_map0.value = img?.tex ?? this.vacia;
+      m.u_map1.value = img?.tex ?? this.vacia;
+      m.u_aspect0.value = img?.aspecto ?? 1;
+      m.u_aspect1.value = img?.aspecto ?? 1;
+    };
+    // Una foto a la profundidad z: se corre hacia afuera para que su centro quede donde estaba en pantalla
+    const colocarFoto = (malla: THREE.Mesh, z: number) => {
+      const f = (CAM_Z - z) / CAM_Z;
+      malla.position.set(cx * f, cy * f, z);
+      malla.scale.set(sx, sy, 1);
+      malla.rotation.set(giroX, giroY, 0);
+    };
+
+    if (regreso) {
+      // Al volar de regreso: la foto que se veía se funde con la portada; sin marco ni transición
+      const a = this.imagen(regreso.desde) ?? this.imagen(0);
+      const b = this.imagen(0) ?? a;
+      u.u_map0.value = a?.tex ?? this.vacia;
+      u.u_map1.value = b?.tex ?? this.vacia;
+      u.u_aspect0.value = a?.aspecto ?? 1;
+      u.u_aspect1.value = b?.aspecto ?? 1;
+      u.u_mezcla.value = regreso.desde === 0 ? 0 : p;
+      u.u_visible.value = 1;
+      colocarFoto(this.malla, 0);
+      this.mallaB.visible = false;
+      for (const m of this.marcos) m.visible = false;
+      this.hayMarco = false;
+      this.transicion = null;
+      this.oclusor.position.copy(this.malla.position);
+      this.oclusor.scale.copy(this.malla.scale);
+      this.oclusor.visible = true;
+      return;
+    }
+
+    // Mientras se ve el design system, la foto y su marco se desvanecen (y dejan de tapar las esquirlas)
+    const visible = 1 - presenciaDS(e.pos, e.tramo, this.cristales.length, this.config.designSystem !== null);
+    // La foto que toca: la del paso cuyo límite ya se cruzó por la mitad (la imagen 0 es la portada)
+    const objetivo = Math.min(this.claves.length - 1, Math.max(0, (e.mezcla >= 0.5 ? e.medio + 1 : e.medio) + 1));
+    if (this.mostrada === null || e.reducido) {
+      // Con movimiento reducido cambia sin moverse
+      this.mostrada = objetivo;
+      this.transicion = null;
+    } else if (objetivo !== this.mostrada) {
+      this.transicion = { desde: this.mostrada, hacia: objetivo, inicio: e.tiempo, t: 0 };
+      this.mostrada = objetivo;
+    }
+    const tr = this.transicion;
+    if (tr) {
+      tr.t = acotar01((e.tiempo - tr.inicio) / DURACION_TRANSICION);
+      if (tr.t >= 1) this.transicion = null;
+    }
+    const enCurso = this.transicion;
+    // La que se va: hacia el fondo en el primer 60 % (acelerando); la que llega: desde el fondo, del 30 % al final (frenando)
+    const salida = enCurso ? entrarSuave(acotar01(enCurso.t / 0.6)) : 0;
+    const llegada = enCurso ? salirSuave(acotar01((enCurso.t - 0.3) / 0.7)) : 1;
+    const zA = FONDO_TRANSICION * salida;
+    const zB = FONDO_TRANSICION * (1 - llegada);
+    const alfaA = (1 - salida) * visible;
+    const alfaB = enCurso ? llegada * visible : 0;
+
+    ponerImagen(u, enCurso ? enCurso.desde : this.mostrada);
+    u.u_visible.value = alfaA;
+    colocarFoto(this.malla, zA);
+    this.mallaB.visible = enCurso !== null;
+    if (enCurso) {
+      ponerImagen(uB, enCurso.hacia);
+      uB.u_visible.value = alfaB;
+      colocarFoto(this.mallaB, zB);
+    }
+    // La que está más adelante se dibuja encima
+    this.malla.renderOrder = zA >= zB ? 2 : 1;
+    this.mallaB.renderOrder = zA >= zB ? 1 : 2;
+    this.oclusor.position.set(cx, cy, 0);
+    this.oclusor.scale.set(sx, sy, 1);
+    this.oclusor.visible = visible > 0.5 && !enCurso;
+
+    // El marco de cristal acompaña a cada foto; entra con las cortinas
+    const upx = (2 * SEMIALTO) / this.wh;
+    let alguno = false;
+    this.marcos.forEach((m, i) => {
+      const alfa = (i === 0 ? alfaA : alfaB) * e.alfaFondo;
+      const z = i === 0 ? zA : zB;
+      const f = (CAM_Z - z) / CAM_Z;
+      m.position.set(cx * f, cy * f, z);
+      m.scale.setScalar(upx);
+      m.rotation.set(giroX, giroY, 0);
+      m.material.uniforms.u_alfa.value = alfa;
+      m.visible = alfa > 0.002;
+      if (m.visible) alguno = true;
+    });
+    this.hayMarco = alguno;
   }
 
   /** Pone la pose de un cristal en px de la ventana y devuelve su caja proyectada. */
@@ -683,20 +927,24 @@ export class MundoN4 {
 
   private actualizarCristales(e: EstadoMundo, d: Disposicion): void {
     const n = this.cristales.length;
-    // Con paleta, la historia tiene un tramo más después: el último paso también sale (movimiento reducido)
-    const tramos = n + (this.colores.length > 0 ? 1 : 0);
+    // Con design system, la historia tiene un tramo más antes del resultado: el resultado se corre uno, y
+    // mientras se ve la sección los cristales de la historia se desvanecen
+    const ds = this.config.designSystem !== null;
+    const tramos = totalTramos(n, ds);
+    const presencia = presenciaDS(e.pos, e.tramo, n, ds);
     let alguno = false;
     this.cristales.forEach((c, k) => {
       const reducido = e.reducido;
-      const altura = reducido ? 0 : alturaDelCristal(k, e.pos, e.tramo, d.alto);
-      const giroBase = reducido ? giroEnReposo(k) : giroDelCristal(k, e.pos, e.tramo);
+      const t = tramoDelPaso(k, n, ds);
+      const altura = reducido ? 0 : alturaDelCristal(t, e.pos, e.tramo, d.alto);
+      const giroBase = reducido ? giroEnReposo(k) : giroDelCristal(k, e.pos, e.tramo, t);
       const extra = reducido ? ([0, 0, 0] as const) : girarBalanceo(c.balanceo, e.tiempo);
       const prof = PROFUNDIDAD_CRISTAL[k % PROFUNDIDAD_CRISTAL.length];
       // El paralaje de ratón corre cada cristal en sentido contrario al ratón (cero con el ratón al centro)
       const para = reducido ? 0 : PARALAJE * d.alto * prof;
       const cx = d.columnaX + X_CRISTAL[k % X_CRISTAL.length] * d.escalaX - e.raton.x * para;
       const cy = d.mesetaY - altura - e.raton.y * para;
-      const alfa = e.alfaCristales * (reducido ? opacidadDelPaso(k, e.pos, e.tramo, tramos) : 1);
+      const alfa = e.alfaCristales * (reducido ? opacidadDelPaso(t, e.pos, e.tramo, tramos) : 1) * (1 - presencia);
       const giro: [number, number, number] = [giroBase[0] + extra[0], giroBase[1] + extra[1], giroBase[2] + extra[2]];
       const caja = this.colocar(c, cx, cy, d.anchoCristal, Z_ENTRE_CRISTALES * (k % X_CRISTAL.length), giro, alfa);
       const dentro = caja.x + caja.ancho > 0 && caja.x < this.ww && caja.y + caja.alto > 0 && caja.y < this.wh;
@@ -704,9 +952,20 @@ export class MundoN4 {
       if (c.malla.visible) alguno = true;
       this.cajas[k] = { ...caja, opacidad: alfa };
     });
-    // La paleta: sube en cascada en el tramo que sigue a la historia y se queda agrupada
+    // El design system: la paleta sube en cascada a la izquierda y las tipografías a la derecha
     let algunColor = false;
-    const alfaPaleta = e.alfaCristales * opacidadPaleta(n, e.pos, e.tramo, e.reducido);
+    const alfaPaleta = e.alfaCristales * opacidadDS(n, e.pos, e.tramo, e.reducido);
+    if (this.cristalFuentes) {
+      const c = this.cristalFuentes;
+      const p = poseFuentes(n, e.pos, e.tramo, d, e.reducido);
+      const extra = e.reducido ? ([0, 0, 0] as const) : girarBalanceo(c.balanceo, e.tiempo);
+      const giro: [number, number, number] = [p.giro[0] + extra[0] * 0.4, p.giro[1] + extra[1] * 0.4, p.giro[2] + extra[2] * 0.4];
+      const caja = this.colocar(c, p.cx, p.cy, p.ancho, Z_PALETA, giro, alfaPaleta);
+      const dentro = caja.x + caja.ancho > 0 && caja.x < this.ww && caja.y + caja.alto > 0 && caja.y < this.wh;
+      c.malla.visible = alfaPaleta > 0.002 && dentro;
+      if (c.malla.visible) algunColor = true;
+      this.cajaFuentes = { ...caja, opacidad: c.malla.visible ? alfaPaleta : 0 };
+    }
     this.colores.forEach((c, i) => {
       const p = poseColor(i, n, e.pos, e.tramo, d, e.reducido);
       const extra = e.reducido ? ([0, 0, 0] as const) : girarBalanceo(c.balanceo, e.tiempo);
@@ -779,8 +1038,8 @@ export class MundoN4 {
       escena = rt.esquirlas.texture;
     }
 
-    // 3. Los cristales de frente y su texto; sin cristales, la escena pasa tal cual
-    if (this.hayCristales) {
+    // 3. Los cristales de frente (y el marco de la foto) y su texto; sin cristales, la escena pasa tal cual
+    if (this.hayCristales || this.hayMarco) {
       r.setClearColor(this.colorLimpio, 0);
       r.setRenderTarget(rt.frente);
       r.clear();
@@ -851,7 +1110,7 @@ export class MundoN4 {
     this.destruido = true;
     for (const { tex } of this.imagenes.values()) tex.dispose();
     this.imagenes.clear();
-    for (const c of [...this.cristales, ...this.esquirlas, ...this.colores]) {
+    for (const c of [...this.cristales, ...this.esquirlas, ...this.colores, ...(this.cristalFuentes ? [this.cristalFuentes] : [])]) {
       c.malla.geometry.dispose();
       c.malla.material.dispose();
       c.tinte?.material.dispose();
@@ -864,7 +1123,12 @@ export class MundoN4 {
     this.cristales.length = 0;
     this.esquirlas.length = 0;
     this.colores.length = 0;
+    this.cristalFuentes = null;
     this.material.dispose();
+    this.materialB.dispose();
+    if (this.marcos.length) this.marcos[0].geometry.dispose();
+    for (const m of this.marcos) m.material.dispose();
+    this.marcos = [];
     this.oclusor.material.dispose();
     this.geometria.dispose();
     this.vacia.dispose();

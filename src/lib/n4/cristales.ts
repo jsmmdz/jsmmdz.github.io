@@ -43,10 +43,13 @@ export function alturaDelCristal(k: number, pos: number, tramo: number, altoPx: 
   return RECORRIDO * altoPx * avanceConMeseta((pos - centroDelPaso(k, tramo)) / tramo);
 }
 
-/** Interpolación del giro de K3: `u = clamp((g(s) + 1,5)/3, 0, 1)`. */
-export function giroDelCristal(k: number, pos: number, tramo: number): [number, number, number] {
+/**
+ * Interpolación del giro de K3: `u = clamp((g(s) + 1,5)/3, 0, 1)`. `t` es el tramo en que el cristal cruza el
+ * centro (con design system, el del resultado se corre uno); por omisión, su propio índice.
+ */
+export function giroDelCristal(k: number, pos: number, tramo: number, t = k): [number, number, number] {
   const [ini, fin] = GIRO_CRISTAL[k % GIRO_CRISTAL.length];
-  const u = acotar((avanceConMeseta((pos - centroDelPaso(k, tramo)) / tramo) + 1.5) / 3, 0, 1);
+  const u = acotar((avanceConMeseta((pos - centroDelPaso(t, tramo)) / tramo) + 1.5) / 3, 0, 1);
   return [ini[0] + (fin[0] - ini[0]) * u, ini[1] + (fin[1] - ini[1]) * u, ini[2] + (fin[2] - ini[2]) * u];
 }
 
