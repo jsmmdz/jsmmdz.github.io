@@ -24,7 +24,59 @@ export interface N2TarjetasOpciones {
   radius?: number;
   height?: number;
   grosorRatio?: number;
+  raton?: UniformesRaton;
 }
+
+/** Los uniformes de la luz del ratón, compartidos por todas las tarjetas (los mueve el gestor de escena). */
+export interface UniformesRaton {
+  uRaton: THREE.IUniform<THREE.Vector2>; // uv de pantalla, y hacia arriba, con el retardo de Aikawa
+  uRatonActivo: THREE.IUniform<number>;
+  uResolucion: THREE.IUniform<THREE.Vector2>; // px CSS del canvas
+  uDpr: THREE.IUniform<number>;
+}
+
+// La luz del ratón sobre el vidrio, como Aikawa (pulido del 2026-10-03): un halo de 256 px alrededor del
+// cursor, (1 − d/256)^2,4, que suma un brillo (0,1) y un arcoíris prismático (6,4) que pesa más en el canto
+// y el fresnel. Aikawa saca los 4 colores del prisma de cada foto; aquí no hay foto y se usan los del canto
+// tornasolado: rosa, lila, cian y azul.
+const LUZ_RATON_GLSL = /* glsl */ `
+  uniform vec2 uRaton;
+  uniform float uRatonActivo;
+  uniform vec2 uResolucion;
+  uniform float uDpr;
+
+  vec3 paletaPrisma(float t) {
+    t = fract(t);
+    float s1 = smoothstep(0.00, 0.22, t) - smoothstep(0.22, 0.44, t);
+    float s2 = smoothstep(0.18, 0.42, t) - smoothstep(0.42, 0.68, t);
+    float s3 = smoothstep(0.44, 0.70, t) - smoothstep(0.70, 0.90, t);
+    float s4 = smoothstep(0.74, 0.92, t) + (1.0 - smoothstep(0.00, 0.12, t));
+    vec3 c = vec3(0.96, 0.72, 0.85) * max(s1, 0.0) + vec3(0.79, 0.71, 0.95) * max(s2, 0.0)
+      + vec3(0.62, 0.90, 0.96) * max(s3, 0.0) + vec3(0.55, 0.71, 0.85) * max(s4, 0.0);
+    return c / max(s1 + s2 + s3 + s4, 0.0001);
+  }
+
+  // Devuelve la luz que se suma (rgb) y cuánto se vuelve visible el vidrio (a)
+  vec4 luzRaton(vec3 n, vec3 v, vec2 uvCara) {
+    if (uRatonActivo < 0.5) return vec4(0.0);
+    vec2 pantalla = gl_FragCoord.xy / (uResolucion * uDpr);
+    float d = length((pantalla - uRaton) * uResolucion);
+    float influencia = pow(clamp(1.0 - d / 256.0, 0.0, 1.0), 2.4);
+    if (influencia < 0.0001) return vec4(0.0);
+    float nov = clamp(abs(dot(n, v)), 0.0, 1.0);
+    float fres = pow(1.0 - nov, 3.0);
+    float aro = pow(1.0 - nov, 1.35);
+    float fase = (1.0 - nov) * 1.8 * 1.75
+      + dot(n, normalize(vec3(0.28, 0.74, 0.61))) * 0.35 * 1.15
+      + dot(n, normalize(vec3(-0.81, 0.22, 0.54))) * 0.18 * 1.15;
+    vec3 prisma = paletaPrisma(fase * 1.12 + uvCara.x * 0.9 + uvCara.y * 0.35);
+    float brillo = influencia * 0.1;
+    vec3 luz = vec3(0.81) * (0.05 + 0.18 * aro) * brillo
+      + vec3(0.92, 0.96, 1.0) * (0.04 + 0.14 * fres) * brillo
+      + prisma * (0.06 + 0.22 * fres + 0.16 * aro) * influencia * 6.4;
+    return vec4(luz, influencia);
+  }
+`;
 
 export class N2TarjetasManager {
   private group: THREE.Group;
@@ -40,6 +92,13 @@ export class N2TarjetasManager {
 
   private uniformCurva: THREE.IUniform<number> = { value: 1.0 };
   private uniformR: THREE.IUniform<number> = { value: 1.3 };
+  private tempPunto = new THREE.Vector3();
+  private raton: UniformesRaton = {
+    uRaton: { value: new THREE.Vector2(0.5, 0.5) },
+    uRatonActivo: { value: 0 },
+    uResolucion: { value: new THREE.Vector2(1, 1) },
+    uDpr: { value: 1 },
+  };
   private roomEnvTexture: THREE.Texture | null = null;
   private onRequestRender?: (frames: number) => void;
 
@@ -62,6 +121,7 @@ export class N2TarjetasManager {
     if (options?.grosorRatio) {
       this.grosor = this.height * options.grosorRatio;
     }
+    if (options?.raton) this.raton = options.raton;
     this.uniformR.value = this.radius;
   }
 
@@ -211,6 +271,7 @@ export class N2TarjetasManager {
         depthWrite: false,
         side: THREE.DoubleSide,
       });
+      edgeMat.defines = { ...edgeMat.defines, USE_UV: '' };
       this.patchEdgeMaterial(edgeMat, cardOpacity);
       this.materialsToDispose.push(edgeMat);
 
@@ -297,6 +358,7 @@ export class N2TarjetasManager {
       shader.uniforms.uR = this.uniformR;
       shader.uniforms.uTextMask = { value: textTex };
       shader.uniforms.uCardOpacity = cardOpacity;
+      Object.assign(shader.uniforms, this.raton);
 
       // Inyección en Vertex Shader
       shader.vertexShader = `
@@ -333,6 +395,7 @@ export class N2TarjetasManager {
       shader.fragmentShader = `
         uniform sampler2D uTextMask;
         uniform float uCardOpacity;
+        ${LUZ_RATON_GLSL}
       ` + shader.fragmentShader;
 
       shader.fragmentShader = shader.fragmentShader.replace(
@@ -355,6 +418,10 @@ export class N2TarjetasManager {
         outgoingLight = mix(outgoingLight, vec3(1.0), textAlpha * 0.55);
         outgoingLight += vec3(0.35, 0.45, 0.55) * edge;
         float alphaVidrio = mix(0.22, 0.75, fresnelVal);
+        // La luz del ratón: el halo se nota también donde el vidrio es casi transparente
+        vec4 luz = luzRaton(nNormal, nView, vUv);
+        outgoingLight += luz.rgb;
+        alphaVidrio = min(1.0, alphaVidrio + luz.a * 0.3);
         diffuseColor.a = max(alphaVidrio, textAlpha * 0.85) * uCardOpacity;
         #include <opaque_fragment>
         `
@@ -370,6 +437,7 @@ export class N2TarjetasManager {
       shader.uniforms.uCurva = this.uniformCurva;
       shader.uniforms.uR = this.uniformR;
       shader.uniforms.uCardOpacity = cardOpacity;
+      Object.assign(shader.uniforms, this.raton);
 
       shader.vertexShader = `
         uniform float uCurva;
@@ -403,12 +471,15 @@ export class N2TarjetasManager {
 
       shader.fragmentShader = `
         uniform float uCardOpacity;
+        ${LUZ_RATON_GLSL}
       ` + shader.fragmentShader;
 
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <opaque_fragment>',
         `
-        diffuseColor.a *= uCardOpacity;
+        vec4 luz = luzRaton(normalize(vNormal), normalize(vViewPosition), vUv);
+        outgoingLight += luz.rgb;
+        diffuseColor.a = min(1.0, diffuseColor.a + luz.a * 0.3) * uCardOpacity;
         #include <opaque_fragment>
         `
       );
@@ -714,6 +785,75 @@ export class N2TarjetasManager {
     });
   }
 
+  /**
+   * La tarjeta bajo el puntero (x, y en px CSS), como Aikawa: el contorno doblado de cada tarjeta que mira
+   * hacia la cámara se proyecta a pantalla y gana la más cercana que lo contenga. Usa las matrices reales,
+   * así que respeta el giro y la inclinación con el ratón. Devuelve su slug o null.
+   */
+  public tarjetaBajo(
+    x: number,
+    y: number,
+    camara: THREE.PerspectiveCamera,
+    ancho: number,
+    alto: number,
+    anguloDeg: number,
+  ): string | null {
+    const arc = (2 * Math.PI) / Math.max(1, this.cardMeshes.length);
+    const giro = THREE.MathUtils.degToRad(anguloDeg);
+    const curva = this.uniformCurva.value;
+    const R = this.radius;
+    const medioAlto = this.height / 2;
+    const medioAncho = this.cardWidth / 2;
+    const pasos = 16;
+    const v = this.tempPunto;
+    let elegida: string | null = null;
+    let profundidadMin = Infinity;
+
+    this.cardMeshes.forEach((mesh, idx) => {
+      if (!mesh.visible || Math.cos(idx * arc - giro) <= 0.05) return;
+      const grupo = this.cardGroups[idx];
+      grupo.updateWorldMatrix(true, false);
+      // Las orillas de arriba y de abajo, proyectadas: [x, y, profundidad]
+      const orillas = [medioAlto, -medioAlto].map((yLocal) => {
+        const puntos: Array<[number, number, number]> = [];
+        for (let i = 0; i <= pasos; i++) {
+          const xLocal = -medioAncho + (i / pasos) * this.cardWidth;
+          const theta = xLocal / R;
+          const px = xLocal + (R * Math.sin(theta) - xLocal) * curva;
+          const pz = R + (R * Math.cos(theta) - R) * curva;
+          v.set(px, yLocal, pz).applyMatrix4(grupo.matrixWorld).project(camara);
+          puntos.push([(v.x * 0.5 + 0.5) * ancho, (-v.y * 0.5 + 0.5) * alto, v.z]);
+        }
+        return puntos;
+      });
+      // Por tiras y no con el contorno entero: una tarjeta de los lados pasa por detrás de la silueta y su
+      // contorno se dobla sobre sí mismo, y la franja junto a la silueta quedaba «fuera» (no se podía
+      // pasar ni hacer clic ahí). Las tiras que miran hacia atrás (giradas en pantalla) no cuentan.
+      const [arriba, abajo] = orillas;
+      for (let i = 0; i < pasos; i++) {
+        const tira: Array<[number, number]> = [
+          [arriba[i][0], arriba[i][1]],
+          [arriba[i + 1][0], arriba[i + 1][1]],
+          [abajo[i + 1][0], abajo[i + 1][1]],
+          [abajo[i][0], abajo[i][1]],
+        ];
+        let area = 0;
+        for (let k = 0; k < 4; k++) {
+          const [ax, ay] = tira[k];
+          const [bx, by] = tira[(k + 1) % 4];
+          area += ax * by - bx * ay;
+        }
+        if (area <= 0 || !puntoEnPoligono(x, y, tira)) continue;
+        const profundidad = (arriba[i][2] + arriba[i + 1][2] + abajo[i][2] + abajo[i + 1][2]) / 4;
+        if (profundidad < profundidadMin) {
+          profundidadMin = profundidad;
+          elegida = (mesh.userData?.slug as string) ?? null;
+        }
+      }
+    });
+    return elegida;
+  }
+
   public getIsExitAnimating(): boolean {
     return this.isExitAnimating;
   }
@@ -753,4 +893,15 @@ export class N2TarjetasManager {
     this.geometriesToDispose = [];
     this.roomEnvTexture = null;
   }
+}
+
+/** Regla del rayo: el punto está dentro si cruza el contorno un número impar de veces. */
+function puntoEnPoligono(x: number, y: number, contorno: Array<[number, number]>): boolean {
+  let dentro = false;
+  for (let i = 0, j = contorno.length - 1; i < contorno.length; j = i++) {
+    const [xi, yi] = contorno[i];
+    const [xj, yj] = contorno[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi || 1e-6) + xi) dentro = !dentro;
+  }
+  return dentro;
 }

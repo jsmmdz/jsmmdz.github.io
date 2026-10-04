@@ -13,14 +13,27 @@
  * - Antialias por nivel (D4): el contexto se crea sin antialias (N2, como Aikawa) y el mundo N3 se
  *   dibuja en un render target de 4 muestras que se copia a pantalla (como Landberg).
  * - Sin hex suelto: colores tomados de tokens CSS o rgb().
+ * - El ratón en el N2 (pulido del 2026-10-03, calcado de Aikawa): el cilindro se inclina, el vidrio se
+ *   ilumina alrededor del cursor y el titular, dibujado en WebGL, se deforma con un fluido y toma un filo de
+ *   arcoíris. Todo corre en este mismo reloj y solo dibuja mientras algo se mueve.
  */
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { tomarRegreso } from '@/lib/navigation/vuelo';
 import type { CasoN4 } from '@/lib/n4/caso';
-import type { N2TarjetasManager } from './n2-tarjetas';
+import type { N2TarjetasManager, UniformesRaton } from './n2-tarjetas';
+import { FluidoN2 } from './n2/fluido';
+import { TitularN2 } from './n2/titular';
 import type { ControladorN3, EntradaControlador } from './n3/controlador';
 import type { MundoN4 } from './n4/mundo';
+
+// La inclinación con el ratón de Aikawa (rad) y cuánto tarda en seguirlo: 1 − e^(−3,2·dt)
+const INCLINACION = { x: 0.075, y: 0.15, z: 0.035 };
+const SEGUIR_INCLINACION = 3.2;
+// El centro de la luz del ratón sigue al cursor con lerp 0,08 por cuadro a 60 fps
+const SEGUIR_LUZ = 0.08;
+// El cilindro se inclina sobre su centro, no sobre el origen del grupo
+const PIVOTE_N2 = new THREE.Vector3(0, 0.2, 0);
 
 export interface N2DisciplinaItem {
   slug: string;
@@ -67,6 +80,23 @@ export class ThreeSceneManager {
   private n2RingToCylinderAnimating: boolean = false;
   private n2RingAnimStartTime: number = 0;
   private n2RingAnimDuration: number = 1600;
+
+  // El ratón en el N2: posición en px CSS (null hasta que se mueve; solo ratón, no dedo)
+  private raton: { x: number; y: number } | null = null;
+  private inclinacion = { x: 0, y: 0, z: 0 };
+  private inclinacionEscrita = '';
+  private readonly uniformesRaton: UniformesRaton = {
+    uRaton: { value: new THREE.Vector2(0.5, 0.5) },
+    uRatonActivo: { value: 0 },
+    uResolucion: { value: new THREE.Vector2(1, 1) },
+    uDpr: { value: 1 },
+  };
+  // La luz salta al cursor la primera vez (no viaja desde el centro de la pantalla)
+  private luzSinPosicion: boolean = true;
+  private titularN2: TitularN2 | null = null;
+  private fluidoN2: FluidoN2 | null = null;
+  private ultimoCuadro: number = 0;
+  private pivoteTemp: THREE.Vector3 = new THREE.Vector3();
 
   private tempVec: THREE.Vector3 = new THREE.Vector3();
   private onContextLostCallback?: () => void;
@@ -291,6 +321,18 @@ export class ThreeSceneManager {
       this.n2Group.add(this.n2CylinderGroup);
       this.scene.add(this.n2Group);
     }
+    if (!this.titularN2 && this.n2Group) {
+      this.titularN2 = new TitularN2();
+      this.n2Group.add(this.titularN2.malla);
+    }
+    if (!this.fluidoN2 && this.renderer) {
+      try {
+        this.fluidoN2 = new FluidoN2(this.renderer);
+        this.fluidoN2.redimensionar(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
+      } catch {
+        this.fluidoN2 = null; // sin texturas de media precisión: el titular queda sin fluido
+      }
+    }
 
     const initialIdx = disciplinas.findIndex((d) => d.slug === initialSlug);
     const targetDeg = (initialIdx >= 0 ? initialIdx : 0) * 72;
@@ -326,7 +368,7 @@ export class ThreeSceneManager {
     const { N2TarjetasManager } = await import('./n2-tarjetas');
     this.n2TarjetasCargando = false;
     if (this.isDisposed || this.n2TarjetasManager || !this.n2CylinderGroup || !this.renderer) return;
-    this.n2TarjetasManager = new N2TarjetasManager(this.n2CylinderGroup);
+    this.n2TarjetasManager = new N2TarjetasManager(this.n2CylinderGroup, { raton: this.uniformesRaton });
     this.n2TarjetasManager.setupCards(disciplinas, this.renderer, (frames) => {
       this.requestRender(frames);
     });
@@ -368,13 +410,16 @@ export class ThreeSceneManager {
     let maxX = -Infinity;
     let minY = Infinity;
     let maxY = -Infinity;
-    // Puntos extremos visibles frontales
+    // Puntos extremos visibles frontales, con la inclinación del ratón (la matriz del grupo)
+    this.n2Group?.updateMatrixWorld(true);
     for (let a = -90; a <= 90; a += 15) {
       const rad = (a * Math.PI) / 180;
       const x = R * Math.sin(rad);
       const z = R * Math.cos(rad);
       for (const y of [yMin, yMax]) {
-        this.tempVec.set(x, y, z).project(this.n2Camera);
+        this.tempVec.set(x, y, z);
+        if (this.n2Group) this.tempVec.applyMatrix4(this.n2Group.matrixWorld);
+        this.tempVec.project(this.n2Camera);
         const sx = (this.tempVec.x * 0.5 + 0.5) * width;
         const sy = (-this.tempVec.y * 0.5 + 0.5) * height;
         if (sx < minX) minX = sx;
@@ -390,8 +435,9 @@ export class ThreeSceneManager {
     const y = Math.round(minY);
 
     const actN2 = document.getElementById('act-n2');
-    if (actN2) {
-      actN2.dataset.cilindro = `${x},${y},${ancho},${alto}`;
+    const cilindro = `${x},${y},${ancho},${alto}`;
+    if (actN2 && actN2.dataset.cilindro !== cilindro) {
+      actN2.dataset.cilindro = cilindro;
     }
   }
 
@@ -466,6 +512,24 @@ export class ThreeSceneManager {
     return this.n2CurrentAngle;
   }
 
+  /** La tarjeta bajo el puntero (px CSS), con el giro y la inclinación reales; su slug o null. */
+  public tarjetaBajo(x: number, y: number): string | null {
+    if (!this.n2TarjetasManager || !this.n2Camera || !this.container) return null;
+    const ancho = this.container.clientWidth || window.innerWidth;
+    const alto = this.container.clientHeight || window.innerHeight;
+    return this.n2TarjetasManager.tarjetaBajo(x, y, this.n2Camera, ancho, alto, this.n2CurrentAngle);
+  }
+
+  /** El hover de las tarjetas vale en reposo y durante el giro, no al formarse el cilindro ni en la salida. */
+  public hoverDisponible(): boolean {
+    return (
+      this.n2IsActive &&
+      !!this.n2TarjetasManager &&
+      !this.n2RingToCylinderAnimating &&
+      !this.n2TarjetasManager.getIsExitAnimating()
+    );
+  }
+
   public getCylinderBox(): { x: number; y: number; ancho: number; alto: number } {
     const p = (document.getElementById('act-n2')?.dataset.cilindro ?? '371,212,698,336').split(',').map(Number);
     return { x: p[0], y: p[1], ancho: p[2], alto: p[3] };
@@ -490,8 +554,18 @@ export class ThreeSceneManager {
     this.mqReducido.addEventListener('change', this.handleReducidoChange);
 
     window.addEventListener('resize', this.handleResize);
+    window.addEventListener('pointermove', this.handlePointerMove, { passive: true });
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
   }
+
+  // Solo el ratón: con el dedo Aikawa no inclina, no ilumina ni riega el fluido
+  private handlePointerMove = (e: PointerEvent): void => {
+    if (e.pointerType !== 'mouse') return;
+    this.raton = { x: e.clientX, y: e.clientY };
+    if (!this.n2IsActive) return;
+    if (!this.reducido) this.fluidoN2?.mover(e.clientX, e.clientY);
+    this.requestRender(2);
+  };
 
   private handleReducidoChange = (e: MediaQueryListEvent): void => {
     this.reducido = e.matches;
@@ -507,6 +581,7 @@ export class ThreeSceneManager {
       this.updateCylinderBoundingBox();
     }
     this.renderer.setSize(width, height);
+    this.fluidoN2?.redimensionar(width, height);
     this.n3?.alRedimensionar();
     this.requestRender(30);
   };
@@ -524,8 +599,12 @@ export class ThreeSceneManager {
     if (this.isDisposed) return;
 
     if (this.isPaused || document.hidden) return;
+    const dt = this.ultimoCuadro ? Math.min(0.1, Math.max(0, (now - this.ultimoCuadro) / 1000)) : 1 / 60;
+    this.ultimoCuadro = now;
 
     if (this.n2IsActive) {
+      this.actualizarRaton(dt);
+
       if (this.n2IsAnimating) {
         const elapsed = now - this.n2AnimStartTime;
         const duration = 800;
@@ -596,6 +675,7 @@ export class ThreeSceneManager {
       if (this.needsRender > 0) {
         this.needsRender--;
         if (this.n2Camera && this.renderer && this.scene) {
+          this.actualizarTitular();
           this.renderer.render(this.scene, this.n2Camera);
         }
       }
@@ -605,6 +685,88 @@ export class ThreeSceneManager {
     // N3: el controlador lleva su propio estado y solo dibuja cuando algo cambió
     if (this.isN3Active) this.n3?.tick(now);
   };
+
+  /**
+   * La inclinación, la luz del ratón y el fluido, en cada cuadro del N2. Pide cuadros mientras algo se
+   * mueve; con todo quieto no dibuja.
+   */
+  private actualizarRaton(dt: number): void {
+    if (!this.container || !this.n2Group) return;
+    const ancho = this.container.clientWidth || window.innerWidth;
+    const alto = this.container.clientHeight || window.innerHeight;
+    const saliendo = !!this.n2TarjetasManager?.getIsExitAnimating();
+    const raton = saliendo ? null : this.raton;
+
+    // 1. Inclinación (Aikawa la quita al formarse el cilindro y al salir; con movimiento reducido no hay)
+    const inclina = !!raton && !this.reducido && !this.n2RingToCylinderAnimating;
+    const m = raton && inclina ? THREE.MathUtils.clamp((raton.x / ancho) * 2 - 1, -1, 1) : 0;
+    const g = raton && inclina ? THREE.MathUtils.clamp((raton.y / alto) * 2 - 1, -1, 1) : 0;
+    const objetivo = { x: g * INCLINACION.x, y: -m * INCLINACION.y, z: -m * INCLINACION.z };
+    const seguir = 1 - Math.exp(-SEGUIR_INCLINACION * dt);
+    const inc = this.inclinacion;
+    inc.x += (objetivo.x - inc.x) * seguir;
+    inc.y += (objetivo.y - inc.y) * seguir;
+    inc.z += (objetivo.z - inc.z) * seguir;
+    const falta = Math.max(Math.abs(objetivo.x - inc.x), Math.abs(objetivo.y - inc.y), Math.abs(objetivo.z - inc.z));
+    if (falta < 1e-5) Object.assign(inc, objetivo);
+    this.n2Group.rotation.set(inc.x, inc.y, inc.z);
+    this.pivoteTemp.copy(PIVOTE_N2).applyEuler(this.n2Group.rotation);
+    this.n2Group.position.copy(PIVOTE_N2).sub(this.pivoteTemp);
+    const escrita = `${inc.x.toFixed(3)},${inc.y.toFixed(3)},${inc.z.toFixed(3)}`;
+    if (escrita !== this.inclinacionEscrita) {
+      this.inclinacionEscrita = escrita;
+      const actN2 = document.getElementById('act-n2');
+      if (actN2) actN2.dataset.inclinacion = escrita;
+      if (!saliendo) this.updateCylinderBoundingBox();
+      this.needsRender = Math.max(this.needsRender, 2);
+    }
+
+    // 2. La luz del ratón sobre el vidrio
+    const u = this.uniformesRaton;
+    u.uResolucion.value.set(ancho, alto);
+    u.uDpr.value = this.renderer?.getPixelRatio() ?? 1;
+    u.uRatonActivo.value = raton ? 1 : 0;
+    if (raton) {
+      const tx = raton.x / ancho;
+      const ty = 1 - raton.y / alto;
+      const luz = u.uRaton.value;
+      if (this.luzSinPosicion) {
+        luz.set(tx, ty);
+        this.luzSinPosicion = false;
+      }
+      const k = 1 - Math.pow(1 - SEGUIR_LUZ, dt * 60);
+      luz.x += (tx - luz.x) * k;
+      luz.y += (ty - luz.y) * k;
+      if (Math.abs(tx - luz.x) > 1e-4 || Math.abs(ty - luz.y) > 1e-4) {
+        this.needsRender = Math.max(this.needsRender, 2);
+      }
+    }
+
+    // 3. El fluido del titular
+    if (this.fluidoN2 && !this.reducido && this.fluidoN2.activo) {
+      this.fluidoN2.paso(dt);
+      this.needsRender = Math.max(this.needsRender, 2);
+    }
+  }
+
+  /** El titular sigue a su h1 (posición, opacidad y color) justo antes de dibujar. */
+  private actualizarTitular(): void {
+    if (!this.titularN2 || !this.container || !this.renderer) return;
+    const h1 = document.querySelector<HTMLElement>('[data-n2-titular]');
+    if (!h1) {
+      this.titularN2.malla.visible = false;
+      return;
+    }
+    if (!h1.hasAttribute('data-n2-titular-gl')) h1.setAttribute('data-n2-titular-gl', '');
+    const ancho = this.container.clientWidth || window.innerWidth;
+    const alto = this.container.clientHeight || window.innerHeight;
+    const saliendo = !!this.n2TarjetasManager?.getIsExitAnimating();
+    // El efecto del cursor usa el mismo centro con retardo que la luz del vidrio, como Aikawa
+    const luz = this.uniformesRaton.uRaton.value;
+    const puntero = this.raton && !saliendo ? { x: luz.x * ancho, y: (1 - luz.y) * alto } : null;
+    const fluido = this.fluidoN2 && !this.reducido && this.fluidoN2.activo ? this.fluidoN2.textura : null;
+    this.titularN2.actualizar(h1, ancho, alto, this.renderer.getPixelRatio(), puntero, fluido);
+  }
 
   public pause(): void {
     this.isPaused = true;
@@ -640,6 +802,7 @@ export class ThreeSceneManager {
     this.mqReducido = null;
 
     window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('pointermove', this.handlePointerMove);
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
 
     this.eventsAttached = false;
@@ -655,6 +818,11 @@ export class ThreeSceneManager {
       this.n2TarjetasManager.dispose();
       this.n2TarjetasManager = null;
     }
+    this.titularN2?.dispose();
+    this.titularN2 = null;
+    this.fluidoN2?.dispose();
+    this.fluidoN2 = null;
+    document.querySelector('[data-n2-titular]')?.removeAttribute('data-n2-titular-gl');
     if (this.n2Group && this.scene) {
       this.scene.remove(this.n2Group);
       this.n2Group = null;

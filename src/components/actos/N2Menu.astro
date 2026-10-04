@@ -140,6 +140,34 @@ const primeraDisciplina = metadatosDisciplinas[0];
     </div>
   </aside>
 
+  <!-- Pastilla que sigue al cursor sobre las tarjetas, calcada de Aikawa (pulido del 2026-10-03) -->
+  <div data-n2-pastilla class="n2-pastilla" aria-hidden="true">
+    <span class="n2-pastilla-tinte"></span>
+    <span class="n2-pastilla-brillo"></span>
+    <span class="n2-pastilla-texto">Ver</span>
+  </div>
+  <!-- El vidrio de la pastilla: ruido suave que desplaza lo de atrás, con una separación cromática leve -->
+  <svg class="n2-filtros" width="0" height="0" aria-hidden="true" focusable="false">
+    <filter id="n2-vidrio-distorsion" x="0%" y="0%" width="100%" height="100%" filterUnits="objectBoundingBox">
+      <feTurbulence type="fractalNoise" baseFrequency="0.0015 0.006" numOctaves="1" seed="24" result="ruido" />
+      <feGaussianBlur in="ruido" stdDeviation="8" result="mapa" />
+      <feDisplacementMap in="SourceGraphic" in2="mapa" scale="72" xChannelSelector="R" yChannelSelector="A" result="desplazado" />
+      <feOffset in="mapa" dx="0.35" dy="0" result="mapaCorrido" />
+      <feDisplacementMap in="SourceGraphic" in2="mapaCorrido" scale="72" xChannelSelector="R" yChannelSelector="A" result="desplazadoCorrido" />
+      <feColorMatrix in="desplazadoCorrido" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="rojo" />
+      <feColorMatrix in="desplazadoCorrido" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="verde" />
+      <feColorMatrix in="desplazadoCorrido" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="azul" />
+      <feOffset in="rojo" dx="1.1" dy="0" result="rojoCorrido" />
+      <feOffset in="verde" dx="-1" dy="0" result="verdeCorrido" />
+      <feOffset in="azul" dx="-1.1" dy="0" result="azulCorrido" />
+      <feBlend in="rojoCorrido" in2="verdeCorrido" mode="screen" result="rojoVerde" />
+      <feBlend in="rojoVerde" in2="azulCorrido" mode="screen" result="tres" />
+      <feGaussianBlur in="tres" stdDeviation="0.25" result="tresSuave" />
+      <feComposite in="tresSuave" in2="SourceGraphic" operator="in" result="croma" />
+      <feBlend in="desplazado" in2="croma" mode="lighten" />
+    </filter>
+  </svg>
+
   <!-- Metadatos de disciplinas para el script del cliente -->
   <script
     id="n2-meta"
@@ -208,8 +236,10 @@ const primeraDisciplina = metadatosDisciplinas[0];
   /* Titular tipográfico gigante detrás del cilindro (B1, T21 § 3) */
   .n2-titular {
     position: absolute;
-    /* Pulido (aikawa-05): el titular baja y crece; el cilindro le tapa el tercio inferior. */
-    top: 17vh;
+    /* Pulido (autor, 2026-10-03): un 8 % más pequeño, en 700 y más arriba. Las letras empiezan al 9 % del
+       alto y terminan antes de la cara del reposo de motion (≈ 23 %), que se asomaba por la «O». El −0,055em
+       es lo que hay entre el borde de la caja y la parte de arriba de las mayúsculas de Unbounded. */
+    top: calc(9vh - 0.055em);
     left: 50%;
     transform: translateX(-50%);
     width: 94vw;
@@ -217,15 +247,127 @@ const primeraDisciplina = metadatosDisciplinas[0];
     padding: 0;
     text-align: center;
     font-family: var(--fuente-display);
-    font-size: clamp(3.5rem, 11.6vw, 10.5rem);
+    font-size: clamp(3.2rem, 10.67vw, 9.65rem);
     white-space: nowrap;
-    font-weight: 800;
+    font-weight: 700;
     line-height: 0.9;
     letter-spacing: -0.04em;
     text-transform: uppercase;
     color: var(--texto-activo);
     z-index: 2;
     pointer-events: none;
+  }
+
+  /* Con WebGL las letras las dibuja el canvas (lib/three/n2/titular.ts): el h1 queda para el tamaño, la
+     posición, las animaciones y los lectores de pantalla. Sin WebGL el atributo no aparece y se ve el h1. */
+  .n2-titular[data-n2-titular-gl] {
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* La pastilla que sigue al cursor sobre las tarjetas, calcada de Aikawa: vidrio con distorsión, 34 px de
+     alto, 15 px encima del cursor; se abre desde el centro en 0,45 s y el texto entra a los 0,15 s. */
+  .n2-pastilla {
+    --x: 0px;
+    --y: 0px;
+    --radio-pastilla: clamp(4px, 0.5vw, 8px);
+    position: fixed;
+    top: 0;
+    left: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 60px;
+    height: 34px;
+    padding: 0 15px;
+    color: rgb(255, 255, 255);
+    background-color: rgba(12, 12, 12, 0.3);
+    border-radius: var(--radio-pastilla);
+    font-family: var(--fuente-texto);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 100;
+    translate: calc(var(--x) - 50%) calc(var(--y) - 100% - 15px);
+    clip-path: inset(0 50% 0 50% round var(--radio-pastilla));
+    backdrop-filter: blur(4px) url(#n2-vidrio-distorsion) saturate(1.8);
+    -webkit-backdrop-filter: blur(4px) saturate(1.8);
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.0375),
+      inset 1.8px 3px 0 -2px rgba(255, 255, 255, 0.3375),
+      inset -2px -2px 0 -2px rgba(255, 255, 255, 0.3),
+      inset -3px -8px 1px -6px rgba(255, 255, 255, 0.225),
+      inset -0.3px -1px 4px rgba(0, 0, 0, 0.045),
+      inset -1.5px 2.5px 0 -2px rgba(0, 0, 0, 0.075),
+      inset 0 3px 4px -2px rgba(0, 0, 0, 0.075),
+      inset 2px -6.5px 1px -4px rgba(0, 0, 0, 0.0375),
+      0 1px 5px rgba(0, 0, 0, 0.0375),
+      0 6px 16px rgba(0, 0, 0, 0.03);
+    transition: clip-path 0.25s cubic-bezier(0.104, 0.204, 0.492, 1);
+    overflow: hidden;
+  }
+
+  .n2-pastilla.es-activa {
+    clip-path: inset(0 0 0 0 round var(--radio-pastilla));
+    transition: clip-path 0.45s cubic-bezier(0.104, 0.204, 0.492, 1);
+    will-change: translate, clip-path;
+  }
+
+  .n2-pastilla-tinte,
+  .n2-pastilla-brillo {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radio-pastilla);
+    pointer-events: none;
+  }
+
+  .n2-pastilla-tinte {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.11) 0, rgba(255, 255, 255, 0.04) 32%, rgba(0, 0, 0, 0.02));
+  }
+
+  .n2-pastilla-brillo {
+    box-shadow:
+      inset 0 1px rgba(255, 255, 255, 0.36),
+      inset 0 -1px rgba(0, 0, 0, 0.05),
+      inset 1px 1px rgba(255, 255, 255, 0.18),
+      inset -1px -1px rgba(0, 0, 0, 0.04);
+  }
+
+  .n2-pastilla-texto {
+    position: relative;
+    z-index: 4;
+    opacity: 0;
+    transition: opacity 0s linear 0.25s;
+  }
+
+  .n2-pastilla.es-activa .n2-pastilla-texto {
+    opacity: 1;
+    transition: opacity 0.25s cubic-bezier(0.104, 0.204, 0.492, 1) 0.15s;
+  }
+
+  :global(body:not([data-current-level="N2"])) .n2-pastilla {
+    display: none;
+  }
+
+  .n2-filtros {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+  }
+
+  /* Con el dedo no hay hover (Aikawa la esconde igual) */
+  @media (pointer: coarse) {
+    .n2-pastilla {
+      display: none;
+    }
+  }
+
+  :global(html[data-n2-hover]),
+  :global(html[data-n2-hover] body) {
+    cursor: pointer;
   }
 
   /* Control de disciplina centrado debajo del reflejo (Decisión 1) */
@@ -454,6 +596,7 @@ const primeraDisciplina = metadatosDisciplinas[0];
 
 <script>
   import { navigate } from 'astro:transitions/client';
+  import gsap from 'gsap';
   import { ORDERED_SLUGS, obtenerClipReposo } from '@/lib/n2/config';
   import { obtenerNavegacion, transicionConRespaldo } from '@/lib/navigation/instancia';
   import { conBase, conMedia } from '@/lib/rutas';
@@ -490,6 +633,7 @@ const primeraDisciplina = metadatosDisciplinas[0];
   };
 
   function cleanupN2Act() {
+    document.documentElement.removeAttribute('data-n2-hover');
     if (currentAbortController) {
       currentAbortController.abort();
       currentAbortController = null;
@@ -706,6 +850,7 @@ const primeraDisciplina = metadatosDisciplinas[0];
 
       isExiting = true;
       raiz.dataset.n2Estado = 'salida';
+      fijarHover(null);
 
       // Pulido (auditoría T27 · E1): la salida cuenta desde el clic (al soltar), no desde el
       // pointerdown; con el clic sostenido se saltaba el desenrollado.
@@ -725,6 +870,7 @@ const primeraDisciplina = metadatosDisciplinas[0];
       document.body.dataset.discipline = destinoSlug;
 
       window.history.replaceState(null, '', conBase(`#${destinoSlug}`));
+      fijarHover(null);
 
       // Giro medido de Aikawa
       if (dir === 'next') {
@@ -749,6 +895,7 @@ const primeraDisciplina = metadatosDisciplinas[0];
         raiz.dataset.n2Estado = 'reposo';
         const nav = obtenerNavegacion();
         nav.completeTransition();
+        revisarHover(document.elementFromPoint(punteroX, punteroY));
       });
 
       // Reproducción del clip de video correspondiente al paso
@@ -820,6 +967,121 @@ const primeraDisciplina = metadatosDisciplinas[0];
     // Inicializar estado del menú y cuadro de video en reposo
     actualizarControlUI(disciplinaActiva);
     fijarVideoReposo(disciplinaActiva);
+
+    // ---- Hover sobre las tarjetas y la pastilla que sigue al cursor (Aikawa, pulido del 2026-10-03) ----
+    const pastilla = raiz.querySelector<HTMLElement>('[data-n2-pastilla]');
+    const textoPastilla = pastilla?.querySelector<HTMLElement>('.n2-pastilla-texto') ?? null;
+    // La pastilla vive en <body>: un ancestro con transform la volvería relativa a él
+    if (pastilla && pastilla.parentElement !== document.body) {
+      document.body.querySelectorAll(':scope > [data-n2-pastilla]').forEach((n) => n.remove());
+      document.body.appendChild(pastilla);
+    }
+    let slugHover: string | null = null;
+    let punteroX = 0;
+    let punteroY = 0;
+    let conPuntero = false;
+    const pastillaPos = { x: 0, y: 0 };
+    let ultimoTic = 0;
+    let siguiendo = false;
+
+    const reducidoAhora = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Sigue al cursor con 1 − e^(−8,4·dt), como Aikawa (con movimiento reducido, sin retardo)
+    const ticPastilla = () => {
+      if (!pastilla) return;
+      const ahora = performance.now();
+      const dt = ultimoTic ? Math.min(0.1, (ahora - ultimoTic) / 1000) : 1 / 60;
+      ultimoTic = ahora;
+      const k = reducidoAhora() ? 1 : 1 - Math.exp(-8.4 * dt);
+      pastillaPos.x += (punteroX - pastillaPos.x) * k;
+      pastillaPos.y += (punteroY - pastillaPos.y) * k;
+      pastilla.style.setProperty('--x', `${pastillaPos.x.toFixed(3)}px`);
+      pastilla.style.setProperty('--y', `${pastillaPos.y.toFixed(3)}px`);
+    };
+    const seguirPastilla = (activo: boolean) => {
+      if (activo === siguiendo) return;
+      siguiendo = activo;
+      if (activo) {
+        ultimoTic = 0;
+        gsap.ticker.add(ticPastilla);
+      } else {
+        gsap.ticker.remove(ticPastilla);
+      }
+    };
+    signal.addEventListener('abort', () => {
+      seguirPastilla(false);
+      pastilla?.remove();
+    });
+
+    const fijarHover = (slug: string | null) => {
+      if (slug === slugHover) return;
+      const antes = slugHover;
+      slugHover = slug;
+      const meta = slug ? metaMap.get(slug) : null;
+      // La tarjeta de frente entra solo si tiene mundo; las de los lados siempre giran
+      const clicable = !!slug && (slug !== disciplinaActiva || !!meta?.tieneMundo);
+      document.documentElement.toggleAttribute('data-n2-hover', clicable);
+      raiz.dataset.n2Hover = slug ?? '';
+      if (!pastilla) return;
+      if (slug) {
+        if (textoPastilla) {
+          textoPastilla.textContent = slug === disciplinaActiva && !meta?.tieneMundo ? 'Próximamente' : 'Ver';
+        }
+        if (!antes) {
+          // Se abre donde está el cursor, no viaja desde el último lugar
+          pastillaPos.x = punteroX;
+          pastillaPos.y = punteroY;
+          ticPastilla();
+        }
+        pastilla.classList.add('es-activa');
+        seguirPastilla(true);
+      } else {
+        pastilla.classList.remove('es-activa');
+        // Se cierra en 0,25 s; la posición queda quieta mientras tanto
+        seguirPastilla(false);
+      }
+    };
+
+    const revisarHover = (destino: EventTarget | null) => {
+      if (!conPuntero || document.body.dataset.currentLevel !== 'N2' || isExiting) {
+        fijarHover(null);
+        return;
+      }
+      const sobreControl = destino instanceof Element && destino.closest('button, a, [data-n2-control], [data-n2-hud]');
+      if (sobreControl || !sceneManager.hoverDisponible() || raiz.dataset.n2Estado !== 'reposo') {
+        fijarHover(null);
+        return;
+      }
+      fijarHover(sceneManager.tarjetaBajo(punteroX, punteroY));
+    };
+
+    window.addEventListener(
+      'pointermove',
+      (e) => {
+        if (e.pointerType !== 'mouse') return;
+        punteroX = e.clientX;
+        punteroY = e.clientY;
+        conPuntero = true;
+        revisarHover(e.target);
+      },
+      { signal, passive: true }
+    );
+    // Al dejar el menú (la rueda sube al home, se entra a un mundo) la pastilla se cierra aunque el
+    // ratón no se mueva
+    const desuscribirHover = navInst.subscribe((estado) => {
+      if (estado.currentLevel !== 'N2') fijarHover(null);
+    });
+    signal.addEventListener('abort', () => desuscribirHover());
+
+    // El ratón se salió de la ventana
+    document.documentElement.addEventListener(
+      'mouseleave',
+      () => {
+        conPuntero = false;
+        fijarHover(null);
+      },
+      { signal }
+    );
 
     // Eventos de botones de control
     if (btnAnterior) {
@@ -934,15 +1196,15 @@ const primeraDisciplina = metadatosDisciplinas[0];
             irAnterior();
           }
         } else {
-          // Si fue un clic simple, verificar si cayó dentro del cilindro proyectado
-          const c = sceneManager.getCylinderBox();
-          if (
-            e.clientX >= c.x &&
-            e.clientX <= c.x + c.ancho &&
-            e.clientY >= c.y &&
-            e.clientY <= c.y + c.alto
-          ) {
+          // Clic simple: la tarjeta bajo el puntero (su contorno proyectado, como Aikawa). La de frente
+          // entra; una de los lados hace girar el cilindro hacia ella (autor, 2026-10-03).
+          const slug = sceneManager.tarjetaBajo(e.clientX, e.clientY);
+          if (!slug || !(ORDERED_SLUGS as readonly string[]).includes(slug)) return;
+          if (slug === disciplinaActiva) {
             entrarANivel3();
+          } else {
+            const pasos = (ORDERED_SLUGS.indexOf(slug as DisciplineSlug) - ORDERED_SLUGS.indexOf(disciplinaActiva) + ORDERED_SLUGS.length) % ORDERED_SLUGS.length;
+            cambiarADisciplina(slug as DisciplineSlug, pasos <= ORDERED_SLUGS.length / 2 ? 'next' : 'prev');
           }
         }
       },

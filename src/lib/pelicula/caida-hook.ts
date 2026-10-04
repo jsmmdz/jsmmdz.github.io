@@ -6,12 +6,31 @@
  * Sigue el scroll con un `scroll` de la ventana, sin ScrollTrigger (D2).
  */
 
+export type OyenteCaida = (progreso: number) => void;
+
+const oyentes = new Set<OyenteCaida>();
+let ultimoProgreso = 0;
+
+/**
+ * Avisa a quien quiera seguir la caída (el home: la tinta y el lavado) sin abrir otro listener de
+ * scroll. Llama al oyente de una vez con el progreso actual y devuelve la función para soltarlo.
+ */
+export function suscribirProgresoCaida(oyente: OyenteCaida): () => void {
+  oyentes.add(oyente);
+  oyente(ultimoProgreso);
+  return () => {
+    oyentes.delete(oyente);
+  };
+}
+
 /**
  * Notifica el progreso actual del scroll y actualiza los efectos de la caída.
  * Invocado por el controlador de scroll de la película.
  */
 export function notificarProgresoCaida(progreso: number): void {
   const normalizado = Math.max(0, Math.min(1, progreso));
+  ultimoProgreso = normalizado;
+  oyentes.forEach((oyente) => oyente(normalizado));
 
   if (typeof document !== 'undefined') {
     if (document.body) {
