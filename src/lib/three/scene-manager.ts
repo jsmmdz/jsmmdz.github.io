@@ -747,6 +747,45 @@ export class ThreeSceneManager {
       this.fluidoN2.paso(dt);
       this.needsRender = Math.max(this.needsRender, 2);
     }
+
+    // 4. La cinta de obra de las disciplinas sin casos (con movimiento reducido se queda quieta; el cursor no
+    //    la toca mientras el cilindro gira o se forma)
+    if (this.n2TarjetasManager && this.n2Camera && !this.reducido) {
+      const tocable = !this.n2IsAnimating && !this.n2RingToCylinderAnimating ? raton : null;
+      const dpr = this.renderer?.getPixelRatio() ?? 1;
+      if (this.n2TarjetasManager.moverCintas(dt, tocable, this.n2Camera, ancho, alto, this.n2CurrentAngle, dpr)) {
+        this.needsRender = Math.max(this.needsRender, 2);
+      }
+    }
+  }
+
+  /** Agarra la cinta de obra bajo el puntero (px CSS), si hay. Con movimiento reducido no se agarra. */
+  public agarrarCintaN2(x: number, y: number): boolean {
+    if (!this.n2TarjetasManager || !this.n2Camera || !this.container || this.reducido) return false;
+    if (this.n2IsAnimating || this.n2RingToCylinderAnimating) return false;
+    const ancho = this.container.clientWidth || window.innerWidth;
+    const alto = this.container.clientHeight || window.innerHeight;
+    const agarro = this.n2TarjetasManager.agarrarCinta(x, y, this.n2Camera, ancho, alto, this.n2CurrentAngle);
+    if (agarro) {
+      this.raton = { x, y };
+      this.requestRender(4);
+    }
+    return agarro;
+  }
+
+  /** La mano suelta la cinta de obra. */
+  public soltarCintaN2(): void {
+    this.n2TarjetasManager?.soltarCinta();
+    this.requestRender(4);
+  }
+
+  /** El clic en la tarjeta de frente de una disciplina sin casos: su cinta brinca («aquí no se entra»). */
+  public golpearCintaN2(slug: string, x: number, y: number): void {
+    if (!this.n2TarjetasManager || !this.n2Camera || !this.container || this.reducido) return;
+    const ancho = this.container.clientWidth || window.innerWidth;
+    const alto = this.container.clientHeight || window.innerHeight;
+    this.n2TarjetasManager.golpearCinta(slug, x, y, this.n2Camera, ancho, alto);
+    this.requestRender(4);
   }
 
   /** El titular sigue a su h1 (posición, opacidad y color) justo antes de dibujar. */

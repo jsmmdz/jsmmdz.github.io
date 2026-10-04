@@ -695,6 +695,8 @@ const primeraDisciplina = metadatosDisciplinas[0];
     let pointerStartX = 0;
     let pointerMoved = 0;
     let isDragging = false;
+    // La cinta de obra agarrada (autor, 2026-10-04): mientras se sostiene, el arrastre no gira el cilindro
+    let cintaAgarrada = false;
 
     // Carga diferida de ThreeSceneManager con dynamic import (compuertas: three fuera del JS inicial de /)
     const { getThreeSceneManager } = await import('@/lib/three/scene-manager');
@@ -1165,6 +1167,11 @@ const primeraDisciplina = metadatosDisciplinas[0];
         if (document.body.dataset.currentLevel !== 'N2') return;
         const target = e.target as HTMLElement | null;
         if (target && target.closest('button, a, input, textarea, select')) return;
+        // Si el clic cae sobre una cinta de obra, se agarra la cinta en vez de girar
+        if (e.pointerType === 'mouse' && e.button === 0 && sceneManager.agarrarCintaN2(e.clientX, e.clientY)) {
+          cintaAgarrada = true;
+          return;
+        }
 
         isDragging = true;
         pointerStartX = e.clientX;
@@ -1185,6 +1192,11 @@ const primeraDisciplina = metadatosDisciplinas[0];
     window.addEventListener(
       'pointerup',
       (e) => {
+        if (cintaAgarrada) {
+          cintaAgarrada = false;
+          sceneManager.soltarCintaN2();
+          return;
+        }
         if (!isDragging) return;
         isDragging = false;
         const deltaX = e.clientX - pointerStartX;
@@ -1201,6 +1213,8 @@ const primeraDisciplina = metadatosDisciplinas[0];
           const slug = sceneManager.tarjetaBajo(e.clientX, e.clientY);
           if (!slug || !(ORDERED_SLUGS as readonly string[]).includes(slug)) return;
           if (slug === disciplinaActiva) {
+            // Sin casos no se entra: su cinta de obra brinca donde se hizo clic
+            if (!metaMap.get(slug)?.tieneMundo) sceneManager.golpearCintaN2(slug, e.clientX, e.clientY);
             entrarANivel3();
           } else {
             const pasos = (ORDERED_SLUGS.indexOf(slug as DisciplineSlug) - ORDERED_SLUGS.indexOf(disciplinaActiva) + ORDERED_SLUGS.length) % ORDERED_SLUGS.length;

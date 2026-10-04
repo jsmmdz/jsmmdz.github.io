@@ -33,14 +33,20 @@ import {
 } from 'three';
 import { ADVECTAR, DIVERGENCIA, GRADIENTE, MEZCLA, PRESION, REDUCIR, SALPICAR, VERTICE } from './shaders';
 
-/** Los valores de noth.in (ficha K1). Se afinan en el pulido, lado a lado con el referente. */
+/**
+ * Los valores de noth.in (ficha K1), salvo `radio` (6e-5): el autor pidió en el pulido (2026-10-04) que el
+ * cursor abriera más tinta para ver el video. Con el barrido de la prueba de los Hz de T33, a 60 Hz la tinta
+ * pasa de abrir el 3,5 % de la franja del titular al 18,9 %, y se disipa en 2,75 s en lugar de 1,25 s.
+ * Subir `fuerza` casi no abre más (la salpicadura de velocidad se pierde en la advección del mismo cuadro)
+ * y sí agranda la diferencia entre 60 y 120 Hz.
+ */
 const AJUSTES = {
   resolucionVelocidad: 256,
   resolucionTinta: 512,
   disipacionVelocidad: 0.962,
   disipacionTinta: 0.988,
   iteracionesPresion: 20,
-  radio: 6e-5,
+  radio: 4e-4,
   fuerza: 5900,
   tamanoRevelado: 3.9,
   bordeSuave: 0.5,

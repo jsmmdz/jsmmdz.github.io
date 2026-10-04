@@ -44,6 +44,8 @@ export class ControladorN3 {
   private ultVelocidad = '';
   private punteroX = -1;
   private punteroY = -1;
+  private agarrandoCinta = false;
+  private ultEstadoCintas = '';
   private hoverPosible: boolean;
   private notificado = false;
   private destruido = false;
@@ -79,8 +81,16 @@ export class ControladorN3 {
     this.scroll.saltarA(this.pista.centradaExacta(this.indiceInicial(e.slugInicial)));
     this.pista.aplicar(this.scroll.a);
     this.mundo = new MundoN3(renderer, this.pista, e.tarjetas, e.reducido);
+    e.act.dataset.cintas = String(this.mundo.numeroCintas);
+    e.act.dataset.cintaAgarrada = '0';
+    e.act.dataset.cintasRotas = '0';
 
     const { signal } = this.control;
+    // La cinta de obra se agarra antes que el arrastre de la fila: el clic sobre una cinta no mueve la cinta
+    // de tarjetas (fase de captura, antes que el scroll virtual)
+    window.addEventListener('pointerdown', this.alAgarrarCinta, { capture: true, signal });
+    window.addEventListener('pointerup', this.alSoltarCinta, { signal });
+    window.addEventListener('pointercancel', this.alSoltarCinta, { signal });
     this.scroll.conectar(signal);
     window.addEventListener('pointermove', this.alPuntero, { signal });
     document.documentElement.addEventListener('mouseleave', this.alSalirPuntero, { signal });
@@ -122,6 +132,19 @@ export class ControladorN3 {
         this.publicar(false);
         this.mundo.sucio = true;
         this.actualizarHover();
+      }
+    }
+    // La cinta de obra de las tarjetas «Próximamente»: solo calcula mientras el cursor la toca o se asienta
+    // (la que está agarrada sigue a la mano aunque el equipo no tenga hover)
+    const toca = this.agarrandoCinta || (this.hoverPosible && !this.scroll.arrastrando);
+    const puntero = toca && this.punteroX >= 0 ? { x: this.punteroX, y: this.punteroY } : null;
+    if (this.mundo.moverCintas(dt, puntero)) {
+      const { agarrada, rotas } = this.mundo.estadoCintas;
+      const estado = `${agarrada ? 1 : 0},${rotas}`;
+      if (estado !== this.ultEstadoCintas) {
+        this.ultEstadoCintas = estado;
+        this.e.act.dataset.cintaAgarrada = agarrada ? '1' : '0';
+        this.e.act.dataset.cintasRotas = String(rotas);
       }
     }
     if (this.mundo.sucio || this.mundo.hayVideo) {
@@ -182,6 +205,22 @@ export class ControladorN3 {
     this.punteroX = ev.clientX;
     this.punteroY = ev.clientY;
     this.actualizarHover();
+  };
+
+  private alAgarrarCinta = (ev: PointerEvent): void => {
+    if (ev.pointerType !== 'mouse' || ev.button !== 0 || this.mundo.volando) return;
+    if (!this.mundo.agarrarCinta(ev.clientX, ev.clientY)) return;
+    this.agarrandoCinta = true;
+    this.punteroX = ev.clientX;
+    this.punteroY = ev.clientY;
+    ev.stopPropagation();
+    ev.preventDefault();
+  };
+
+  private alSoltarCinta = (): void => {
+    if (!this.agarrandoCinta) return;
+    this.agarrandoCinta = false;
+    this.mundo.soltarCinta();
   };
 
   private alSalirPuntero = (): void => {

@@ -13,6 +13,8 @@ import gsap from 'gsap';
 import type { Pista, RectTarjeta } from '@/lib/n3/pista';
 import type { RelevoVuelo } from '@/lib/navigation/vuelo';
 import { CAM_Z, FOV, SEMIALTO } from '../camara';
+import { ALTO_TARJETA, CintasDeTarjeta, type Disposicion } from '../cinta-obra';
+import { CINTA_FRAGMENT, CINTA_N3_VERTEX } from '../cinta-obra/glsl';
 import { PASE_FRAGMENT, PASE_VERTEX, TARJETA_FRAGMENT, TARJETA_VERTEX } from './glsl';
 import { Piso } from './piso';
 import { dibujarFondo, dibujarOverlay, leerColoresN3, type ColoresN3 } from './textura-tarjeta';
@@ -60,7 +62,12 @@ interface Carta {
   /** Título y disco: se rehace al cambiar el tamaño de la tarjeta. */
   overlay: THREE.Texture | null;
   video: HTMLVideoElement | null;
+  /** La cinta de obra de las tarjetas «Próximamente» y los uniformes que copia de su tarjeta. */
+  cintas: { obra: CintasDeTarjeta; u: Record<string, THREE.IUniform> } | null;
 }
+
+/** Medio grueso de la tarjeta para el doblez de la cinta (el N3 no tiene grosor: el doblez es fino). */
+const R_CANTO_N3 = 0.04;
 
 const esperar = (ms: number) => new Promise<void>((listo) => window.setTimeout(listo, ms));
 
@@ -88,6 +95,7 @@ export class MundoN3 {
   private readonly geometria = new THREE.PlaneGeometry(1, 1, 24, 24);
   private readonly uW: THREE.IUniform<number> = { value: 1 };
   private readonly uV: THREE.IUniform<number> = { value: 0 };
+  private readonly uRes: THREE.IUniform<THREE.Vector2> = { value: new THREE.Vector2(1, 1) };
   private readonly piso: Piso;
   private readonly vacia = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1);
   private colores: ColoresN3 = leerColoresN3();
@@ -113,8 +121,130 @@ export class MundoN3 {
     this.camara.updateMatrixWorld(true);
     this.piso = new Piso(this.uW);
     this.escena.add(this.piso.malla);
-    for (const d of datos) this.cartas.push(this.crearCarta(d));
+    // La cinta de obra va en las tarjetas «Próximamente»: cada una toma otra disposición que la anterior y el
+    // texto sigue alternándose de una cinta a la siguiente
+    let anterior: Disposicion | null = null;
+    let texto = 0;
+    datos.forEach((d, i) => {
+      const c = this.crearCarta(d);
+      if (d.slug === null) {
+        c.cintas = this.crearCintas(d, i, anterior, texto);
+        anterior = c.cintas.obra.disposicion;
+        texto += c.cintas.obra.textos.length;
+      }
+      this.cartas.push(c);
+    });
     this.ajustar();
+  }
+
+  private crearCintas(datos: DatosTarjeta, i: number, anterior: Disposicion | null, texto: number): NonNullable<Carta['cintas']> {
+    const u: Record<string, THREE.IUniform> = {
+      u_sheetP: { value: 1 },
+      u_hover: { value: 0 },
+      u_dent: { value: 0 },
+      u_escala: { value: 1 },
+      u_centro: { value: new THREE.Vector2() },
+      u_size: { value: new THREE.Vector2(1, 1) },
+      u_alpha: { value: 1 },
+    };
+    const obra = new CintasDeTarjeta({
+      aspecto: datos.aspecto,
+      semilla: 4049 + i * 7919,
+      anterior,
+      texto,
+      rCanto: R_CANTO_N3,
+      anisotropia: Math.min(8, this.renderer.capabilities.getMaxAnisotropy()),
+      crearMaterial: (propios) =>
+        new THREE.ShaderMaterial({
+          uniforms: { ...u, ...propios, u_W: this.uW, u_V: this.uV, u_res: this.uRes, u_ocultarDetras: { value: 1 }, u_frente: { value: 1 } },
+          vertexShader: CINTA_N3_VERTEX,
+          fragmentShader: CINTA_FRAGMENT,
+          transparent: true,
+          depthTest: false,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+          toneMapped: false,
+        }),
+      alCargar: () => {
+        this.sucio = true;
+      },
+    });
+    for (const m of obra.mallas) {
+      // Encima de su tarjeta (sin profundidad, manda el orden de dibujo)
+      m.renderOrder = 1;
+      m.visible = false;
+      this.escena.add(m);
+    }
+    return { obra, u };
+  }
+
+  /** Cuántas cintas de obra hay en el mundo (para `data-cintas`). */
+  get numeroCintas(): number {
+    return this.cartas.reduce((n, c) => n + (c.cintas ? c.cintas.obra.mallas.length : 0), 0);
+  }
+
+  /**
+   * La física de las cintas en este cuadro, con el puntero (px CSS) o null. Devuelve si alguna se movió (hay
+   * que dibujar). Con movimiento reducido las cintas se quedan quietas.
+   */
+  moverCintas(dt: number, puntero: { x: number; y: number } | null): boolean {
+    if (this.reducido() || this.vuelo) return false;
+    let movio = false;
+    for (let i = 0; i < this.cartas.length; i++) {
+      const c = this.cartas[i];
+      if (!c.cintas) continue;
+      const local = puntero ? this.punteroEnTarjeta(i, puntero.x, puntero.y) : null;
+      if (c.cintas.obra.paso(dt, local)) movio = true;
+    }
+    if (movio) this.sucio = true;
+    return movio;
+  }
+
+  /** El puntero (px CSS) pasado a la tarjeta plana i (alto = ALTO_TARJETA), desde su rectángulo DOM. */
+  private punteroEnTarjeta(i: number, x: number, y: number): { x: number; y: number } | null {
+    const base = this.pista.rects[i];
+    if (!base || base.ancho <= 0 || base.alto <= 0) return null;
+    const izq = base.izq + this.cartas[i].entrada.x;
+    return {
+      x: ((x - izq) / base.ancho - 0.5) * ALTO_TARJETA * (base.ancho / base.alto),
+      y: (0.5 - (y - base.arriba) / base.alto) * ALTO_TARJETA,
+    };
+  }
+
+  /**
+   * Agarra la cinta que está bajo el puntero (px CSS), si hay: al jalarla se estira y, si se jala de más, se
+   * rompe (autor, 2026-10-04). Con movimiento reducido no se agarra.
+   */
+  agarrarCinta(x: number, y: number): boolean {
+    if (this.reducido() || this.vuelo) return false;
+    for (let i = 0; i < this.cartas.length; i++) {
+      const c = this.cartas[i];
+      if (!c.cintas || !c.malla.visible) continue;
+      const local = this.punteroEnTarjeta(i, x, y);
+      if (local && c.cintas.obra.agarrar(local)) {
+        this.sucio = true;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** El estado de las cintas para `data-*`: si hay una agarrada y cuántas están rotas. */
+  get estadoCintas(): { agarrada: boolean; rotas: number } {
+    let agarrada = false;
+    let rotas = 0;
+    for (const c of this.cartas) {
+      if (!c.cintas) continue;
+      agarrada ||= c.cintas.obra.agarrada;
+      rotas += c.cintas.obra.rotas;
+    }
+    return { agarrada, rotas };
+  }
+
+  /** La mano suelta la cinta que tuviera. */
+  soltarCinta(): void {
+    for (const c of this.cartas) c.cintas?.obra.soltar();
+    this.sucio = true;
   }
 
   private crearCarta(datos: DatosTarjeta): Carta {
@@ -148,7 +278,7 @@ export class MundoN3 {
     malla.frustumCulled = false; // la deformación ocurre en el shader: la esfera de la malla no vale
     malla.visible = false;
     this.escena.add(malla);
-    return { datos, malla, hover: { v: 0 }, entrada: { x: 0 }, alfa: { v: 1 }, texturas: [], overlay: null, video: null };
+    return { datos, malla, hover: { v: 0 }, entrada: { x: 0 }, alfa: { v: 1 }, texturas: [], overlay: null, video: null, cintas: null };
   }
 
   // ---------- Carga ----------
@@ -277,6 +407,7 @@ export class MundoN3 {
     this.renderer.getDrawingBufferSize(this.tam);
     const ancho = Math.max(1, this.tam.x);
     const alto = Math.max(1, this.tam.y);
+    this.uRes.value.set(ancho, alto);
     if (!this.mundoRT) {
       this.mundoRT = new THREE.WebGLRenderTarget(ancho, alto, { samples: MUESTRAS, depthBuffer: false });
     } else if (this.mundoRT.width !== ancho || this.mundoRT.height !== alto) {
@@ -321,6 +452,7 @@ export class MundoN3 {
       // Las tarjetas fuera de ±0,5 ventanas no se dibujan (K19)
       const visible = volando || (r.izq + r.ancho > -0.5 * ww && r.izq < 1.5 * ww);
       c.malla.visible = visible && c.malla.material.uniforms.u_alpha.value > 0.001;
+      if (c.cintas) for (const m of c.cintas.obra.mallas) m.visible = c.malla.visible;
       if (!visible) continue;
       const cx = ((r.izq + r.ancho / 2 - ww / 2) / (ww / 2)) * this.W;
       const cy = ((wh / 2 - (r.arriba + r.alto / 2)) / (wh / 2)) * this.H;
@@ -341,6 +473,17 @@ export class MundoN3 {
       u.u_scrim.value = c.datos.slug ? 1 - p : 0;
       u.u_overlayA.value = 1 - p;
       u.u_alpha.value = volando ? 1 : c.alfa.v;
+      if (c.cintas) {
+        // La cinta copia la pose de su tarjeta: centro, tamaño, hueco del hover y apagado
+        const uc = c.cintas.u;
+        (uc.u_centro.value as THREE.Vector2).set(cx, cy);
+        (uc.u_size.value as THREE.Vector2).set(sx, sy);
+        uc.u_escala.value = sy / ALTO_TARJETA;
+        uc.u_hover.value = c.hover.v;
+        uc.u_dent.value = HUECO_HOVER * sy;
+        uc.u_sheetP.value = 1 - p;
+        uc.u_alpha.value = u.u_alpha.value;
+      }
     }
   }
 
@@ -505,6 +648,7 @@ export class MundoN3 {
     for (const c of this.cartas) {
       gsap.killTweensOf([c.hover, c.entrada, c.alfa]);
       c.malla.material.dispose();
+      c.cintas?.obra.dispose();
       for (const t of c.texturas) t.dispose();
       c.overlay?.dispose();
       if (c.video) {

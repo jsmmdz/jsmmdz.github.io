@@ -10,6 +10,8 @@
  * desenrollado a plano en 600 ms con ease-in-out, reposo quieto hasta 1200 ms).
  */
 import * as THREE from 'three';
+import { ALTO_TARJETA, CintasDeTarjeta, type Disposicion, type Punto2 } from './cinta-obra';
+import { CINTA_FRAGMENT, CINTA_N2_VERTEX } from './cinta-obra/glsl';
 
 export interface N2DisciplinaItem {
   slug: string;
@@ -101,6 +103,16 @@ export class N2TarjetasManager {
   };
   private roomEnvTexture: THREE.Texture | null = null;
   private onRequestRender?: (frames: number) => void;
+  // La cinta de obra de las disciplinas sin casos (autor, 2026-10-04): una por tarjeta, o null
+  private cintas: Array<CintasDeTarjeta | null> = [];
+  private frenteCintas: Array<THREE.IUniform<number>> = [];
+  private ultEstadoCintas = '';
+  private readonly uResCinta: THREE.IUniform<THREE.Vector2> = { value: new THREE.Vector2(1, 1) };
+  private readonly rayoCinta = new THREE.Raycaster();
+  private readonly ndcCinta = new THREE.Vector2();
+  private readonly invCinta = new THREE.Matrix4();
+  private readonly oCinta = new THREE.Vector3();
+  private readonly dCinta = new THREE.Vector3();
 
   public readonly radius: number = 1.3;
   public readonly height: number = 0.95;
@@ -214,6 +226,11 @@ export class N2TarjetasManager {
 
     // Precargar fuente Unbounded 800 si está en el entorno del navegador
     this.precargarFuente();
+
+    // La cinta de obra: cada disciplina sin casos toma otra disposición que la anterior y el texto se alterna
+    let cintaAnterior: Disposicion | null = null;
+    let cintaTexto = 0;
+    const escalaCinta = this.height / ALTO_TARJETA;
 
     disciplinas.forEach((d, idx) => {
       const cardGroup = new THREE.Group();
@@ -340,9 +357,159 @@ export class N2TarjetasManager {
       const reflMesh = new THREE.Mesh(reflGeo, reflMat);
       this.reflMeshes.push(reflMesh);
       cardGroup.add(reflMesh);
+
+      // 8. La cinta de obra, si la disciplina todavía no tiene casos: sobre la cara, envolviendo el canto
+      //    del vidrio (el doblez sigue por detrás y se ve a través de la tarjeta)
+      const uFrente: THREE.IUniform<number> = { value: 1 };
+      this.frenteCintas.push(uFrente);
+      if (d.tieneMundo) {
+        this.cintas.push(null);
+        return;
+      }
+      const obra = new CintasDeTarjeta({
+        aspecto: this.cardWidth / this.height,
+        semilla: 9173 + idx * 7919,
+        anterior: cintaAnterior,
+        texto: cintaTexto,
+        rCanto: this.grosor / 2 / escalaCinta,
+        anisotropia: Math.min(8, renderer.capabilities.getMaxAnisotropy()),
+        crearMaterial: (propios) =>
+          new THREE.ShaderMaterial({
+            uniforms: {
+              ...propios,
+              uCurva: this.uniformCurva,
+              uR: this.uniformR,
+              u_escala: { value: escalaCinta },
+              u_zCara: { value: this.grosor / 2 },
+              u_alpha: cardOpacity,
+              u_ocultarDetras: { value: 0 },
+              u_frente: uFrente,
+              u_res: this.uResCinta,
+            },
+            defines: { SALIDA_LINEAL: '' },
+            vertexShader: CINTA_N2_VERTEX,
+            fragmentShader: CINTA_FRAGMENT,
+            transparent: true,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          }),
+        alCargar: () => this.onRequestRender?.(2),
+      });
+      cintaAnterior = obra.disposicion;
+      cintaTexto += obra.textos.length;
+      for (const m of obra.mallas) cardGroup.add(m);
+      this.cintas.push(obra);
     });
 
     this.actualizarAtributosEstado();
+  }
+
+  /**
+   * El puntero (px CSS) sobre la cara curva de la tarjeta idx, en las coordenadas planas de su cinta (alto =
+   * ALTO_TARJETA). El rayo del cursor se corta con el cilindro de la cara en el espacio de la tarjeta, así que
+   * respeta el giro y la inclinación con el ratón. Null si no la toca.
+   */
+  private puntoEnTarjeta(idx: number, x: number, y: number, camara: THREE.PerspectiveCamera, ancho: number, alto: number): Punto2 | null {
+    const grupo = this.cardGroups[idx];
+    if (!grupo) return null;
+    grupo.updateWorldMatrix(true, false);
+    this.ndcCinta.set((x / ancho) * 2 - 1, -(y / alto) * 2 + 1);
+    this.rayoCinta.setFromCamera(this.ndcCinta, camara);
+    this.invCinta.copy(grupo.matrixWorld).invert();
+    const o = this.oCinta.copy(this.rayoCinta.ray.origin).applyMatrix4(this.invCinta);
+    const d = this.dCinta.copy(this.rayoCinta.ray.direction).transformDirection(this.invCinta);
+    const R = this.radius + this.grosor / 2;
+    const A = d.x * d.x + d.z * d.z;
+    const B = 2 * (o.x * d.x + o.z * d.z);
+    const C = o.x * o.x + o.z * o.z - R * R;
+    const disc = B * B - 4 * A * C;
+    if (A < 1e-9 || disc < 0) return null;
+    const t = (-B - Math.sqrt(disc)) / (2 * A);
+    if (t < 0) return null;
+    const theta = Math.atan2(o.x + t * d.x, o.z + t * d.z);
+    const k = this.height / ALTO_TARJETA;
+    return { x: (theta * this.radius) / k, y: (o.y + t * d.y) / k };
+  }
+
+  /**
+   * La física de la cinta de obra en este cuadro. El cursor solo la toca en reposo (no al girar, al formarse
+   * el cilindro ni en la salida) y en las tarjetas que miran a la cámara. Devuelve si alguna se movió.
+   */
+  public moverCintas(
+    dt: number,
+    raton: { x: number; y: number } | null,
+    camara: THREE.PerspectiveCamera,
+    ancho: number,
+    alto: number,
+    anguloDeg: number,
+    dpr: number,
+  ): boolean {
+    this.uResCinta.value.set(ancho * dpr, alto * dpr);
+    const arc = (2 * Math.PI) / Math.max(1, this.cardMeshes.length);
+    const giro = THREE.MathUtils.degToRad(anguloDeg);
+    const enReposo = this.uniformCurva.value > 0.999 && !this.isExitAnimating;
+    let movio = false;
+    this.cintas.forEach((obra, idx) => {
+      if (!obra) return;
+      const deFrente = Math.cos(idx * arc - giro) > 0.3;
+      // La que está agarrada sigue a la mano aunque el cilindro no esté del todo quieto
+      const toca = (enReposo && deFrente) || obra.agarrada;
+      const local = raton && toca ? this.puntoEnTarjeta(idx, raton.x, raton.y, camara, ancho, alto) : null;
+      if (obra.paso(dt, local)) movio = true;
+    });
+    if (movio) {
+      // El estado para las pruebas: si hay una agarrada y cuántas están rotas (solo cuando cambia)
+      const agarrada = this.cintas.some((o) => o?.agarrada);
+      const rotas = this.cintas.reduce((n, o) => n + (o ? o.rotas : 0), 0);
+      const estado = `${agarrada ? 1 : 0},${rotas}`;
+      const actN2 = document.getElementById('act-n2');
+      if (actN2 && estado !== this.ultEstadoCintas) {
+        this.ultEstadoCintas = estado;
+        actN2.dataset.cintaAgarrada = agarrada ? '1' : '0';
+        actN2.dataset.cintasRotas = String(rotas);
+      }
+    }
+    return movio;
+  }
+
+  /**
+   * Agarra la cinta bajo el puntero (px CSS) en una tarjeta de frente, en reposo: al jalarla se estira y, si
+   * se jala de más, se rompe (autor, 2026-10-04). ¿Agarró alguna?
+   */
+  public agarrarCinta(x: number, y: number, camara: THREE.PerspectiveCamera, ancho: number, alto: number, anguloDeg: number): boolean {
+    if (this.uniformCurva.value < 0.999 || this.isExitAnimating) return false;
+    const arc = (2 * Math.PI) / Math.max(1, this.cardMeshes.length);
+    const giro = THREE.MathUtils.degToRad(anguloDeg);
+    for (let idx = 0; idx < this.cintas.length; idx++) {
+      const obra = this.cintas[idx];
+      if (!obra || Math.cos(idx * arc - giro) <= 0.3) continue;
+      const local = this.puntoEnTarjeta(idx, x, y, camara, ancho, alto);
+      if (local && obra.agarrar(local)) return true;
+    }
+    return false;
+  }
+
+  /** La mano suelta la cinta que tuviera. */
+  public soltarCinta(): void {
+    for (const obra of this.cintas) obra?.soltar();
+  }
+
+  /** El clic en una tarjeta sin casos: su cinta brinca donde se hizo clic. */
+  public golpearCinta(slug: string, x: number, y: number, camara: THREE.PerspectiveCamera, ancho: number, alto: number): void {
+    const idx = this.cardMeshes.findIndex((m) => m.userData?.slug === slug);
+    const obra = this.cintas[idx];
+    if (!obra) return;
+    const local = this.puntoEnTarjeta(idx, x, y, camara, ancho, alto);
+    if (local) obra.golpe(local.x, local.y);
+  }
+
+  /** Las cintas se ven solo si se ve su tarjeta. */
+  private visibilidadCintas(): void {
+    this.cintas.forEach((obra, idx) => {
+      if (!obra) return;
+      const visible = this.cardMeshes[idx]?.visible ?? false;
+      for (const m of obra.mallas) m.visible = visible;
+    });
   }
 
   /**
@@ -640,6 +807,7 @@ export class N2TarjetasManager {
       }
       mesh.visible = elapsed < 250;
     });
+    this.visibilidadCintas();
 
     // 2. 0 → ≈ 600 ms: uCurva va de 1 a 0 con ease-in-out (a 300 ms va en 0.5)
     const pCurva = Math.min(1, Math.max(0, elapsed / 600));
@@ -760,6 +928,7 @@ export class N2TarjetasManager {
       }
       mesh.visible = true;
     });
+    this.visibilidadCintas();
 
     const titular = document.querySelector<HTMLElement>('[data-n2-titular]');
     if (titular) {
@@ -782,6 +951,11 @@ export class N2TarjetasManager {
       mesh.renderOrder = 10 + Math.round((cercania + 1) * 10);
       const refl = this.reflMeshes[idx];
       if (refl) refl.renderOrder = Math.round((cercania + 1) * 4);
+      // La cinta, justo después de su tarjeta (antes de las que tiene delante)
+      for (const m of this.cintas[idx]?.mallas ?? []) m.renderOrder = mesh.renderOrder + 0.5;
+      // De espaldas la tarjeta casi no se ve (su dorso es tenue): la cinta se apaga con ella
+      const uFrente = this.frenteCintas[idx];
+      if (uFrente) uFrente.value = THREE.MathUtils.smoothstep(cercania, -0.05, 0.35);
     });
   }
 
@@ -865,6 +1039,7 @@ export class N2TarjetasManager {
       const ratio = this.grosor / this.height;
       actN2.dataset.grosor = ratio.toFixed(2);
       actN2.dataset.curva = this.uniformCurva.value.toFixed(2);
+      actN2.dataset.cintas = String(this.cintas.reduce((n, c) => n + (c ? c.mallas.length : 0), 0));
     }
   }
 
@@ -873,6 +1048,9 @@ export class N2TarjetasManager {
     this.isExitAnimating = false;
     this.exitCallback = null;
 
+    this.cintas.forEach((c) => c?.dispose());
+    this.cintas = [];
+    this.frenteCintas = [];
     this.cardGroups.forEach((g) => {
       this.group.remove(g);
     });

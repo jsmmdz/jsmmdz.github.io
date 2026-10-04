@@ -33,6 +33,40 @@ const {
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <link rel="icon" type="image/svg+xml" href={conBase('favicon.svg')} />
+    <!-- Visitas con GoatCounter (docs/2-TECNICO.md § Hosting): sin cookies, solo en el sitio publicado
+         y con su script copiado en public/, así que no corre código de terceros. -->
+    <script define:vars={{ contador: conBase('goatcounter.js') }}>
+      (function () {
+        if (location.hostname !== 'jsmmdz.github.io') return;
+        var gc = (window.goatcounter = { endpoint: 'https://jsmmdz.goatcounter.com/count', no_onload: true });
+        var q = new URLSearchParams(location.search);
+        var origen = q.get('ref');
+        try {
+          // ?contarme=no deja de contar al autor en este navegador; ?contarme=si lo revierte.
+          if (q.get('contarme') === 'no') {
+            localStorage.setItem('skipgc', 't');
+            alert('GoatCounter: este navegador ya no cuenta tus visitas.');
+          }
+          if (q.get('contarme') === 'si') localStorage.removeItem('skipgc');
+          // El ?ref= de cada empresa vale para toda la visita, también si recarga: la URL lo pierde al cambiar de página.
+          if (origen) sessionStorage.setItem('gc-ref', origen);
+          else origen = sessionStorage.getItem('gc-ref');
+        } catch (e) {}
+        // El ClientRouter cambia de página sin recargar: se cuenta en cada astro:page-load, una vez por ruta.
+        var contada = null;
+        var contar = function () {
+          if (!gc.count || location.pathname === contada) return;
+          contada = location.pathname;
+          gc.count({ path: location.pathname, referrer: origen || undefined });
+        };
+        document.addEventListener('astro:page-load', contar);
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = contador;
+        s.onload = contar;
+        document.head.appendChild(s);
+      })();
+    </script>
     <ClientRouter />
   </head>
   <body
