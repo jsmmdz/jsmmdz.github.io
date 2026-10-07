@@ -16,6 +16,9 @@ const ENTRADA = {
   retardo: 0.2,
 } as const;
 
+/** T36: la base de las letras cae al 92,6 % del alto (diagramación del autor: 833 px a 900). */
+const BASE_DE_LAS_LETRAS = 0.926;
+
 function letrasDe(titular: HTMLElement): HTMLElement[] {
   return Array.from(titular.querySelectorAll<HTMLElement>('[data-n1-letra]'));
 }
@@ -36,7 +39,29 @@ export function ajustarTitular(titular: HTMLElement): void {
   const anchoA100 = letras.reduce((suma, letra) => suma + ctx.measureText(letra.textContent ?? '').width, 0);
   const ancho = titular.getBoundingClientRect().width;
   if (anchoA100 <= 0 || ancho <= 0) return;
-  titular.style.setProperty('--n1-titular-tam', `${((ancho * 100) / anchoA100).toFixed(3)}px`);
+  const tamano = (ancho * 100) / anchoA100;
+  titular.style.setProperty('--n1-titular-tam', `${tamano.toFixed(3)}px`);
+  bajarTitular(titular, ctx, letras, tamano);
+}
+
+/**
+ * Pone la base de las letras al 92,6 % del alto de la capa (diagramación del autor, T36). Hace falta medirla:
+ * la línea base dentro del h1 depende de las métricas de la fuente, y el h1 es de línea 1. Además deja en la
+ * sección `--n1-letras-arriba`, el borde de arriba de las letras, para poner las redes justo encima.
+ */
+function bajarTitular(titular: HTMLElement, ctx: CanvasRenderingContext2D, letras: HTMLElement[], tamano: number): void {
+  const capa = titular.offsetParent;
+  const sonda = titular.querySelector<HTMLElement>('[data-n1-sonda]');
+  if (!(capa instanceof HTMLElement) || !sonda) return;
+  const alto = capa.clientHeight;
+  if (alto <= 0) return;
+  // La línea base, contada desde el borde de arriba del h1 (la sonda es un cuadrito de alto 0 sobre ella).
+  const base = sonda.getBoundingClientRect().bottom - titular.getBoundingClientRect().top;
+  const lineaBase = alto * BASE_DE_LAS_LETRAS;
+  titular.style.setProperty('--n1-titular-arriba', `${(lineaBase - base).toFixed(2)}px`);
+  const texto = letras.map((letra) => letra.textContent ?? '').join('');
+  const altoLetras = (ctx.measureText(texto).actualBoundingBoxAscent / 100) * tamano;
+  titular.closest<HTMLElement>('section')?.style.setProperty('--n1-letras-arriba', `${(lineaBase - altoLetras).toFixed(2)}px`);
 }
 
 /** Deja las letras fuera de su máscara, listas para la entrada. */

@@ -10,10 +10,16 @@
  *
  * three y la tinta se cargan con `import()` cuando termina (o empieza) la entrada: nunca en el JS
  * inicial de `/` (compuerta `three-fuera-del-inicio`).
+ *
+ * T36: además de la tinta, junta el paralaje del personaje y la capa de atrás (el titular, la tinta y el
+ * video: `[data-n1-capa-atras]`) y la entrada de los textos de las columnas.
  */
 import gsap from 'gsap';
 import { suscribirProgresoCaida } from '@/lib/pelicula/caida-hook';
 import { ajustarTitular, animarEntrada, esconderLetras, mostrarLetras } from './titular';
+import { animarTextos, esconderTextos, mostrarTextos } from './entrada-textos';
+import { iniciarParalaje, type ControladorParalaje } from './paralaje';
+import { montarPersonaje, type PersonajeMontado } from './personaje';
 import type { ControladorTinta, EstadoTinta } from './tinta';
 
 type EstadoHome = EstadoTinta | 'inactiva' | 'apagada';
@@ -50,7 +56,8 @@ export function iniciarHome(): ControladorHome | null {
   const seccion = document.getElementById('act-n1');
   const titular = seccion?.querySelector<HTMLElement>('h1[data-n1-titular]');
   const video = seccion?.querySelector<HTMLVideoElement>('video[data-n1-materiales]');
-  if (!seccion || !titular || !video) return null;
+  const capaAtras = seccion?.querySelector<HTMLElement>('[data-n1-capa-atras]');
+  if (!seccion || !titular || !video || !capaAtras) return null;
 
   const consultaReducido = window.matchMedia('(prefers-reduced-motion: reduce)');
   let reducido = consultaReducido.matches;
@@ -68,13 +75,16 @@ export function iniciarHome(): ControladorHome | null {
   let progreso = 0;
   let promesaModulo: Promise<ModuloTinta> | null = null;
   let cancelarEntrada: (() => void) | null = null;
+  let cancelarTextos: (() => void) | null = null;
+  let personaje: PersonajeMontado | null = null;
+  let paralaje: ControladorParalaje | null = null;
   let respaldoEntrada: number | null = null;
   let esperaRedimensionar: gsap.core.Tween | null = null;
 
   const nivel = (): string => document.body.dataset.currentLevel ?? '';
   const fuera = (): boolean => {
     const n = nivel();
-    return n === 'N2' || n === 'N3' || n === 'N4' || progreso >= CAIDA_FUERA_DEL_HOME;
+    return n === 'N2' || n === 'N3' || n === 'N4' || n === 'SM' || progreso >= CAIDA_FUERA_DEL_HOME;
   };
 
   const preloaderTerminado = (): boolean => {
@@ -156,7 +166,8 @@ export function iniciarHome(): ControladorHome | null {
       nuevo.setAttribute('data-n1-tinta', '');
       nuevo.setAttribute('aria-hidden', 'true');
       nuevo.className = 'n1-tinta';
-      seccion.prepend(nuevo);
+      // El canvas va dentro de la capa de atrás: se corre con el paralaje junto con el titular y el video.
+      capaAtras.prepend(nuevo);
       lienzo = nuevo;
       try {
         tinta = modulo.crearTinta({
@@ -193,9 +204,12 @@ export function iniciarHome(): ControladorHome | null {
     entradaPendiente = false;
     cancelarEntrada?.();
     cancelarEntrada = null;
+    cancelarTextos?.();
+    cancelarTextos = null;
     if (respaldoEntrada !== null) window.clearTimeout(respaldoEntrada);
     respaldoEntrada = null;
     mostrarLetras(titular);
+    mostrarTextos(seccion);
     evaluar();
   };
 
@@ -204,6 +218,7 @@ export function iniciarHome(): ControladorHome | null {
     // Mientras las letras suben se va trayendo el módulo de la tinta; se monta al terminar.
     void precargarModulo().catch(() => undefined);
     cancelarEntrada = animarEntrada(titular, terminarEntrada);
+    cancelarTextos = animarTextos(seccion);
     respaldoEntrada = window.setTimeout(terminarEntrada, ESPERA_MAXIMA_ENTRADA_MS);
   };
 
@@ -221,6 +236,7 @@ export function iniciarHome(): ControladorHome | null {
         // Se llegó directo al menú: el titular ya está entero cuando se vuelva al home.
         entradaPendiente = false;
         mostrarLetras(titular);
+        mostrarTextos(seccion);
         fijarEstado('pausada');
       } else if (!entrando) {
         iniciarEntrada();
@@ -262,7 +278,20 @@ export function iniciarHome(): ControladorHome | null {
     fijarEstado('apagada');
   } else {
     fijarEstado('inactiva');
-    if (entradaPendiente) esconderLetras(titular);
+    if (entradaPendiente) {
+      esconderLetras(titular);
+      esconderTextos(seccion);
+    }
+  }
+
+  // El paralaje del ratón: solo con movimiento normal y mientras se está en el home.
+  personaje = montarPersonaje(seccion);
+  if (personaje && !reducido) {
+    paralaje = iniciarParalaje({
+      personaje: personaje.elemento,
+      capaAtras,
+      activo: () => nivel() === 'N1' && progreso < CAIDA_FUERA_DEL_HOME,
+    });
   }
 
   // Si el visitante activa el movimiento reducido con la página abierta: se apaga la tinta y el titular queda entero.
@@ -272,6 +301,9 @@ export function iniciarHome(): ControladorHome | null {
     apagar();
     terminarEntrada();
     mostrarLetras(titular);
+    mostrarTextos(seccion);
+    paralaje?.destruir();
+    paralaje = null;
   };
   consultaReducido.addEventListener('change', alCambiarMovimiento);
 
@@ -289,6 +321,9 @@ export function iniciarHome(): ControladorHome | null {
       soltarCaida();
       esperaRedimensionar?.kill();
       cancelarEntrada?.();
+      cancelarTextos?.();
+      paralaje?.destruir();
+      personaje?.destruir();
       if (respaldoEntrada !== null) window.clearTimeout(respaldoEntrada);
       if (esperaVideo !== null) window.clearTimeout(esperaVideo);
       video.pause();

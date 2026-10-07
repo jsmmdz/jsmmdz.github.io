@@ -11,7 +11,7 @@
  * El DOM del N4 es transparente sobre el canvas: el fondo lo pone la escena.
  */
 import type { CollectionEntry } from 'astro:content';
-import { conBase } from '@/lib/rutas';
+import { conBase, conMedia } from '@/lib/rutas';
 import { variablesCssPortada } from '@/lib/n4/portada';
 import { NOMBRE_TIPO, type MedioCaso } from '@/lib/n4/historia';
 import { familiaFuente } from '@/lib/n4/design-system';
@@ -26,10 +26,17 @@ const datos = proyecto.data;
 const discSlug = disciplina?.slug ?? 'web';
 const mundoUrl = conBase(`${discSlug}/`);
 
+// La sección de resultados (autor, 2026-10-06; hoy solo Bernarte): con `galeria`, los pasos con video salen de la
+// historia y van juntos, cada corto en su marco, en el tramo de la sección, antes del paso que los sigue
+const galeria = datos.galeria ? datos.historia.filter((p) => p.video) : [];
+const historia = datos.galeria ? datos.historia.filter((p) => !p.video) : datos.historia;
+const galeriaEn = datos.galeria ? datos.historia.findIndex((p) => p.video) : -1;
 // Las fotos: la portada (medio −1, donde aterriza el vuelo) y la de cada paso
 const portada: MedioCaso = { src: datos.portada.src, ancho: datos.portada.width, alto: datos.portada.height, alt: `Portada de ${datos.titulo}` };
-const fotos: MedioCaso[] = datos.historia.map((p) => ({ src: p.foto.src, ancho: p.foto.width, alto: p.foto.height, alt: p.alt }));
+const fotos: MedioCaso[] = historia.map((p) => ({ src: p.foto.src, ancho: p.foto.width, alto: p.foto.height, alt: p.alt }));
 const medios = [portada, ...fotos];
+// Los resultados finales con su corto (T38): si su foto (el póster) es vertical, el marco también lo es (9:16)
+const hayVideo = historia.some((p) => p.video);
 // La exposición del design system (opcional): 5 colores al final del caso
 const ds = datos.designSystem;
 // Las fuentes del design system se declaran aquí con su archivo (en public/): el cristal las escribe en su
@@ -67,17 +74,29 @@ const caraFuentes = (ds?.fuentes ?? [])
         draggable="false"
       />
     ))}
+    {hayVideo && <div class="n4-clic-foto" data-n4-clic-foto aria-hidden="true"></div>}
   </div>
 
   <h1 class="n4-titulo">{datos.titulo}</h1>
 
   <!-- La historia completa, en orden: con WebGL es transparente y su caja sigue a su cristal -->
-  <ol class="n4-historia" data-n4-historia aria-label="Historia del caso">
-    {datos.historia.map((p, k) => (
-      <li class="n4-paso" data-n4-paso={k} data-tipo={p.tipo}>
+  <ol class="n4-historia" data-n4-historia tabindex="-1" aria-label="Historia del caso">
+    {historia.map((p, k) => (
+      <li
+        class="n4-paso"
+        data-n4-paso={k}
+        data-tipo={p.tipo}
+        data-n4-video={p.video ? conMedia(p.video.corto) : undefined}
+        data-n4-vertical={p.video ? String(p.foto.height > p.foto.width) : undefined}
+      >
         <h2 class="n4-paso-tipo">{NOMBRE_TIPO[p.tipo]}</h2>
         {p.destacado && <p class="n4-paso-destacado">{p.destacado}</p>}
         <p class="n4-paso-texto">{p.texto}</p>
+        {p.video && (
+          <a class="n4-ver-completo" data-n4-ver-completo href={p.video.enlace} target="_blank" rel="noopener noreferrer">
+            Ver completo<span aria-hidden="true"> ↗</span><span class="n4-solo-lectores"> (video en Google Drive, se abre en otra pestaña)</span>
+          </a>
+        )}
       </li>
     ))}
   </ol>
@@ -108,6 +127,27 @@ const caraFuentes = (ds?.fuentes ?? [])
         </ul>
       </div>
       <style is:inline set:html={caraFuentes}></style>
+    </section>
+  )}
+
+  <!-- La sección de resultados (con `galeria`): con WebGL, cada corto corre en su marco de cristal y estas copias
+       (transparentes, salvo el anillo de foco) siguen la caja de su marco; el clic abre el video completo en Drive.
+       Sin WebGL se ven los pósters en HTML. -->
+  {galeria.length > 0 && (
+    <section class="n4-galeria" data-n4-galeria data-n4-en={galeriaEn} aria-label="Resultados">
+      <h2 class="n4-solo-lectores">Resultados</h2>
+      <ul class="n4-galeria-lista">
+        {galeria.map((p, i) => (
+          <li class="n4-galeria-item" data-n4-galeria-item={i} data-n4-video={p.video ? conMedia(p.video.corto) : undefined}>
+            <img class="n4-galeria-poster" src={p.foto.src} width={p.foto.width} height={p.foto.height} alt={p.alt} loading="eager" decoding="async" draggable="false" />
+            <a class="n4-galeria-enlace" data-n4-galeria-enlace href={p.video?.enlace} target="_blank" rel="noopener noreferrer">
+              {p.destacado && <span class="n4-galeria-destacado">{p.destacado}</span>}
+              <span class="n4-galeria-texto">{p.texto}</span>
+              <span class="n4-galeria-ver">Ver completo<span aria-hidden="true"> ↗</span><span class="n4-solo-lectores"> (video en Google Drive, se abre en otra pestaña)</span></span>
+            </a>
+          </li>
+        ))}
+      </ul>
     </section>
   )}
 
@@ -323,6 +363,22 @@ const caraFuentes = (ds?.fuentes ?? [])
     pointer-events: none;
   }
 
+  /* El área del clic sobre la foto del corto (T38): el controlador la pone sobre la foto o su marco vertical
+     y solo recibe clics mientras el paso activo trae video */
+  #act-n4 .n4-clic-foto {
+    position: absolute;
+    pointer-events: none;
+  }
+
+  #act-n4 .n4-clic-foto[data-activo] {
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  #act-n4 .n4-clic-foto[data-activo][data-tapado] {
+    cursor: auto;
+  }
+
   /* Con WebGL el plano del canvas dibuja la foto; la imagen queda detrás como respaldo */
   #act-n4.n4-con-webgl .n4-medio {
     opacity: 0 !important;
@@ -395,6 +451,64 @@ const caraFuentes = (ds?.fuentes ?? [])
     color: var(--color-texto-claro);
   }
 
+  /* «Ver completo ↗» (T38): el cristal lo imprime el canvas; este enlace es su copia en el DOM, transparente,
+     y solo recibe clics mientras su paso es el activo. Con el foco del teclado se hace visible. */
+  #act-n4 .n4-ver-completo {
+    position: absolute;
+    left: 2.4rem;
+    bottom: 2.4rem;
+    padding: 0.2rem 0.4rem;
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--color-texto-claro);
+    text-decoration: underline;
+    pointer-events: none;
+  }
+
+  #act-n4 .n4-ver-completo[data-activo] {
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  /* Con WebGL el controlador le da su caja exacta (la de la línea que dibuja el cristal): sin relleno propio */
+  #act-n4:not(.n4-sin-webgl) .n4-ver-completo {
+    color: transparent;
+    padding: 0;
+    box-sizing: border-box;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  /* El clic y el toque llegan a un área mayor que el texto (el controlador da --n4-toque-x/y); el anillo no la sigue */
+  #act-n4:not(.n4-sin-webgl) .n4-ver-completo::after {
+    content: '';
+    position: absolute;
+    inset: calc(-1 * var(--n4-toque-y, 0px)) calc(-1 * var(--n4-toque-x, 0px));
+  }
+
+  /* Recibe el foco (tabindex -1) cuando el paso con enlace sale, para no soltarlo en <body>: no dibuja anillo */
+  #act-n4 .n4-historia:focus,
+  #act-n4 .n4-historia:focus-visible {
+    outline: none;
+  }
+
+  #act-n4:not(.n4-sin-webgl) .n4-paso:has(.n4-ver-completo:focus-visible) {
+    opacity: 1;
+  }
+
+  #act-n4:not(.n4-sin-webgl) .n4-paso:has(.n4-ver-completo:focus-visible) > :not(.n4-ver-completo) {
+    visibility: hidden;
+  }
+
+  #act-n4 .n4-solo-lectores {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
   /* Sin WebGL: la historia se lee en HTML, un paso a la vez, al centro de la columna y con el fundido de
      las fotos; el fondo es el color plano del caso */
   #act-n4.n4-sin-webgl {
@@ -407,6 +521,12 @@ const caraFuentes = (ds?.fuentes ?? [])
     height: auto;
     overflow: visible;
     transform: translateY(-50%);
+  }
+
+  #act-n4.n4-sin-webgl .n4-ver-completo {
+    position: static;
+    display: inline-block;
+    margin-top: 1rem;
   }
 
   /* ---------- El design system ---------- */
@@ -543,6 +663,95 @@ const caraFuentes = (ds?.fuentes ?? [])
     margin-bottom: 0.5rem;
     border-radius: 0.5rem;
     background: var(--n4-color);
+  }
+
+  /* ---------- La sección de resultados (autor, 2026-10-06) ---------- */
+  #act-n4 .n4-galeria-lista {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Con WebGL: cada copia sigue la caja de su marco; el póster y el texto los dibuja el canvas */
+  #act-n4 .n4-galeria-item {
+    position: absolute;
+    left: 0;
+    top: 0;
+    box-sizing: border-box;
+    width: calc(9 * 1rem);
+    height: calc(16 * 1rem);
+    margin: 0;
+    pointer-events: none;
+    transform-origin: 0 0;
+    transform: translate3d(0, 150vh, 0);
+  }
+
+  #act-n4 .n4-galeria-poster {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+  }
+
+  #act-n4 .n4-galeria-enlace {
+    position: absolute;
+    inset: 0;
+    color: transparent;
+    font-size: 1rem;
+    text-decoration: none;
+    pointer-events: none;
+  }
+
+  #act-n4 .n4-galeria-enlace[data-activo] {
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  #act-n4 .n4-galeria-enlace:focus-visible {
+    outline: 2px solid var(--color-texto-claro);
+    outline-offset: 2px;
+  }
+
+  #act-n4 .n4-galeria-destacado,
+  #act-n4 .n4-galeria-texto,
+  #act-n4 .n4-galeria-ver {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* Sin WebGL: los pósters en fila, a pantalla completa, con su texto y el enlace */
+  #act-n4.n4-sin-webgl .n4-galeria {
+    position: absolute;
+    inset: calc(8 * 1rem) calc(6 * 1rem);
+    opacity: 0;
+  }
+
+  #act-n4.n4-sin-webgl .n4-galeria-lista {
+    display: flex;
+    gap: calc(3 * 1rem);
+    justify-content: center;
+    height: 100%;
+  }
+
+  #act-n4.n4-sin-webgl .n4-galeria-item {
+    position: relative;
+    width: auto;
+    height: 100%;
+    aspect-ratio: 9 / 16;
+    transform: none;
+  }
+
+  #act-n4.n4-sin-webgl .n4-galeria-poster {
+    opacity: 1;
+  }
+
+  #act-n4.n4-sin-webgl .n4-galeria-enlace {
+    pointer-events: auto;
   }
 
   /* ---------- «← Volver» ---------- */
@@ -711,6 +920,14 @@ const caraFuentes = (ds?.fuentes ?? [])
       opacity: 1;
       transform: none;
       margin-top: calc(3 * 1rem);
+    }
+
+    #act-n4 .n4-ver-completo {
+      position: static;
+      display: inline-block;
+      margin-top: 1rem;
+      color: var(--color-texto-claro);
+      pointer-events: auto;
     }
 
     #act-n4 .n4-medios,

@@ -599,6 +599,10 @@ export class ThreeSceneManager {
     if (this.isDisposed) return;
 
     if (this.isPaused || document.hidden) return;
+    // T35: con la sección «Sobre mí» encima del N2 no se dibuja nada, ni con el ratón moviéndose. Se sale
+    // antes de tocar `ultimoCuadro`: al volver al N2 el primer paso sale acotado a 0,1 s, no a todo el tiempo
+    // que estuvo tapado, y los cuadros pendientes de `needsRender` se dibujan entonces.
+    if (document.body?.dataset.currentLevel === 'SM') return;
     const dt = this.ultimoCuadro ? Math.min(0.1, Math.max(0, (now - this.ultimoCuadro) / 1000)) : 1 / 60;
     this.ultimoCuadro = now;
 

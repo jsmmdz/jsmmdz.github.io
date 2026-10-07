@@ -24,7 +24,9 @@ import { formaMarco } from '@/lib/n4/marco';
 import type { Disposicion } from '@/lib/n4/geometria';
 import { NOMBRE_TIPO, type PasoVista } from '@/lib/n4/historia';
 import { mezclaDelLimite } from '@/lib/n4/medios';
-import { familiaFuente, opacidadDS, poseColor, poseFuentes, presenciaDS, tintaSobre, totalTramos, tramoDelPaso } from '@/lib/n4/design-system';
+import { centroDelPaso } from '@/lib/n4/scroll';
+import { rectDelMedio } from '@/lib/n4/video';
+import { centroDS, familiaFuente, LARGO_DS, LARGO_GALERIA, opacidadDS, poseColor, poseFuentes, presenciaDS, primerResultadoFinal, subida, tintaSobre, totalTramos, tramoDelPaso } from '@/lib/n4/design-system';
 import { CAM_Z, FOV, SEMIALTO } from '../camara';
 import { PASE_FRAGMENT, PASE_VERTEX } from '../n3/glsl';
 import {
@@ -40,7 +42,7 @@ import {
   TEXTO_VERTEX,
   TINTE_FRAGMENT,
 } from './glsl';
-import { dibujarFuentes, dibujarTextoCristal, fuentesDelTextoListas } from './texto';
+import { dibujarFuentes, dibujarTextoCristal, fuentesDelTextoListas, type RectTextura } from './texto';
 
 // Muestras de los render targets (D4: el antialias de Landberg, como el N3)
 const MUESTRAS = 4;
@@ -72,6 +74,34 @@ const MARCO_ANGOSTO_PX = 13;
 const DURACION_TRANSICION = 0.9;
 const FONDO_TRANSICION = -16;
 const acotar01 = (v: number) => Math.min(1, Math.max(0, v));
+const suave = (a: number, b: number, v: number) => {
+  const t = acotar01((v - a) / (b - a));
+  return t * t * (3 - 2 * t);
+};
+/**
+ * «Ver completo ↗» solo en el cristal del paso activo (autor, 2026-10-06; E1 y E2 de la auditoría final r4 de T38):
+ * a esta distancia del centro de su paso (en tramos) empieza a desvanecerse y a medio tramo, donde el paso activo
+ * cambia, ya no se ve.
+ */
+const ENLACE_DESDE = 0.35;
+/** Holgura del rectángulo de «Ver completo ↗» en la textura (en uv), para que el borde del trazo no quede fuera. */
+const ENLACE_HOLGURA = 0.01;
+/** Opacidad mínima de un cristal para que tape el clic en la foto del corto. */
+const TAPA_DESDE = 0.1;
+/**
+ * La sección de resultados (boceto del autor, 2026-10-06): los marcos a lo ancho, separados por esta fracción del
+ * ancho de la ventana; cada uno corrido en vertical (fracción del alto: el de la izquierda un poco abajo, el del
+ * centro arriba, el de la derecha más abajo), del alto que cabe y subiendo en cascada con la sección.
+ */
+const X_PASO_GALERIA = 0.3;
+const Y_GALERIA = [0.06, -0.03, 0.1] as const;
+const ALTO_GALERIA = 0.56;
+const ANCHO_MAX_GALERIA = 0.24;
+const CASCADA_GALERIA = 0.08;
+/** En angosto: en zigzag de arriba abajo (izquierda, derecha, izquierda), cada marco de esta fracción del alto. */
+const ALTO_GALERIA_ANGOSTO = 0.27;
+const X_GALERIA_ANGOSTO = [0.32, 0.68] as const;
+const MARGEN_GALERIA_PX = 16;
 // La foto se inclina un poco al hacer scroll (autor, 2026-10-02): hasta 0,1 rad hacia atrás y 0,06 de lado con
 // la rapidez plena, según el sentido del scroll, y vuelve suave (constante de tiempo de 0,3 s)
 const GIRO_FOTO_X = 0.1;
@@ -156,6 +186,12 @@ export interface ConfigMundo {
   colorOscuro: string;
   /** El design system del caso (antes del resultado), si lo trae: 5 colores y de 1 a 3 fuentes. */
   designSystem: { paleta: string[]; fuentes: Array<{ nombre: string; uso: string }> } | null;
+  /**
+   * La sección de resultados (autor, 2026-10-06; hoy solo Bernarte): los cortos verticales de los resultados, cada
+   * uno en su marco 9:16, escalonados a pantalla completa. Ocupa el tramo de la sección (el del design system, que
+   * ese caso no trae), justo antes del paso `en` de la historia.
+   */
+  galeria?: { en: number; items: Array<{ img: HTMLImageElement; corto: string }> } | null;
 }
 
 /** La caja proyectada de un cristal en la ventana (px) y su opacidad. */
@@ -179,8 +215,31 @@ interface Cristal {
   /** Los vértices del contorno (x, y, z) delante y detrás, para la caja proyectada. */
   puntos: Float32Array;
   texto: { malla: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>; textura: THREE.CanvasTexture } | null;
+  /** Dónde dibujó el texto la línea «Ver completo ↗» dentro de su textura (solo los pasos con video). */
+  enlace: RectTextura | null;
   /** Solo los de la paleta: la malla hija que pinta su color en la máscara de tinte. */
   tinte?: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+}
+
+/** El corto en video de una foto: el elemento, su textura (cuando ya tiene un cuadro) y si está corriendo. */
+/** Una pieza de la sección de resultados: su foto (el póster o el corto), su marco y su video. */
+interface PiezaGaleria {
+  img: HTMLImageElement;
+  url: string;
+  poster: THREE.Texture | null;
+  corto: CortoVideo | null;
+  material: THREE.ShaderMaterial;
+  malla: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
+  marco: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+}
+
+interface CortoVideo {
+  el: HTMLVideoElement;
+  tex: THREE.VideoTexture | null;
+  fallo: boolean;
+  /** Si en el cuadro anterior debía correr (al pasar a true arranca desde el principio). */
+  activo: boolean;
+  ultimoIntento: number;
 }
 
 interface PasePantalla {
@@ -253,6 +312,11 @@ export class MundoN4 {
   animado = false;
   /** La caja proyectada de cada cristal, en el orden de la historia. */
   readonly cajas: CajaCristal[];
+  /**
+   * La caja proyectada de la línea «Ver completo ↗» que dibuja cada cristal con video (null si no la trae o aún no
+   * se imprimió): sale de la misma geometría de la textura, así el enlace del DOM cae sobre el texto dibujado.
+   */
+  readonly cajasEnlace: Array<{ x: number; y: number; ancho: number; alto: number } | null>;
   /** La caja proyectada de cada cristal de la paleta y la del cristal de las tipografías. */
   readonly cajasPaleta: CajaCristal[];
   cajaFuentes: CajaCristal = { x: 0, y: 0, ancho: 0, alto: 0, opacidad: 0 };
@@ -269,6 +333,8 @@ export class MundoN4 {
   private readonly mallaB: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
   /** El marco de cristal de cada foto (comparten geometría; se rehace si cambia el tamaño de la foto). */
   private marcos: Array<THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>> = [];
+  /** La geometría del marco 16:10 y la del vertical 9:16 (solo si algún paso la usa). */
+  private geomMarcos: [THREE.BufferGeometry | null, THREE.BufferGeometry | null] = [null, null];
   private marcoClave = '';
   private hayMarco = false;
   /** La imagen que se muestra (0 es la portada) y la transición en curso, si hay. */
@@ -286,6 +352,19 @@ export class MundoN4 {
   private readonly imagenes = new Map<string, Imagen>();
   private readonly claves: string[];
   private readonly fuentes: HTMLImageElement[];
+  /** Por foto (la 0 es la portada): si su marco es vertical y la URL de su corto, si lo tiene. */
+  private readonly verticales: boolean[];
+  private readonly urlsCorto: Array<string | null>;
+  private readonly cortos: Array<CortoVideo | null>;
+  /** Dónde va la sección (la del design system o la de resultados): el índice del paso que la sigue, o null. */
+  private readonly dsEn: number | null;
+  /** Cuántos tramos dura la sección: la del design system o la de resultados, más corta. */
+  private readonly largo: number;
+  /** La sección de resultados (si el caso la trae); su marco es el mismo para las tres fotos. */
+  private readonly galeria: PiezaGaleria[] = [];
+  private galeriaClave = '';
+  /** La caja (px de la ventana) de cada marco de la sección de resultados y su opacidad: la sigue su enlace. */
+  readonly cajasGaleria: CajaCristal[];
   private rtEscena: THREE.WebGLRenderTarget | null = null;
   private rtMascaraFrente: THREE.WebGLRenderTarget | null = null;
   private rtMascaraFondo: THREE.WebGLRenderTarget | null = null;
@@ -319,6 +398,13 @@ export class MundoN4 {
   ) {
     this.fuentes = medios.map((m) => m.img);
     this.claves = this.fuentes.map(clave);
+    // La foto i es la portada (0) o la del paso i − 1
+    this.verticales = this.fuentes.map((_, i) => config.pasos[i - 1]?.video?.vertical ?? false);
+    this.urlsCorto = this.fuentes.map((_, i) => config.pasos[i - 1]?.video?.corto ?? null);
+    this.cortos = this.fuentes.map(() => null);
+    this.dsEn = config.designSystem ? primerResultadoFinal(config.pasos.map((p) => p.tipo)) : (config.galeria?.en ?? null);
+    this.largo = config.designSystem ? LARGO_DS : LARGO_GALERIA;
+    document.addEventListener('visibilitychange', this.pausarCortos);
     this.vacia.needsUpdate = true;
     this.camara.position.set(0, 0, CAM_Z);
     this.camara.updateMatrixWorld(true);
@@ -361,6 +447,33 @@ export class MundoN4 {
     this.mallaB.visible = false;
     this.escena.add(this.mallaB);
 
+    // La sección de resultados: una foto (con el mismo shader) y un marco por corto
+    for (const it of config.galeria?.items ?? []) {
+      const material = this.material.clone();
+      const malla = new THREE.Mesh(this.geometria, material);
+      malla.frustumCulled = false;
+      malla.layers.set(CAPA.foto);
+      malla.visible = false;
+      this.escena.add(malla);
+      const marco = new THREE.Mesh(
+        new THREE.BufferGeometry(),
+        new THREE.ShaderMaterial({
+          uniforms: { u_alfa: { value: 0 } },
+          vertexShader: MASCARA_VERTEX,
+          fragmentShader: MASCARA_FRAGMENT,
+          side: THREE.DoubleSide,
+          blending: THREE.NoBlending,
+          toneMapped: false,
+        }),
+      );
+      marco.frustumCulled = false;
+      marco.layers.set(CAPA.cristales);
+      marco.visible = false;
+      this.escena.add(marco);
+      this.galeria.push({ img: it.img, url: it.corto, poster: null, corto: null, material, malla, marco });
+    }
+    this.cajasGaleria = this.galeria.map(() => ({ x: 0, y: 0, ancho: 0, alto: 0, opacidad: 0 }));
+
     // El oclusor: la misma foto, solo en profundidad, para que tape las esquirlas de fondo
     this.oclusor = new THREE.Mesh(this.geometria, new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.DoubleSide }));
     this.oclusor.frustumCulled = false;
@@ -398,6 +511,7 @@ export class MundoN4 {
       this.cristales.push(this.crearCristal(formaCristal(SEMILLA_CRISTAL + k * PASO_SEMILLA), k, CAPA.cristales));
     });
     this.cajas = config.pasos.map(() => ({ x: 0, y: 0, ancho: 0, alto: 0, opacidad: 0 }));
+    this.cajasEnlace = config.pasos.map(() => null);
     // Las esquirlas de fondo: sin texto, más delgadas
     ESQUIRLAS.forEach((_, j) => {
       this.esquirlas.push(this.crearCristal(formaCristal(SEMILLA_ESQUIRLA + j * 13, { grosor: 0.07 }), 100 + j, CAPA.esquirlas));
@@ -462,7 +576,7 @@ export class MundoN4 {
     malla.layers.set(capa);
     malla.visible = false;
     this.escena.add(malla);
-    return { malla, forma, balanceo: balanceoDelCristal(indice), puntos: puntosDelContorno(forma), texto: null };
+    return { malla, forma, balanceo: balanceoDelCristal(indice), puntos: puntosDelContorno(forma), texto: null, enlace: null };
   }
 
   // ---------- Carga ----------
@@ -552,12 +666,20 @@ export class MundoN4 {
   private imprimir(c: Cristal, paso: PasoVista, color: string, orden: number, rotulo?: string): void {
     if (c.texto) return;
     const a = c.forma.areaTexto;
-    this.imprimirLienzo(c, dibujarTextoCristal(paso, a.ancho / a.alto, color, rotulo), orden);
+    const dibujado = dibujarTextoCristal(paso, a.ancho / a.alto, color, rotulo);
+    const texto = this.imprimirLienzo(c, dibujado.lienzo, orden);
+    c.enlace = dibujado.enlace;
+    const r = dibujado.enlace;
+    // La textura del canvas va volteada (flipY): la fila de arriba del lienzo es v = 1
+    if (r && texto) {
+      const h = ENLACE_HOLGURA;
+      texto.malla.material.uniforms.u_enlace.value.set(r.x - h, 1 - (r.y + r.alto) - h, r.x + r.ancho + h, 1 - r.y + h);
+    }
   }
 
-  /** Pone un lienzo ya dibujado en el área de texto del cristal. */
-  private imprimirLienzo(c: Cristal, lienzo: HTMLCanvasElement, orden: number): void {
-    if (c.texto) return;
+  /** Pone un lienzo ya dibujado en el área de texto del cristal y devuelve el texto impreso. */
+  private imprimirLienzo(c: Cristal, lienzo: HTMLCanvasElement, orden: number): Cristal['texto'] {
+    if (c.texto) return c.texto;
     const a = c.forma.areaTexto;
     const tex = new THREE.CanvasTexture(lienzo);
     tex.colorSpace = THREE.NoColorSpace;
@@ -568,7 +690,7 @@ export class MundoN4 {
     tex.anisotropy = 4;
     tex.needsUpdate = true;
     const material = new THREE.ShaderMaterial({
-      uniforms: { u_mapa: { value: tex }, u_alfa: { value: 1 } },
+      uniforms: { u_mapa: { value: tex }, u_alfa: { value: 1 }, u_enlace: { value: new THREE.Vector4(0, 0, 0, 0) }, u_alfaEnlace: { value: 1 } },
       vertexShader: TEXTO_VERTEX,
       fragmentShader: TEXTO_FRAGMENT,
       transparent: true,
@@ -585,6 +707,7 @@ export class MundoN4 {
     plano.layers.set(CAPA.texto);
     c.malla.add(plano);
     c.texto = { malla: plano, textura: tex };
+    return c.texto;
   }
 
   /**
@@ -663,13 +786,21 @@ export class MundoN4 {
   /** El marco de cristal de las dos fotos, a la medida de la foto (en px; el mundo lo escala). */
   private rehacerMarcos(disp: Disposicion): void {
     const margen = disp.angosto ? MARCO_ANGOSTO_PX : MARCO_REM * disp.remPx;
-    const clave = `${Math.round(this.rect.width)}x${Math.round(this.rect.height)}x${margen.toFixed(1)}`;
+    const hayVertical = this.verticales.some(Boolean);
+    const clave = `${Math.round(this.rect.width)}x${Math.round(this.rect.height)}x${margen.toFixed(1)}x${hayVertical ? 'v' : 'h'}`;
     if (clave === this.marcoClave || this.rect.width < 2 || this.rect.height < 2) return;
     this.marcoClave = clave;
-    const forma = formaMarco(this.rect.width, this.rect.height, margen);
-    const geometria = new THREE.BufferGeometry();
-    geometria.setAttribute('position', new THREE.BufferAttribute(forma.posiciones, 3));
-    geometria.setAttribute('normal', new THREE.BufferAttribute(forma.normales, 3));
+    const hacer = (r: RectPlano) => {
+      const forma = formaMarco(r.width, r.height, margen);
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(forma.posiciones, 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(forma.normales, 3));
+      return g;
+    };
+    // El marco vertical (9:16, del mismo alto) solo se talla si algún paso trae un corto vertical
+    const previas = this.geomMarcos;
+    const horizontal = hacer(this.rect);
+    this.geomMarcos = [horizontal, hayVertical ? hacer(rectDelMedio(this.rect, true)) : null];
     if (this.marcos.length === 0) {
       for (let i = 0; i < 2; i++) {
         const material = new THREE.ShaderMaterial({
@@ -680,7 +811,7 @@ export class MundoN4 {
           blending: THREE.NoBlending,
           toneMapped: false,
         });
-        const m = new THREE.Mesh(geometria, material);
+        const m = new THREE.Mesh(horizontal, material);
         m.frustumCulled = false;
         m.layers.set(CAPA.cristales);
         m.visible = false;
@@ -688,14 +819,17 @@ export class MundoN4 {
         this.marcos.push(m);
       }
     } else {
-      this.marcos[0].geometry.dispose();
-      for (const m of this.marcos) m.geometry = geometria;
+      for (const m of this.marcos) m.geometry = horizontal;
     }
+    for (const g of previas) g?.dispose();
     this.sucio = true;
   }
 
   /** Cuánto está inclinada la foto por el scroll (rad, el giro en x). */
   giroFoto = 0;
+
+  /** Cuánto se ve la foto con su marco (0 a 1): se desvanece con el design system. */
+  alfaFoto = 1;
 
   /** Progreso 0..1 de la transición entre fotos (1 si no hay ninguna en curso). */
   get progresoTransicion(): number {
@@ -745,7 +879,145 @@ export class MundoN4 {
     if (this.disp) {
       this.actualizarCristales(e, this.disp);
       this.actualizarEsquirlas(e, this.disp);
+      this.actualizarGaleria(e, this.disp);
     }
+  }
+
+  // ---------- La sección de resultados (autor, 2026-10-06) ----------
+
+  /** El marco de las fotos de la sección, a su medida: el mismo para las tres, como en el boceto del autor. */
+  private rehacerGaleria(ancho: number, alto: number, margen: number): void {
+    const clave = `${Math.round(ancho)}x${Math.round(alto)}x${margen.toFixed(1)}`;
+    if (clave === this.galeriaClave || ancho < 2 || alto < 2) return;
+    this.galeriaClave = clave;
+    const forma = formaMarco(ancho, alto, margen);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(forma.posiciones, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(forma.normales, 3));
+    const previa = this.galeria[0]?.marco.geometry;
+    for (const p of this.galeria) p.marco.geometry = g;
+    previa?.dispose();
+    this.sucio = true;
+  }
+
+  /** El video de una pieza de la sección, con su textura cuando ya tiene un cuadro. Si falla, queda el póster. */
+  private crearCortoGaleria(p: PiezaGaleria): CortoVideo {
+    const el = document.createElement('video');
+    el.muted = true;
+    el.loop = true;
+    el.playsInline = true;
+    el.preload = 'auto';
+    el.src = p.url;
+    const corto: CortoVideo = { el, tex: null, fallo: false, activo: false, ultimoIntento: -Infinity };
+    el.addEventListener(
+      'loadeddata',
+      () => {
+        if (this.destruido || p.corto !== corto) return;
+        const t = new THREE.VideoTexture(el);
+        t.colorSpace = THREE.NoColorSpace;
+        corto.tex = t;
+        this.sucio = true;
+      },
+      { once: true },
+    );
+    el.addEventListener('error', () => {
+      corto.fallo = true;
+      this.sucio = true;
+    });
+    return corto;
+  }
+
+  /**
+   * Las fotos de la sección de resultados: cada una con su marco 9:16 y su corto, a lo ancho y escalonadas, suben
+   * con la sección como la paleta del design system. Los cortos corren mientras su foto se ve (sin movimiento
+   * reducido, con la ventana visible); se cargan cuando la sección está a 2 tramos o menos.
+   */
+  private actualizarGaleria(e: EstadoMundo, d: Disposicion): void {
+    const n = this.galeria.length;
+    const ds = this.dsEn;
+    if (n === 0 || ds === null) return;
+    const margen = d.angosto ? MARCO_ANGOSTO_PX : MARCO_REM * d.remPx;
+    // Del mismo alto: a lo ancho en escritorio y en zigzag de arriba abajo en angosto
+    const anchoMax = d.angosto ? (this.ww - 2 * MARGEN_GALERIA_PX) * 0.5 - 2 * margen : ANCHO_MAX_GALERIA * this.ww;
+    const alto = Math.max(2, Math.min((d.angosto ? ALTO_GALERIA_ANGOSTO : ALTO_GALERIA) * this.wh, (anchoMax * 16) / 9));
+    const ancho = (alto * 9) / 16;
+    this.rehacerGaleria(ancho, alto, margen);
+    const regreso = this.regreso !== null;
+    const alfa = regreso ? 0 : e.alfaFondo * opacidadDS(ds, e.pos, e.tramo, e.reducido, this.largo);
+    const cerca = Math.abs(e.pos - centroDS(ds, e.tramo, this.largo)) < 2 * Math.max(1, e.tramo);
+    const upx = (2 * SEMIALTO) / this.wh;
+    let alguno = false;
+    this.galeria.forEach((p, i) => {
+      const t = i - (n - 1) / 2;
+      const cx = d.angosto ? X_GALERIA_ANGOSTO[i % 2] * this.ww : this.ww / 2 + t * X_PASO_GALERIA * this.ww;
+      const cy0 = d.angosto ? this.wh / 2 + t * (alto + margen) * 0.92 : this.wh / 2 + Y_GALERIA[i % Y_GALERIA.length] * this.wh;
+      const cy = cy0 - subida(ds, e.pos, e.tramo, this.wh, t * CASCADA_GALERIA, e.reducido, this.largo);
+      const x0 = cx - ancho / 2;
+      const y0 = cy - alto / 2;
+      const dentro = y0 + alto + margen > 0 && y0 - margen < this.wh;
+      const visible = alfa > 0.002 && dentro;
+
+      // El corto: se crea cerca de la sección y corre solo mientras su foto se ve
+      if (!e.reducido && !regreso && !p.corto && cerca) p.corto = this.crearCortoGaleria(p);
+      const c = p.corto;
+      if (c) {
+        const corre = visible && !e.reducido && !regreso && !document.hidden && !c.fallo;
+        if (corre && !c.activo) {
+          try {
+            c.el.currentTime = 0;
+          } catch {
+            // sin metadatos todavía: arranca donde esté
+          }
+        }
+        c.activo = corre;
+        if (corre && c.el.paused && e.tiempo - c.ultimoIntento > 0.5) {
+          c.ultimoIntento = e.tiempo;
+          void c.el.play().catch(() => undefined);
+        } else if (!corre && !c.el.paused) {
+          c.el.pause();
+        }
+      }
+      if (!p.poster && p.img.complete && p.img.naturalWidth > 0) p.poster = textura(p.img);
+      const medio: Imagen | null =
+        c && c.tex && !c.fallo && !c.el.paused && c.el.readyState >= 2 && c.el.videoWidth > 0
+          ? { tex: c.tex, aspecto: c.el.videoWidth / c.el.videoHeight }
+          : p.poster
+            ? { tex: p.poster, aspecto: p.img.naturalWidth / p.img.naturalHeight }
+            : null;
+
+      // La foto: la misma pose que la del caso (px de la ventana a unidades del mundo en z = 0), sin giro
+      const u = p.material.uniforms;
+      u.u_W.value = this.W;
+      u.u_planeAspect.value = ancho / alto;
+      u.u_corner.value = 0;
+      u.u_sheetP.value = 0;
+      u.u_shade.value = 0;
+      u.u_scrim.value = 0;
+      u.u_mezcla.value = 0;
+      u.u_raton.value.set(e.reducido ? 0 : e.raton.x, e.reducido ? 0 : e.raton.y);
+      u.u_giro.value.set(0, 0);
+      u.u_tornasol.value = TORNASOL_FOTO;
+      u.u_map0.value = medio?.tex ?? this.vacia;
+      u.u_map1.value = medio?.tex ?? this.vacia;
+      u.u_aspect0.value = medio?.aspecto ?? 1;
+      u.u_aspect1.value = medio?.aspecto ?? 1;
+      u.u_visible.value = alfa;
+      const wx = ((cx - this.ww / 2) / (this.ww / 2)) * this.W;
+      const wy = ((this.wh / 2 - cy) / (this.wh / 2)) * SEMIALTO;
+      p.malla.position.set(wx, wy, 0);
+      p.malla.scale.set((ancho / this.ww) * 2 * this.W, (alto / this.wh) * 2 * SEMIALTO, 1);
+      p.malla.rotation.set(0, 0, 0);
+      p.malla.renderOrder = 2;
+      p.malla.visible = visible;
+      p.marco.position.set(wx, wy, 0);
+      p.marco.scale.setScalar(upx);
+      p.marco.rotation.set(0, 0, 0);
+      p.marco.material.uniforms.u_alfa.value = alfa;
+      p.marco.visible = visible;
+      this.cajasGaleria[i] = { x: x0 - margen, y: y0 - margen, ancho: ancho + 2 * margen, alto: alto + 2 * margen, opacidad: visible ? alfa : 0 };
+      if (visible) alguno = true;
+    });
+    if (alguno) this.hayMarco = true;
   }
 
   private actualizarFondo(e: EstadoMundo): void {
@@ -771,53 +1043,143 @@ export class MundoN4 {
     u.u_rapidez.value = e.reducido ? 0 : Math.min(1, this.velScroll / RAPIDEZ_PLENA);
   }
 
+  /** La caja 16:10 del CSS o, si la foto k es de un corto vertical, el marco 9:16 centrado en ella. */
+  private rectDe(k: number): RectPlano {
+    return rectDelMedio(this.rect, this.verticales[Math.min(this.verticales.length - 1, Math.max(0, k))] ?? false);
+  }
+
+  // ---------- Los cortos en video (T38) ----------
+
+  /** Crea el video de la foto `i` y su textura cuando ya tiene un cuadro. Si falla, la foto (el póster) se queda. */
+  private crearCorto(i: number): CortoVideo | null {
+    const url = this.urlsCorto[i];
+    if (!url) return null;
+    const el = document.createElement('video');
+    el.muted = true;
+    el.loop = true;
+    el.playsInline = true;
+    el.preload = 'auto';
+    el.src = url;
+    const corto: CortoVideo = { el, tex: null, fallo: false, activo: false, ultimoIntento: -Infinity };
+    el.addEventListener(
+      'loadeddata',
+      () => {
+        if (this.destruido || this.cortos[i] !== corto) return;
+        const t = new THREE.VideoTexture(el);
+        t.colorSpace = THREE.NoColorSpace;
+        corto.tex = t;
+        this.sucio = true;
+      },
+      { once: true },
+    );
+    el.addEventListener('error', () => {
+      corto.fallo = true;
+      this.sucio = true;
+    });
+    return corto;
+  }
+
+  /**
+   * Los cortos corren solo mientras su foto se ve (la que está o la que entra), con la ventana visible y sin
+   * movimiento reducido ni regreso; se cargan cuando la foto se acerca (a 2 pasos o menos); al volver a verse
+   * arrancan desde el principio, así los planos del «fast» salen siempre en orden.
+   */
+  private gobernarCortos(e: EstadoMundo, vistas: readonly number[], parar: boolean): void {
+    const mostrada = this.mostrada;
+    this.urlsCorto.forEach((url, i) => {
+      if (!url) return;
+      let c = this.cortos[i];
+      if (e.reducido) {
+        // Con movimiento reducido el corto no corre ni se descarga: se ve la foto
+        if (c && !c.el.paused) c.el.pause();
+        if (c) c.activo = false;
+        return;
+      }
+      if (!c) {
+        if (mostrada === null || Math.abs(i - mostrada) > 2) return;
+        c = this.crearCorto(i);
+        if (!c) return;
+        this.cortos[i] = c;
+      }
+      const debe = !parar && !document.hidden && vistas.includes(i) && !c.fallo;
+      if (debe && !c.activo) {
+        try {
+          c.el.currentTime = 0;
+        } catch {
+          // sin metadatos todavía: arranca donde esté
+        }
+      }
+      c.activo = debe;
+      if (debe && c.el.paused && e.tiempo - c.ultimoIntento > 0.5) {
+        c.ultimoIntento = e.tiempo;
+        void c.el.play().catch(() => undefined);
+      } else if (!debe && !c.el.paused) {
+        c.el.pause();
+      }
+    });
+  }
+
+  /** Lo que se dibuja en la foto k: el corto si está corriendo y, si no, la foto (el póster). */
+  private medioDe(k: number, reducido: boolean): Imagen | null {
+    const c = reducido ? undefined : this.cortos[Math.min(this.claves.length - 1, Math.max(0, k))];
+    if (c && c.tex && !c.fallo && !c.el.paused && c.el.readyState >= 2 && c.el.videoWidth > 0) {
+      return { tex: c.tex, aspecto: c.el.videoWidth / c.el.videoHeight };
+    }
+    return this.imagen(k);
+  }
+
+  private pausarCortos = (): void => {
+    for (const c of [...this.cortos, ...this.galeria.map((p) => p.corto)]) {
+      if (c && !c.el.paused) c.el.pause();
+      if (c) c.activo = false;
+    }
+  };
+
   private actualizarFoto(e: EstadoMundo): void {
     const u = this.material.uniforms;
     const uB = this.materialB.uniforms;
     const regreso = this.regreso;
-    const r: RectPlano = regreso ? this.rectDelRegreso(regreso) : this.rect;
     const p = regreso ? regreso.p : 0;
 
-    // Pose: el rectángulo en px pasa a unidades del mundo en z = 0 (K2)
-    const cx = ((r.x + r.width / 2 - this.ww / 2) / (this.ww / 2)) * this.W;
-    const cy = ((this.wh / 2 - (r.y + r.height / 2)) / (this.wh / 2)) * SEMIALTO;
-    const sx = (r.width / this.ww) * 2 * this.W;
-    const sy = (r.height / this.wh) * 2 * SEMIALTO;
-    for (const m of [u, uB]) {
+    // El giro con el scroll y el tornasol que sigue al ratón (nada de esto al volar de regreso ni en reducido)
+    const v = regreso || e.reducido ? 0 : Math.max(-1, Math.min(1, this.velFirmada / RAPIDEZ_PLENA));
+    const giroX = -GIRO_FOTO_X * v;
+    const giroY = GIRO_FOTO_Y * v;
+    this.giroFoto = giroX;
+
+    // Pose: el rectángulo en px pasa a unidades del mundo en z = 0 (K2); cada foto lleva el suyo
+    const pose = (r: RectPlano) => ({
+      cx: ((r.x + r.width / 2 - this.ww / 2) / (this.ww / 2)) * this.W,
+      cy: ((this.wh / 2 - (r.y + r.height / 2)) / (this.wh / 2)) * SEMIALTO,
+      sx: (r.width / this.ww) * 2 * this.W,
+      sy: (r.height / this.wh) * 2 * SEMIALTO,
+    });
+    const ajustarMaterial = (m: typeof u, r: RectPlano) => {
       m.u_planeAspect.value = r.width / r.height;
       m.u_corner.value = regreso ? (ESQUINA_REM * regreso.remPx * p) / r.height : 0;
       m.u_sheetP.value = p;
       m.u_shade.value = p;
       m.u_scrim.value = p;
       m.u_mezcla.value = 0;
-    }
-    // El giro con el scroll y el tornasol que sigue al ratón (nada de esto al volar de regreso ni en reducido)
-    const v = regreso || e.reducido ? 0 : Math.max(-1, Math.min(1, this.velFirmada / RAPIDEZ_PLENA));
-    const giroX = -GIRO_FOTO_X * v;
-    const giroY = GIRO_FOTO_Y * v;
-    this.giroFoto = giroX;
-    for (const m of [u, uB]) {
       m.u_raton.value.set(e.reducido ? 0 : e.raton.x, e.reducido ? 0 : e.raton.y);
       m.u_giro.value.set(giroX, giroY);
       m.u_tornasol.value = regreso ? 0 : TORNASOL_FOTO;
-    }
-    const ponerImagen = (m: typeof u, k: number) => {
-      const img = this.imagen(k) ?? this.imagen(0);
-      m.u_map0.value = img?.tex ?? this.vacia;
-      m.u_map1.value = img?.tex ?? this.vacia;
-      m.u_aspect0.value = img?.aspecto ?? 1;
-      m.u_aspect1.value = img?.aspecto ?? 1;
     };
     // Una foto a la profundidad z: se corre hacia afuera para que su centro quede donde estaba en pantalla
-    const colocarFoto = (malla: THREE.Mesh, z: number) => {
+    const colocarFoto = (malla: THREE.Mesh, z: number, r: RectPlano) => {
       const f = (CAM_Z - z) / CAM_Z;
-      malla.position.set(cx * f, cy * f, z);
-      malla.scale.set(sx, sy, 1);
+      const q = pose(r);
+      malla.position.set(q.cx * f, q.cy * f, z);
+      malla.scale.set(q.sx, q.sy, 1);
       malla.rotation.set(giroX, giroY, 0);
     };
 
     if (regreso) {
-      // Al volar de regreso: la foto que se veía se funde con la portada; sin marco ni transición
+      // Al volar de regreso: la foto que se veía se funde con la portada; sin marco, sin transición y sin video
+      const r = this.rectDelRegreso(regreso);
+      ajustarMaterial(u, r);
+      ajustarMaterial(uB, r);
+      this.gobernarCortos(e, [], true);
       const a = this.imagen(regreso.desde) ?? this.imagen(0);
       const b = this.imagen(0) ?? a;
       u.u_map0.value = a?.tex ?? this.vacia;
@@ -826,7 +1188,8 @@ export class MundoN4 {
       u.u_aspect1.value = b?.aspecto ?? 1;
       u.u_mezcla.value = regreso.desde === 0 ? 0 : p;
       u.u_visible.value = 1;
-      colocarFoto(this.malla, 0);
+      this.alfaFoto = 1;
+      colocarFoto(this.malla, 0, r);
       this.mallaB.visible = false;
       for (const m of this.marcos) m.visible = false;
       this.hayMarco = false;
@@ -838,7 +1201,8 @@ export class MundoN4 {
     }
 
     // Mientras se ve el design system, la foto y su marco se desvanecen (y dejan de tapar las esquirlas)
-    const visible = 1 - presenciaDS(e.pos, e.tramo, this.cristales.length, this.config.designSystem !== null);
+    const visible = 1 - presenciaDS(e.pos, e.tramo, this.dsEn, this.largo);
+    this.alfaFoto = visible;
     // La foto que toca: la del paso cuyo límite ya se cruzó por la mitad (la imagen 0 es la portada)
     const objetivo = Math.min(this.claves.length - 1, Math.max(0, (e.mezcla >= 0.5 ? e.medio + 1 : e.medio) + 1));
     if (this.mostrada === null || e.reducido) {
@@ -863,30 +1227,52 @@ export class MundoN4 {
     const alfaA = (1 - salida) * visible;
     const alfaB = enCurso ? llegada * visible : 0;
 
-    ponerImagen(u, enCurso ? enCurso.desde : this.mostrada);
+    // Las fotos que se ven: la A (la que está o la que se va) y, en la transición, la B (la que llega).
+    // Cada una lleva su forma: 16:10, o 9:16 si es de un corto vertical (el marco cambia dentro de la transición)
+    const iA = enCurso ? enCurso.desde : this.mostrada;
+    const iB = enCurso ? enCurso.hacia : this.mostrada;
+    const rA = this.rectDe(iA);
+    const rB = this.rectDe(iB);
+    ajustarMaterial(u, rA);
+    ajustarMaterial(uB, rB);
+    this.gobernarCortos(e, visible > 0.05 ? (enCurso ? [iA, iB] : [iA]) : [], false);
+    const ponerImagen = (m: typeof u, k: number) => {
+      const img = this.medioDe(k, e.reducido) ?? this.imagen(0);
+      m.u_map0.value = img?.tex ?? this.vacia;
+      m.u_map1.value = img?.tex ?? this.vacia;
+      m.u_aspect0.value = img?.aspecto ?? 1;
+      m.u_aspect1.value = img?.aspecto ?? 1;
+    };
+
+    ponerImagen(u, iA);
     u.u_visible.value = alfaA;
-    colocarFoto(this.malla, zA);
+    colocarFoto(this.malla, zA, rA);
     this.mallaB.visible = enCurso !== null;
     if (enCurso) {
-      ponerImagen(uB, enCurso.hacia);
+      ponerImagen(uB, iB);
       uB.u_visible.value = alfaB;
-      colocarFoto(this.mallaB, zB);
+      colocarFoto(this.mallaB, zB, rB);
     }
     // La que está más adelante se dibuja encima
     this.malla.renderOrder = zA >= zB ? 2 : 1;
     this.mallaB.renderOrder = zA >= zB ? 1 : 2;
-    this.oclusor.position.set(cx, cy, 0);
-    this.oclusor.scale.set(sx, sy, 1);
+    const qA = pose(rA);
+    this.oclusor.position.set(qA.cx, qA.cy, 0);
+    this.oclusor.scale.set(qA.sx, qA.sy, 1);
     this.oclusor.visible = visible > 0.5 && !enCurso;
 
-    // El marco de cristal acompaña a cada foto; entra con las cortinas
+    // El marco de cristal acompaña a cada foto, con la forma de la suya; entra con las cortinas
     const upx = (2 * SEMIALTO) / this.wh;
     let alguno = false;
     this.marcos.forEach((m, i) => {
       const alfa = (i === 0 ? alfaA : alfaB) * e.alfaFondo;
       const z = i === 0 ? zA : zB;
       const f = (CAM_Z - z) / CAM_Z;
-      m.position.set(cx * f, cy * f, z);
+      const q = pose(i === 0 ? rA : rB);
+      const vertical = this.verticales[Math.min(this.verticales.length - 1, Math.max(0, i === 0 ? iA : iB))] ?? false;
+      const geometria = (vertical ? this.geomMarcos[1] : null) ?? this.geomMarcos[0];
+      if (geometria && m.geometry !== geometria) m.geometry = geometria;
+      m.position.set(q.cx * f, q.cy * f, z);
       m.scale.setScalar(upx);
       m.rotation.set(giroX, giroY, 0);
       m.material.uniforms.u_alfa.value = alfa;
@@ -925,17 +1311,75 @@ export class MundoN4 {
     return { x: x0, y: y0, ancho: x1 - x0, alto: y1 - y0 };
   }
 
+  /**
+   * ¿Algún cristal de la historia a la vista, que no sea el del paso `salvo`, tapa el punto (px de la ventana)?
+   * T38: el clic en la foto del corto no responde donde la tapa otro cristal (a 375 px el anterior queda encima).
+   * Se mira el contorno de la cara de adelante del cristal, proyectado con la matriz del último cuadro.
+   */
+  cristalTapa(x: number, y: number, salvo: number): boolean {
+    return this.cristales.some((c, k) => {
+      const b = this.cajas[k];
+      if (k === salvo || !c.malla.visible || !b || b.opacidad < TAPA_DESDE) return false;
+      if (x < b.x || x > b.x + b.ancho || y < b.y || y > b.y + b.alto) return false;
+      const p = c.puntos;
+      const n = p.length / 6;
+      const v: Array<[number, number]> = [];
+      for (let i = 0; i < n; i++) {
+        this.punto.set(p[i * 6], p[i * 6 + 1], p[i * 6 + 2]).applyMatrix4(c.malla.matrixWorld).project(this.camara);
+        v.push([(this.punto.x * 0.5 + 0.5) * this.ww, (-this.punto.y * 0.5 + 0.5) * this.wh]);
+      }
+      let dentro = false;
+      for (let i = 0, j = n - 1; i < n; j = i++) {
+        const [xi, yi] = v[i];
+        const [xj, yj] = v[j];
+        if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) dentro = !dentro;
+      }
+      return dentro;
+    });
+  }
+
+  /**
+   * La caja en la ventana (px) de la línea «Ver completo ↗» de un cristal: las cuatro esquinas de su rectángulo
+   * en la textura, llevadas al plano de texto, al mundo y a la pantalla con la misma matriz que dibuja el cristal.
+   * Requiere que `colocar` haya actualizado la matriz en este cuadro.
+   */
+  private proyectarEnlace(c: Cristal): { x: number; y: number; ancho: number; alto: number } | null {
+    const r = c.enlace;
+    if (!r || !c.texto) return null;
+    const a = c.forma.areaTexto;
+    const z = c.forma.grosor / 2 + 0.002;
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (const [u, v] of [
+      [r.x, r.y],
+      [r.x + r.ancho, r.y],
+      [r.x + r.ancho, r.y + r.alto],
+      [r.x, r.y + r.alto],
+    ]) {
+      this.punto.set(a.cx + (u - 0.5) * a.ancho, a.cy + (0.5 - v) * a.alto, z).applyMatrix4(c.malla.matrixWorld).project(this.camara);
+      const px = (this.punto.x * 0.5 + 0.5) * this.ww;
+      const py = (-this.punto.y * 0.5 + 0.5) * this.wh;
+      x0 = Math.min(x0, px);
+      x1 = Math.max(x1, px);
+      y0 = Math.min(y0, py);
+      y1 = Math.max(y1, py);
+    }
+    return { x: x0, y: y0, ancho: x1 - x0, alto: y1 - y0 };
+  }
+
   private actualizarCristales(e: EstadoMundo, d: Disposicion): void {
     const n = this.cristales.length;
     // Con design system, la historia tiene un tramo más antes del resultado: el resultado se corre uno, y
     // mientras se ve la sección los cristales de la historia se desvanecen
-    const ds = this.config.designSystem !== null;
-    const tramos = totalTramos(n, ds);
-    const presencia = presenciaDS(e.pos, e.tramo, n, ds);
+    const ds = this.dsEn;
+    const tramos = totalTramos(n, ds, this.largo);
+    const presencia = presenciaDS(e.pos, e.tramo, ds, this.largo);
     let alguno = false;
     this.cristales.forEach((c, k) => {
       const reducido = e.reducido;
-      const t = tramoDelPaso(k, n, ds);
+      const t = tramoDelPaso(k, ds, this.largo);
       const altura = reducido ? 0 : alturaDelCristal(t, e.pos, e.tramo, d.alto);
       const giroBase = reducido ? giroEnReposo(k) : giroDelCristal(k, e.pos, e.tramo, t);
       const extra = reducido ? ([0, 0, 0] as const) : girarBalanceo(c.balanceo, e.tiempo);
@@ -951,13 +1395,18 @@ export class MundoN4 {
       c.malla.visible = alfa > 0.002 && dentro;
       if (c.malla.visible) alguno = true;
       this.cajas[k] = { ...caja, opacidad: alfa };
+      this.cajasEnlace[k] = this.proyectarEnlace(c);
+      if (c.texto && c.enlace) {
+        const lejos = Math.abs(e.pos - centroDelPaso(t, e.tramo)) / Math.max(1e-6, e.tramo);
+        c.texto.malla.material.uniforms.u_alfaEnlace.value = 1 - suave(ENLACE_DESDE, 0.5, lejos);
+      }
     });
     // El design system: la paleta sube en cascada a la izquierda y las tipografías a la derecha
     let algunColor = false;
-    const alfaPaleta = e.alfaCristales * opacidadDS(n, e.pos, e.tramo, e.reducido);
-    if (this.cristalFuentes) {
+    const alfaPaleta = e.alfaCristales * (ds !== null ? opacidadDS(ds, e.pos, e.tramo, e.reducido) : 1);
+    if (this.cristalFuentes && ds !== null) {
       const c = this.cristalFuentes;
-      const p = poseFuentes(n, e.pos, e.tramo, d, e.reducido);
+      const p = poseFuentes(ds, e.pos, e.tramo, d, e.reducido);
       const extra = e.reducido ? ([0, 0, 0] as const) : girarBalanceo(c.balanceo, e.tiempo);
       const giro: [number, number, number] = [p.giro[0] + extra[0] * 0.4, p.giro[1] + extra[1] * 0.4, p.giro[2] + extra[2] * 0.4];
       const caja = this.colocar(c, p.cx, p.cy, p.ancho, Z_PALETA, giro, alfaPaleta);
@@ -967,7 +1416,8 @@ export class MundoN4 {
       this.cajaFuentes = { ...caja, opacidad: c.malla.visible ? alfaPaleta : 0 };
     }
     this.colores.forEach((c, i) => {
-      const p = poseColor(i, n, e.pos, e.tramo, d, e.reducido);
+      if (ds === null) return;
+      const p = poseColor(i, ds, e.pos, e.tramo, d, e.reducido);
       const extra = e.reducido ? ([0, 0, 0] as const) : girarBalanceo(c.balanceo, e.tiempo);
       const giro: [number, number, number] = [p.giro[0] + extra[0] * 0.6, p.giro[1] + extra[1] * 0.6, p.giro[2] + extra[2] * 0.6];
       const caja = this.colocar(c, p.cx, p.cy, p.ancho, Z_PALETA, giro, alfaPaleta);
@@ -1091,7 +1541,7 @@ export class MundoN4 {
   prepararRegreso(destino: RectPlano, remPx: number): void {
     const e = this.ultimoEstado;
     const visible = e ? (e.mezcla >= 0.5 ? e.medio + 1 : e.medio) : -1;
-    this.regreso = { origen: this.rect, destino, p: 0, desde: visible + 1, remPx };
+    this.regreso = { origen: this.rectDe(visible + 1), destino, p: 0, desde: visible + 1, remPx };
     this.sucio = true;
   }
 
@@ -1124,9 +1574,34 @@ export class MundoN4 {
     this.esquirlas.length = 0;
     this.colores.length = 0;
     this.cristalFuentes = null;
+    document.removeEventListener('visibilitychange', this.pausarCortos);
+    for (let i = 0; i < this.cortos.length; i++) {
+      const c = this.cortos[i];
+      if (!c) continue;
+      c.el.pause();
+      c.el.removeAttribute('src');
+      c.el.load();
+      c.tex?.dispose();
+      this.cortos[i] = null;
+    }
+    for (const p of this.galeria) {
+      if (p.corto) {
+        p.corto.el.pause();
+        p.corto.el.removeAttribute('src');
+        p.corto.el.load();
+        p.corto.tex?.dispose();
+        p.corto = null;
+      }
+      p.poster?.dispose();
+      p.material.dispose();
+      p.marco.material.dispose();
+    }
+    this.galeria[0]?.marco.geometry.dispose();
+    this.galeria.length = 0;
     this.material.dispose();
     this.materialB.dispose();
-    if (this.marcos.length) this.marcos[0].geometry.dispose();
+    for (const g of this.geomMarcos) g?.dispose();
+    this.geomMarcos = [null, null];
     for (const m of this.marcos) m.material.dispose();
     this.marcos = [];
     this.oclusor.material.dispose();

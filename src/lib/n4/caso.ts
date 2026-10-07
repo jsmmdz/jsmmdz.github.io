@@ -27,11 +27,12 @@ import { barrer, quitarBarrido } from './barrido';
 import { opacidadDelPaso } from './cristales';
 import { disposicion, TITULO_ANCHO_REM, TITULO_TAMANO_REM, type Disposicion } from './geometria';
 import { TIPOS_PASO, type PasoVista } from './historia';
-import { posHistoria, presenciaDS, totalTramos, tramoDelPaso } from './design-system';
+import { LARGO_DS, LARGO_GALERIA, posHistoria, presenciaDS, primerResultadoFinal, totalTramos, tramoDelPaso, tramosDeAnclas } from './design-system';
 import { estadoDelMedio } from './medios';
 import { N4_MEDIO } from './portada';
 import { pasoEn, ScrollCaso } from './scroll';
 import { ajustarTitulo, fuenteDelTituloLista } from './titulo';
+import { rectDelMedio } from './video';
 
 // La entrada, contada desde el clic que abrió el caso (K14 y ZK3): el título desde 0,44 s; «← Volver»
 // desde 0,5 s; el anillo desde 0,575 s. Las cortinas esperan a que aterrice la pieza (1,0 s) para que el
@@ -56,7 +57,15 @@ const INTERVALO_ANIMADO_MS = 1000 / 30 - 2;
 const ESPERA_MEDIO_MAX_MS = 6000;
 const ESPERA_RELEVO_MAX_MS = 1800;
 
+/** Lado mínimo (px de la ventana) del área que recibe el clic de «Ver completo ↗»: un blanco cómodo para el dedo. */
+const TOQUE_MIN_PX = 64;
 const CONTROLES = 'a[href], button, input, select, textarea, [contenteditable]';
+
+/** Publica en la copia del DOM cuánto se ve su cristal (`data-alfa`), solo cuando cambia: lo leen las pruebas (T37). */
+function escribirAlfa(el: HTMLElement, alfa: number): void {
+  const a = alfa.toFixed(2);
+  if (el.dataset.alfa !== a) el.dataset.alfa = a;
+}
 
 export interface OpcionesCaso {
   /** Contenedor del canvas persistente (donde se publica `data-vuelo`). */
@@ -66,6 +75,19 @@ export interface OpcionesCaso {
 export class CasoN4 {
   private readonly control = new AbortController();
   private readonly pasosDom: HTMLElement[];
+  /** Dónde va el design system (índice del primer resultado final de la serie), o null si el caso no lo trae. */
+  private readonly dsEn: number | null;
+  /** Cuántos tramos dura la sección: la del design system o la de resultados, más corta. */
+  private readonly largo: number;
+  /** El enlace «Ver completo» de cada paso (null si no trae video) y el área del clic sobre la foto del corto. */
+  private readonly enlaces: Array<HTMLAnchorElement | null>;
+  private readonly clicFoto: HTMLElement | null;
+  private enlaceActivo: HTMLAnchorElement | null = null;
+  /** El paso del enlace activo (-1 sin enlace): su cristal es el único que no tapa el clic de la foto. */
+  private pasoEnlace = -1;
+  private claveEnlace = '';
+  /** Sube cada vez que la ventana cambia de tamaño: el área del clic se vuelve a medir. */
+  private versionMedidas = 0;
   /** El design system (antes del resultado), si el caso lo trae: la sección, su título, cada color y las fuentes. */
   private readonly dsDom: HTMLElement | null;
   private readonly tituloDS: HTMLElement | null;
@@ -74,6 +96,16 @@ export class CasoN4 {
   private readonly fuentesLis: HTMLElement[];
   private tituloDSEscrito = '';
   private cajaFuentesEscrita = '';
+  /**
+   * La sección de resultados (autor, 2026-10-06; hoy solo Bernarte): la copia de cada marco sigue su caja y su
+   * enlace abre el video completo; los enlaces solo reciben clics y foco mientras la sección se ve.
+   */
+  private readonly galeriaDom: HTMLElement | null;
+  private readonly galeriaItems: HTMLElement[];
+  private readonly enlacesGaleria: HTMLAnchorElement[];
+  private cajasGaleriaEscritas: string[] = [];
+  private tamanoGaleria: { w: number; h: number } | null = null;
+  private galeriaActiva = false;
   private tamanoFuentes: { w: number; h: number } | null = null;
   private readonly titulo: HTMLElement | null;
   /** Las fotos: la portada (medio −1) y la de cada paso, en ese orden. */
@@ -85,6 +117,8 @@ export class CasoN4 {
   private readonly mq = window.matchMedia('(prefers-reduced-motion: reduce)');
   private readonly escrito: Record<string, string> = {};
   private readonly cajasEscritas: string[] = [];
+  /** Lo último que se escribió en el enlace de cada paso (posición y tamaño), para no reescribirlo si no cambia. */
+  private readonly enlaceEscrito: string[] = [];
   /** El tamaño fijo (CSS) de la copia de cada paso: se mide al montar y al cambiar la ventana, no por cuadro. */
   private tamanosCopia: Array<{ w: number; h: number }> = [];
   private tamanosColor: Array<{ w: number; h: number }> = [];
@@ -121,6 +155,17 @@ export class CasoN4 {
   ) {
     this.pasosDom = Array.from(act.querySelectorAll<HTMLElement>('[data-n4-paso]'));
     this.dsDom = act.querySelector<HTMLElement>('[data-n4-ds]');
+    this.galeriaDom = act.querySelector<HTMLElement>('[data-n4-galeria]');
+    this.galeriaItems = Array.from(act.querySelectorAll<HTMLElement>('[data-n4-galeria-item]'));
+    this.enlacesGaleria = Array.from(act.querySelectorAll<HTMLAnchorElement>('a[data-n4-galeria-enlace]'));
+    for (const a of this.enlacesGaleria) a.tabIndex = -1;
+    // La sección (la del design system o la de resultados) va antes del paso `dsEn`
+    const galeriaEn = Number(this.galeriaDom?.dataset.n4En ?? NaN);
+    this.dsEn = this.dsDom ? primerResultadoFinal(this.pasosDom.map((li) => li.dataset.tipo ?? '')) : Number.isInteger(galeriaEn) && galeriaEn >= 0 ? galeriaEn : null;
+    this.enlaces = this.pasosDom.map((li) => li.querySelector<HTMLAnchorElement>('a[data-n4-ver-completo]'));
+    this.clicFoto = act.querySelector<HTMLElement>('[data-n4-clic-foto]');
+    // El enlace de un paso solo entra en el orden de Tab mientras su paso es el activo
+    for (const a of this.enlaces) a?.setAttribute('tabindex', '-1');
     this.tituloDS = act.querySelector<HTMLElement>('[data-n4-ds-titulo]');
     this.coloresDom = Array.from(act.querySelectorAll<HTMLElement>('[data-n4-color]'));
     this.fuentesDom = act.querySelector<HTMLElement>('[data-n4-fuentes]');
@@ -129,12 +174,16 @@ export class CasoN4 {
     this.medios = Array.from(act.querySelectorAll<HTMLImageElement>('img[data-n4-medio]')).sort((a, b) => Number(a.dataset.n4Medio) - Number(b.dataset.n4Medio));
     this.volver = act.querySelector<HTMLElement>('a[data-n4-volver]');
     this.contAnillo = act.querySelector<HTMLElement>('[data-n4-anillo]');
+    // Las anclas de AvPág: un cristal por paso y, con design system, el centro de la sección
+    this.largo = this.dsDom ? LARGO_DS : LARGO_GALERIA;
+    const anclas = tramosDeAnclas(Math.max(1, this.pasosDom.length), this.dsEn, this.largo);
     this.scroll = new ScrollCaso({
       alto: () => window.innerHeight,
       pasos: () => Math.max(1, this.pasosDom.length),
-      extra: () => (this.dsDom ? 1 : 0),
+      tramos: () => anclas,
       bloqueado: () => this.volando || this.enVueloDeIda,
-      focoEnControl: () => document.activeElement?.closest(CONTROLES) != null,
+      // «Ver completo» no consume las teclas del caso: con el foco en él, AvPág y las flechas siguen moviendo la historia
+      focoEnControl: () => document.activeElement?.closest(CONTROLES) != null && document.activeElement.closest('[data-n4-ver-completo], [data-n4-galeria-enlace]') === null,
       esControl: (destino) => destino instanceof Element && destino.closest(CONTROLES) != null,
     });
     this.anillo = this.contAnillo ? new Anillo(this.contAnillo) : null;
@@ -161,12 +210,12 @@ export class CasoN4 {
 
   /** La posición de la historia sin el tramo del design system (la foto y el paso activo salen de ella). */
   private posHistoria(): number {
-    return posHistoria(this.scroll.pos, this.scroll.tramo, this.pasosDom.length, this.dsDom !== null);
+    return posHistoria(this.scroll.pos, this.scroll.tramo, this.dsEn, this.largo);
   }
 
   /** Cuánto se ve el design system (0 a 1). */
   private presenciaDS(): number {
-    return presenciaDS(this.scroll.pos, this.scroll.tramo, this.pasosDom.length, this.dsDom !== null);
+    return presenciaDS(this.scroll.pos, this.scroll.tramo, this.dsEn, this.largo);
   }
 
   /** Las fotos de respaldo (la portada y una por paso), de donde el mundo WebGL saca sus texturas. */
@@ -180,6 +229,7 @@ export class CasoN4 {
       tipo: TIPOS_PASO.find((t) => t === li.dataset.tipo) ?? 'idea',
       destacado: li.querySelector('.n4-paso-destacado')?.textContent?.trim() || undefined,
       texto: li.querySelector('.n4-paso-texto')?.textContent?.trim() ?? '',
+      video: this.videoDe(li),
     }));
     const hex = /^#([0-9a-f]{6})$/i.exec(this.act.dataset.fondo ?? '')?.[1] ?? '000000';
     const canal = (i: number) => parseInt(hex.slice(2 * i, 2 * i + 2), 16) / 255;
@@ -195,8 +245,136 @@ export class CasoN4 {
             fuentes: this.fuentesLis.map((li) => ({ nombre: li.dataset.nombre ?? '', uso: li.dataset.uso ?? '' })),
           }
         : null,
+      galeria:
+        this.galeriaDom && this.dsEn !== null
+          ? {
+              en: this.dsEn,
+              items: this.galeriaItems.flatMap((li) => {
+                const img = li.querySelector<HTMLImageElement>('img');
+                const corto = li.dataset.n4Video;
+                return img && corto ? [{ img, corto }] : [];
+              }),
+            }
+          : null,
     };
   }
+
+  /** El corto de un paso (su URL ya resuelta, su enlace y si el marco es vertical), si lo trae. */
+  private videoDe(li: HTMLElement): PasoVista['video'] {
+    const corto = li.dataset.n4Video;
+    const enlace = li.querySelector<HTMLAnchorElement>('a[data-n4-ver-completo]')?.href;
+    if (!corto || !enlace) return undefined;
+    return { corto, enlace, vertical: li.dataset.n4Vertical === 'true' };
+  }
+
+  /**
+   * «Ver completo ↗» (T38): el enlace del paso activo entra en el orden de Tab y recibe los clics (de su cristal
+   * y de la foto del corto, cuyo área sigue la forma del marco); con cualquier otro paso no es alcanzable.
+   */
+  private actualizarEnlaces(): void {
+    this.actualizarGaleria();
+    const k = pasoEn(this.posHistoria(), this.scroll.tramo, this.pasosDom.length);
+    const enlace = this.volando || this.presenciaDS() > 0.5 ? null : (this.enlaces[k] ?? null);
+    // Solo se vuelve a medir cuando cambia el paso, el enlace o el tamaño de la ventana (no por cuadro)
+    const clave = `${k}|${enlace ? 1 : 0}|${this.versionMedidas}`;
+    if (clave === this.claveEnlace) return;
+    this.claveEnlace = clave;
+    const vertical = enlace ? this.pasosDom[k].dataset.n4Vertical === 'true' : false;
+    const caja = this.clicFoto && enlace ? rectDelMedio(this.rectFoto(), vertical) : null;
+    if (enlace !== this.enlaceActivo) {
+      const previo = this.enlaceActivo;
+      let tieneElFoco = false;
+      if (previo) {
+        previo.tabIndex = -1;
+        previo.removeAttribute('data-activo');
+        // Si el foco estaba en ese enlace, el paso nuevo lo hereda (su enlace o, sin él, la lista de la historia)
+        // para que quien navega con el teclado no quede en <body> ni en un control que se coma las teclas
+        tieneElFoco = document.activeElement === previo;
+      }
+      if (enlace) {
+        enlace.tabIndex = 0;
+        enlace.setAttribute('data-activo', '');
+      }
+      this.enlaceActivo = enlace;
+      this.pasoEnlace = enlace ? k : -1;
+      if (tieneElFoco) (enlace ?? this.act.querySelector<HTMLElement>('[data-n4-historia]'))?.focus({ preventScroll: true });
+      if (enlace) this.colocarEnlace(k);
+    }
+    const area = this.clicFoto;
+    if (!area) return;
+    if (caja && enlace) {
+      area.style.left = `${caja.x}px`;
+      area.style.top = `${caja.y}px`;
+      area.style.width = `${caja.width}px`;
+      area.style.height = `${caja.height}px`;
+      area.setAttribute('data-activo', '');
+    } else {
+      area.removeAttribute('data-activo');
+    }
+  }
+
+  /**
+   * Con WebGL, el enlace del paso k se pone exactamente sobre la línea «Ver completo ↗» que dibuja el cristal: el
+   * mundo proyecta esa línea a la ventana (`cajasEnlace`, desde la misma geometría con que se dibujó) y aquí se
+   * pasa a las coordenadas de la copia, que está trasladada y escalada sobre la caja del cristal.
+   */
+  private colocarEnlace(k: number): void {
+    const enlace = this.enlaces[k];
+    const mundo = this.mundo;
+    const linea = mundo?.cajasEnlace[k];
+    const caja = mundo?.cajas[k];
+    const copia = this.tamanosCopia[k];
+    if (!enlace || !linea || !caja || !copia || caja.ancho <= 0 || caja.alto <= 0) return;
+    const sx = caja.ancho / copia.w;
+    const sy = caja.alto / copia.h;
+    // El anillo de foco rodea el texto dibujado; el área que recibe el clic o el toque se agranda con un ::after
+    // hasta TOQUE_MIN_PX de la ventana (la palabra mide ~10 px en un celular y el cristal se mueve)
+    const tocaX = Math.max(0, (TOQUE_MIN_PX - linea.ancho) / 2);
+    const tocaY = Math.max(0, (TOQUE_MIN_PX - linea.alto) / 2);
+    const v = [(linea.x - caja.x) / sx, (linea.y - caja.y) / sy, linea.ancho / sx, linea.alto / sy, tocaX / sx, tocaY / sy].map((n) => n.toFixed(2)).join('|');
+    if (this.enlaceEscrito[k] === v) return;
+    this.enlaceEscrito[k] = v;
+    const [x, y, w, h, tx, ty] = v.split('|');
+    enlace.style.left = `${x}px`;
+    enlace.style.top = `${y}px`;
+    enlace.style.width = `${w}px`;
+    enlace.style.height = `${h}px`;
+    enlace.style.bottom = 'auto';
+    enlace.style.setProperty('--n4-toque-x', `${tx}px`);
+    enlace.style.setProperty('--n4-toque-y', `${ty}px`);
+  }
+
+  /**
+   * La sección de resultados: sus enlaces entran en el orden de Tab y reciben clics mientras se ve. Si al salir
+   * uno tenía el foco, pasa a la lista de la historia (no a <body> ni a un control que se coma las teclas).
+   */
+  private actualizarGaleria(): void {
+    if (this.enlacesGaleria.length === 0) return;
+    const activa = !this.volando && this.presenciaDS() > 0.5;
+    if (activa === this.galeriaActiva) return;
+    this.galeriaActiva = activa;
+    const conFoco = this.enlacesGaleria.some((a) => a === document.activeElement);
+    for (const a of this.enlacesGaleria) {
+      a.tabIndex = activa ? 0 : -1;
+      a.toggleAttribute('data-activo', activa);
+    }
+    if (!activa && conFoco) this.act.querySelector<HTMLElement>('[data-n4-historia]')?.focus({ preventScroll: true });
+  }
+
+  /**
+   * El clic en la foto del corto abre el video completo, igual que su enlace, salvo donde la tapa otro cristal a la
+   * vista (a 375 px el del paso anterior queda encima de la foto): ahí no abre nada (E1 de la auditoría final r4).
+   */
+  private alClicFoto = (ev: MouseEvent): void => {
+    if (this.mundo?.cristalTapa(ev.clientX, ev.clientY, this.pasoEnlace)) return;
+    this.enlaceActivo?.click();
+  };
+
+  /** Donde otro cristal tapa la foto, el cursor no ofrece el clic. */
+  private alRatonFoto = (ev: PointerEvent): void => {
+    const tapa = !!this.mundo?.cristalTapa(ev.clientX, ev.clientY, this.pasoEnlace);
+    this.clicFoto?.toggleAttribute('data-tapado', tapa);
+  };
 
   /** ¿Se puede volar de regreso a la cinta? Con WebGL, sin movimiento reducido y si se llegó volando. */
   puedeVolarAl(destino: URL): boolean {
@@ -226,6 +404,8 @@ export class CasoN4 {
 
     const { signal } = this.control;
     this.scroll.conectar(signal);
+    this.clicFoto?.addEventListener('click', this.alClicFoto, { signal });
+    this.clicFoto?.addEventListener('pointermove', this.alRatonFoto, { signal });
     window.addEventListener('resize', this.alRedimensionar, { signal });
     window.addEventListener('pointermove', this.alRaton, { signal });
     document.documentElement.addEventListener('mouseleave', this.alSalirRaton, { signal });
@@ -345,9 +525,11 @@ export class CasoN4 {
     this.mundo = null;
     this.conWebgl = false;
     terminarVueloIda();
-    for (const li of [...this.pasosDom, ...this.coloresDom, ...(this.fuentesDom ? [this.fuentesDom] : [])]) li.style.removeProperty('transform');
+    for (const li of [...this.pasosDom, ...this.coloresDom, ...(this.fuentesDom ? [this.fuentesDom] : []), ...this.galeriaItems]) li.style.removeProperty('transform');
     this.cajasEscritas.length = 0;
+    this.enlaceEscrito.length = 0;
     this.cajasColorEscritas.length = 0;
+    this.cajasGaleriaEscritas.length = 0;
     // Sin escena, el fondo es el color plano del caso y el título se ve de una vez
     this.alfas.fondo = 1;
     this.fondoListo = true;
@@ -510,6 +692,9 @@ export class CasoN4 {
         this.cajasEscritas[k] = v;
         li.style.transform = v;
       }
+      escribirAlfa(li, c.opacidad);
+      // Solo el enlace activo importa (los demás no reciben clics ni foco); la caja del cristal cambia con su giro
+      if (this.enlaces[k] && this.enlaces[k] === this.enlaceActivo) this.colocarEnlace(k);
     });
     // La copia de cada color de la paleta sigue la caja de su cristal, igual que los pasos
     if (this.tamanosColor.length !== this.coloresDom.length) this.tamanosColor = this.coloresDom.map((li) => ({ w: li.offsetWidth || 1, h: li.offsetHeight || 1 }));
@@ -523,6 +708,7 @@ export class CasoN4 {
         if (v) li.style.transform = v;
         else li.style.removeProperty('transform');
       }
+      escribirAlfa(li, c.opacidad);
     });
     // Las tipografías: su copia sigue la caja de su cristal
     if (this.fuentesDom) {
@@ -535,6 +721,23 @@ export class CasoN4 {
         if (v) this.fuentesDom.style.transform = v;
         else this.fuentesDom.style.removeProperty('transform');
       }
+      escribirAlfa(this.fuentesDom, c.opacidad);
+    }
+    // La sección de resultados: la copia de cada marco sigue su caja (como las de los pasos)
+    if (this.galeriaItems.length > 0) {
+      if (!this.tamanoGaleria) this.tamanoGaleria = { w: this.galeriaItems[0].offsetWidth || 1, h: this.galeriaItems[0].offsetHeight || 1 };
+      const { w: w0, h: h0 } = this.tamanoGaleria;
+      this.galeriaItems.forEach((li, i) => {
+        const c = mundo.cajasGaleria[i];
+        if (!c) return;
+        const v = c.opacidad > 0 ? `translate3d(${c.x.toFixed(2)}px, ${c.y.toFixed(2)}px, 0) scale(${(c.ancho / w0).toFixed(4)}, ${(c.alto / h0).toFixed(4)})` : '';
+        if (this.cajasGaleriaEscritas[i] !== v) {
+          this.cajasGaleriaEscritas[i] = v;
+          if (v) li.style.transform = v;
+          else li.style.removeProperty('transform');
+        }
+        escribirAlfa(li, c.opacidad);
+      });
     }
     // «Design system»: encima de la sección, alineado con el borde izquierdo de la paleta; aparece con ella
     if (this.tituloDS) {
@@ -566,7 +769,7 @@ export class CasoN4 {
   /** Respaldo sin WebGL: la foto base opaca y la siguiente encima, y cada paso con la opacidad de su fundido. */
   private aplicarRespaldoDom(): void {
     const n = this.pasosDom.length;
-    const ds = this.dsDom !== null;
+    const ds = this.dsEn;
     const { medio, mezcla } = estadoDelMedio(this.posHistoria(), this.scroll.tramo, n);
     const visible = 1 - this.presenciaDS();
     this.medios.forEach((m, i) => {
@@ -578,20 +781,22 @@ export class CasoN4 {
     });
     if (!this.conWebgl) {
       // Con design system, el resultado se corre un tramo y la sección tiene el suyo
-      const tramos = totalTramos(n, ds);
+      const tramos = totalTramos(n, ds, this.largo);
       this.pasosDom.forEach((li, k) => {
-        const s = String(Math.round(opacidadDelPaso(tramoDelPaso(k, n, ds), this.scroll.pos, this.scroll.tramo, tramos) * 1000) / 1000);
+        const s = String(Math.round(opacidadDelPaso(tramoDelPaso(k, ds, this.largo), this.scroll.pos, this.scroll.tramo, tramos) * 1000) / 1000);
         if (li.style.opacity !== s) li.style.opacity = s;
       });
-      if (this.dsDom) {
+      for (const seccion of [this.dsDom, this.galeriaDom]) {
+        if (!seccion) continue;
         const s = String(Math.round((1 - visible) * 1000) / 1000);
-        if (this.dsDom.style.opacity !== s) this.dsDom.style.opacity = s;
+        if (seccion.style.opacity !== s) seccion.style.opacity = s;
       }
     }
   }
 
   /** Escribe los `data-*` del caso solo cuando cambian (con la escena quieta no hay escrituras). */
   private publicar(forzar: boolean): void {
+    this.actualizarEnlaces();
     const posH = this.posHistoria();
     const { medio, mezcla } = estadoDelMedio(posH, this.scroll.tramo, this.pasosDom.length);
     const valores: Record<string, string> = {
@@ -603,6 +808,8 @@ export class CasoN4 {
       transicion: (this.mundo?.progresoTransicion ?? 1).toFixed(3),
       // Cuánto se inclina la foto con el scroll (rad)
       giro: (this.mundo?.giroFoto ?? 0).toFixed(3),
+      // Cuánto se ve la foto (se desvanece con el design system)
+      foto: (this.mundo?.alfaFoto ?? 1).toFixed(3),
       progreso: this.scroll.progreso.toFixed(4),
       medio: String(medio),
       mezcla: mezcla.toFixed(3),
@@ -640,9 +847,13 @@ export class CasoN4 {
     this.ajustarTitulo();
     this.anillo?.medir();
     this.cajasEscritas.length = 0;
+    this.enlaceEscrito.length = 0;
     this.cajasColorEscritas.length = 0;
     this.tituloDSEscrito = '';
     this.cajaFuentesEscrita = '';
+    this.cajasGaleriaEscritas.length = 0;
+    this.tamanoGaleria = null;
+    this.versionMedidas++;
     this.tamanoFuentes = null;
     this.tamanosCopia = [];
     this.tamanosColor = [];

@@ -2,6 +2,7 @@
 import { getCollection } from 'astro:content';
 import { n2 } from '@/data/n2';
 import { conBase } from '@/lib/rutas';
+import { SOBRE_MI_VISIBLE } from '@/lib/sobre-mi/visible';
 
 const disciplinas = (await getCollection('disciplinas')).sort((a, b) => a.data.orden - b.data.orden);
 const todosProyectos = await getCollection('proyectos');
@@ -133,11 +134,13 @@ const primeraDisciplina = metadatosDisciplinas[0];
       <p class="n2-instruccion tipo-rotulo">{n2.instruccion}</p>
     </div>
 
-    <div class="n2-hud-esquina n2-hud-abajo-der">
-      <a data-n2-cta href={n2.cta.href} class="n2-cta tipo-rotulo">
-        {n2.cta.texto}
-      </a>
-    </div>
+    {SOBRE_MI_VISIBLE && (
+      <div class="n2-hud-esquina n2-hud-abajo-der">
+        <a data-n2-cta href={n2.cta.href} class="n2-cta tipo-rotulo">
+          {n2.cta.texto}
+        </a>
+      </div>
+    )}
   </aside>
 
   <!-- Pastilla que sigue al cursor sobre las tarjetas, calcada de Aikawa (pulido del 2026-10-03) -->
@@ -601,6 +604,8 @@ const primeraDisciplina = metadatosDisciplinas[0];
   import { obtenerNavegacion, transicionConRespaldo } from '@/lib/navigation/instancia';
   import { conBase, conMedia } from '@/lib/rutas';
   import { obtenerLenis } from '@/lib/pelicula/lenis';
+  import { irASobreMi } from '@/lib/pelicula/paso-sm';
+  import { empiezaGesto, gestoAtendido, pasoEnCurso } from '@/lib/pelicula/estado-paso';
   import type { DisciplineSlug } from '@/lib/navigation/types';
 
   interface DisciplinaItemMeta {
@@ -710,14 +715,26 @@ const primeraDisciplina = metadatosDisciplinas[0];
       });
     }
 
-    let nivelAnterior = document.body.dataset.currentLevel ?? 'N0';
+    // ¿El cilindro ya está formado? Entrando directo al N2 (o al hash de una disciplina) sí; entrando por el
+    // home, o por la sección «Sobre mí» sin haber pasado por aquí (T35: /#sobre-mi, o el enlace del home),
+    // no: el anillo se forma la primera vez que el N2 queda a la vista.
+    let cilindroFormado =
+      document.body.dataset.currentLevel === 'N2' ||
+      (ORDERED_SLUGS as readonly string[]).includes(hashInicial) ||
+      hashInicial === 'disciplinas';
     const desuscribirNav = navInst.subscribe((estado) => {
-      if (estado.currentLevel === 'N2' && (nivelAnterior === 'N1' || nivelAnterior === 'N0')) {
-        sceneManager.startRingToCylinderAnimation();
+      if (estado.currentLevel === 'N2') {
+        if (!cilindroFormado) {
+          sceneManager.startRingToCylinderAnimation();
+          cilindroFormado = true;
+        } else {
+          // Al volver de la sección «Sobre mí» el bucle estuvo parado: se piden cuadros para repintar.
+          sceneManager.requestRender(30);
+        }
       } else if (estado.currentLevel === 'N1') {
         sceneManager.prepareRingInitialState();
+        cilindroFormado = false;
       }
-      nivelAnterior = estado.currentLevel;
     });
     signal.addEventListener('abort', () => desuscribirNav());
 
@@ -1130,12 +1147,22 @@ const primeraDisciplina = metadatosDisciplinas[0];
     window.addEventListener(
       'wheel',
       (e) => {
+        // El gesto con que la sección «Sobre mí» acaba de devolver el menú no se cuenta otra vez (T35)
+        if (gestoAtendido(e)) return;
         if (document.body.dataset.currentLevel !== 'N2') return;
+        // Mientras corre el paso suave entre la sección y el menú, la rueda no mueve nada (T35)
+        if (pasoEnCurso()) {
+          e.preventDefault();
+          return;
+        }
         const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
         if (Math.abs(delta) < 20) return;
 
         const now = performance.now();
         if (now - lastWheelTime < 350) return;
+        // La cola del gesto con que se llegó al N2 (la caída del home, la vuelta de la sección) no cruza otro
+        // nivel: solo una rueda que empieza un gesto nuevo baja a la sección o sube al home (auditoría de T35).
+        if (!empiezaGesto()) return;
         lastWheelTime = now;
 
         if (delta < 0) {
@@ -1153,8 +1180,10 @@ const primeraDisciplina = metadatosDisciplinas[0];
             }
           }
         } else {
-          // Rueda hacia abajo: no gira el cilindro (2026-09-28)
+          // Rueda hacia abajo: no gira el cilindro (2026-09-28). Desde T35 sube la sección «Sobre mí» por
+          // encima del menú (decisión del autor, 2026-10-04).
           e.preventDefault();
+          irASobreMi('rueda');
         }
       },
       { passive: false, signal }

@@ -1,13 +1,27 @@
 ---
 /**
- * N1Home.astro — Acto 1: el home calcado de noth.in (T33; decisiones del autor del 2026-10-03).
- * El titular «JSMMDZ» a todo el ancho, textos chicos en las cuatro esquinas y, sobre el titular, una tinta
- * que sigue al cursor y deja ver el video de materiales (lib/n1/). Referente: noth-1440-tinta.jpg.
+ * N1Home.astro — Acto 1: el home con la diagramación del autor (T36, decisiones del 2026-10-04).
+ * El personaje verde en el centro, delante del titular «JSMMDZ» gigante que va abajo; a la izquierda un
+ * titular, un párrafo y el enlace que baja al menú; a la derecha dos cifras; arriba a la derecha el botón
+ * «Contacto». Sobre el titular corre la tinta que sigue al cursor y deja ver el video de materiales (T33,
+ * lib/n1/). Referentes: noth.in (titular, tinta, entrada de los textos) y Digitalists (paralaje de dos capas).
+ *
+ * Capas, de abajo hacia arriba: la capa de atrás (`data-n1-capa-atras`: el titular, el canvas de la tinta y el
+ * video), el personaje y los textos. Los textos van en negro sobre el crema y, donde pasa la tinta, invertidos
+ * con `mix-blend-mode: difference` (E1 de T33): por eso ningún ancestro de un texto crea un contexto de apilado
+ * (sin z-index, opacidad ni transform), o el modo de mezcla solo vería su propia caja.
  */
 import { home } from '@/data/home';
+import { SOBRE_MI_VISIBLE } from '@/lib/sobre-mi/visible';
 
 // El titular se parte a mano en letras, cada una en su máscara (la entrada es de lib/n1/titular.ts).
 const letras = Array.from(home.nombre);
+const izquierda = home.columnaIzquierda;
+
+// El icono de puntos del enlace y del botón: cuatro puntos en cuadrícula, del color del texto.
+const iconoPuntos =
+  '<svg class="n1-icono" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">' +
+  '<circle cx="3" cy="3" r="1.7"/><circle cx="9" cy="3" r="1.7"/><circle cx="3" cy="9" r="1.7"/><circle cx="9" cy="9" r="1.7"/></svg>';
 ---
 
 <section
@@ -23,48 +37,100 @@ const letras = Array.from(home.nombre);
   <!-- Disparador para la transición de caída hacia N2 -->
   <div id="n1-the-drop-trigger" aria-hidden="true"></div>
 
-  <!-- El titular: el único h1. Cuando el canvas de la tinta lo dibuja, queda solo para los lectores de pantalla. -->
-  <h1 class="n1-titular" data-n1-titular aria-label={home.nombre}>{letras.map((letra) => (<span class="n1-mascara" aria-hidden="true"><span class="n1-letra" data-n1-letra>{letra}</span></span>))}<span class="n1-sonda" data-n1-sonda aria-hidden="true"></span></h1>
+  <!-- La capa de atrás del paralaje: el titular, la tinta (su canvas entra aquí al montarse) y el video se
+       mueven juntos, así la tinta sigue calzando con las letras. -->
+  <div class="n1-capa-atras" data-n1-capa-atras>
+    <!-- El titular: el único h1. Cuando el canvas de la tinta lo dibuja, queda solo para los lectores de pantalla. -->
+    <h1 class="n1-titular" data-n1-titular aria-label={home.nombre}>{letras.map((letra) => (<span class="n1-mascara" aria-hidden="true"><span class="n1-letra" data-n1-letra>{letra}</span></span>))}<span class="n1-sonda" data-n1-sonda aria-hidden="true"></span></h1>
 
-  <!-- Arriba a la izquierda: la frase y el botón que baja al menú -->
-  <div class="n1-arriba-izquierda">
-    <p class="n1-frase" data-n1-frase>
-      <span class="n1-frase-linea">{home.frase[0]}</span>
-      <span class="n1-frase-linea">{home.frase[1]}</span>
-    </p>
-    <a class="n1-cta" href={home.cta.href} data-n1-cta>
-      <span>{home.cta.texto}</span>
-      <span class="n1-cta-flecha" aria-hidden="true">↓</span>
-    </a>
+    <!-- La capa revelada de la tinta. No entra a la precarga: se pide cuando la tinta pasa a activa. -->
+    <video
+      class="n1-video"
+      data-n1-materiales
+      src={home.materiales.src}
+      muted
+      loop
+      playsinline
+      preload="none"
+      aria-hidden="true"
+      tabindex="-1"
+    ></video>
   </div>
 
-  <!-- Arriba a la derecha: baja al menú (no hay menú desplegable) -->
-  <a class="n1-enlace n1-arriba-derecha" href={home.disciplinas.href} data-n1-disciplinas>
-    {home.disciplinas.texto} <span aria-hidden="true">::</span>
-  </a>
+  <!-- El personaje, delante del titular (hoy una imagen; lib/n1/personaje.ts es el punto para cambiarla por el modelo 3D) -->
+  <img
+    class="n1-personaje"
+    data-n1-personaje
+    src={home.personaje.src}
+    alt={home.personaje.alt}
+    width={home.personaje.ancho}
+    height={home.personaje.alto}
+    decoding="async"
+    fetchpriority="high"
+    draggable="false"
+  />
 
-  <!-- Abajo a la izquierda -->
-  <p class="n1-rotulo" data-n1-rotulo>{home.rotulo}</p>
+  <!-- Columna izquierda: titular de dos líneas, párrafo de dos líneas y el enlace que baja al menú -->
+  <div class="n1-columna n1-columna-izquierda" data-n1-columna="izquierda">
+    <!-- Entre línea y línea va un espacio: las líneas son bloques, pero así el texto no se lee pegado. -->
+    <h2 class="n1-titulo-columna">
+      {izquierda.titular.map((linea, i) => (
+        <Fragment><span class="n1-envoltura n1-mezcla"><span class="n1-linea" data-n1-sube>{linea}</span></span>{i < izquierda.titular.length - 1 ? " " : ""}</Fragment>
+      ))}
+    </h2>
+    <p class="n1-parrafo">
+      {izquierda.parrafo.map((linea, i) => (
+        <Fragment><span class="n1-envoltura n1-mezcla"><span class="n1-linea" data-n1-sube>{linea}</span></span>{i < izquierda.parrafo.length - 1 ? " " : ""}</Fragment>
+      ))}
+    </p>
+    <span class="n1-envoltura n1-mezcla n1-envoltura-cta">
+      <a class="n1-cta" href={izquierda.cta.href} data-n1-cta data-n1-sube>
+        <Fragment set:html={iconoPuntos} />
+        <span class="n1-cta-texto">{izquierda.cta.texto}</span>
+      </a>
+    </span>
+  </div>
 
-  <!-- Abajo a la derecha -->
-  <nav class="n1-abajo-derecha" aria-label="Redes">
-    <a class="n1-enlace" href={home.linkedin.href} target="_blank" rel="noopener noreferrer">{home.linkedin.texto}</a>
-    <span class="n1-separador" aria-hidden="true">/</span>
-    <a class="n1-enlace" href={home.instagram.href} target="_blank" rel="noopener noreferrer">{home.instagram.texto}</a>
+  <!-- Columna derecha: dos cifras con su pie. Entran como el texto, sin contar. -->
+  <div class="n1-columna n1-columna-derecha" data-n1-columna="derecha">
+    {home.columnaDerecha.map((dato) => (
+      <div class="n1-dato">
+        <div class="n1-envoltura n1-mezcla"><p class="n1-cifra" data-n1-cifra data-n1-sube>{dato.cifra}</p></div>
+        <div class="n1-envoltura n1-mezcla"><p class="n1-pie" data-n1-sube>{dato.pie}</p></div>
+      </div>
+    ))}
+  </div>
+
+  <!-- Arriba a la derecha: «Sobre mí» (T35, lleva a /#sobre-mi) como texto y el botón «Contacto» (lleva a
+       /#contacto: la sección «Sobre mí» abierta en el formulario). Sin la sección (GitHub Pages,
+       lib/sobre-mi/visible.ts) no salen: en el home quedan las redes. -->
+  {SOBRE_MI_VISIBLE && (
+    <nav class="n1-arriba" aria-label="Secciones">
+      <span class="n1-envoltura n1-mezcla">
+        <a class="n1-enlace" href={home.sobreMi.href} data-n1-sobre-mi data-n1-sube>{home.sobreMi.texto}</a>
+      </span>
+      <span class="n1-envoltura n1-envoltura-contacto">
+        <a class="n1-contacto" href={home.contacto.href} data-n1-contacto data-n1-sube>
+          <span class="n1-contacto-foto">
+            <img src={home.personaje.src} alt="" width={home.personaje.ancho} height={home.personaje.alto} decoding="async" loading="eager" draggable="false" />
+          </span>
+          <span class="n1-contacto-texto">
+            <Fragment set:html={iconoPuntos} />
+            <span>{home.contacto.texto}</span>
+          </span>
+        </a>
+      </span>
+    </nav>
+  )}
+
+  <!-- Encima del titular, a la derecha: las redes -->
+  <nav class="n1-redes n1-envoltura n1-mezcla" aria-label="Redes" data-n1-redes>
+    <div class="n1-redes-fila" data-n1-sube>
+      <a class="n1-enlace" href={home.linkedin.href} target="_blank" rel="noopener noreferrer">{home.linkedin.texto}</a>
+      <span class="n1-separador" aria-hidden="true">/</span>
+      <a class="n1-enlace" href={home.instagram.href} target="_blank" rel="noopener noreferrer">{home.instagram.texto}</a>
+    </div>
   </nav>
-
-  <!-- La capa revelada de la tinta. No entra a la precarga: se pide cuando la tinta pasa a activa. -->
-  <video
-    class="n1-video"
-    data-n1-materiales
-    src={home.materiales.src}
-    muted
-    loop
-    playsinline
-    preload="none"
-    aria-hidden="true"
-    tabindex="-1"
-  ></video>
 </section>
 
 <script>
@@ -101,14 +167,22 @@ const letras = Array.from(home.nombre);
 
 <style>
   .n1-seccion {
-    /* Margen de noth.in: 18 px a 1440, proporcional, con un mínimo en pantallas chicas. */
+    /* Margen del titular (noth.in): 18 px a 1440, proporcional, con un mínimo en pantallas chicas. */
     --n1-margen: max(var(--espacio-sm), 1.25vw);
+    /* Márgenes de la diagramación del autor: la columna izquierda y las redes (4,4 %) y el botón (3,6 %). */
+    --n1-lado: 4.4%;
+    --n1-lado-boton: 3.6%;
+    /* Tamaño de los titulares y las cifras de las columnas: 3,2vw (46 px a 1440), sin pasarse del alto. */
+    --n1-tam-columna: min(3.2vw, 5.1vh);
     position: relative;
     width: 100%;
     height: 100vh;
     min-height: 100vh;
     box-sizing: border-box;
     overflow: hidden;
+    /* El grupo de apilado propio: el fondo de la sección (crema y su lavado) es lo que ven los textos con
+       `difference`, y no lo que haya detrás del home. */
+    isolation: isolate;
     color: var(--texto-activo);
     /* K8: el lavado. 0 es el crema; 1, el fondo del menú. Lo mueve lib/n1/home.ts con la caída. */
     background-color: color-mix(
@@ -136,7 +210,16 @@ const letras = Array.from(home.nombre);
     pointer-events: none;
   }
 
-  /* El canvas de la tinta lo crea lib/n1/home.ts: por eso :global. Va debajo de los textos. */
+  /* ---------- La capa de atrás (paralaje) ---------- */
+
+  .n1-capa-atras {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* El canvas de la tinta lo crea lib/n1/home.ts dentro de la capa: por eso :global. Va debajo del titular. */
   .n1-seccion :global(.n1-tinta) {
     position: absolute;
     inset: 0;
@@ -153,10 +236,10 @@ const letras = Array.from(home.nombre);
     position: absolute;
     left: var(--n1-margen);
     right: var(--n1-margen);
-    top: 0;
-    bottom: 0;
+    /* lib/n1/titular.ts pone la base de las letras al 92,6 % del alto; esto es el respaldo. */
+    top: var(--n1-titular-arriba, 66%);
     height: fit-content;
-    margin: auto 0;
+    margin: 0;
     display: flex;
     justify-content: center;
     align-items: baseline;
@@ -167,7 +250,8 @@ const letras = Array.from(home.nombre);
     line-height: 1;
     letter-spacing: 0;
     white-space: nowrap;
-    color: var(--color-casa);
+    /* Desde T36 el titular es #111111, el texto sobre crema: el morado sale del home. */
+    color: var(--color-texto-oscuro);
     z-index: 1;
     user-select: none;
   }
@@ -195,40 +279,204 @@ const letras = Array.from(home.nombre);
     height: 0;
   }
 
-  /* ---------- Los textos de las esquinas ---------- */
-
-  .n1-arriba-izquierda {
+  /* El video se queda en el DOM, sin verse: la tinta lo toma como textura. */
+  .n1-video {
     position: absolute;
-    top: var(--espacio-sm);
-    left: var(--n1-margen);
-    z-index: 2;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--espacio-sm);
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
   }
 
-  .n1-frase {
-    margin: 0;
-    font-family: var(--fuente-texto);
-    font-weight: 600;
-    font-size: var(--tamano-texto-lg);
-    line-height: var(--linea-display-lg);
-    letter-spacing: var(--tracking-texto-lg);
-    color: var(--texto-activo);
+  /* ---------- El personaje ---------- */
+
+  /* Del 2,7 % al 96,5 % del alto se ve la figura: la imagen mide el alto de la pantalla (el PNG trae la figura
+     del 2,9 % al 97,1 % de su alto, medido por la transparencia). El eje de la figura va al 48 % del ancho (la
+     diagramación del autor); en el PNG la figura está centrada en el 49,76 % de su ancho (de 345 a 897 de 1248
+     px), de ahí el 0,4976. No lleva transform en CSS: el paralaje lo mueve con GSAP y lo pisaría. Con los pies
+     sobre las letras y por encima de la tinta. */
+  .n1-personaje {
+    position: absolute;
+    top: var(--n1-personaje-arriba, 0px);
+    left: calc(48% - var(--n1-personaje-alto, 100vh) * 1248 / 1872 * 0.4976);
+    height: var(--n1-personaje-alto, 100vh);
+    width: auto;
+    aspect-ratio: 1248 / 1872;
+    pointer-events: none;
+    user-select: none;
+    will-change: transform;
   }
 
-  .n1-frase-linea {
+  /* ---------- Los textos: negros sobre el crema, invertidos donde pasa la tinta ---------- */
+
+  /* La envoltura de lo que sube. Recorta solo mientras dura la entrada (lib/n1/entrada-textos.ts), para
+     que el foco y los subrayados no queden cortados después. */
+  .n1-envoltura {
     display: block;
   }
 
+  .n1-seccion[data-n1-entrando] .n1-envoltura {
+    clip-path: inset(0);
+  }
+
+  /* `difference` con el token claro: sobre el crema da #111111 y donde la tinta oscurece el fondo, claro. */
+  .n1-mezcla {
+    mix-blend-mode: difference;
+    color: var(--color-texto-diferencia);
+  }
+
+  .n1-columna {
+    position: absolute;
+    top: 21.4%;
+    margin: 0;
+  }
+
+  .n1-columna-izquierda {
+    left: var(--n1-lado);
+    width: 26%;
+  }
+
+  .n1-columna-derecha {
+    right: var(--n1-lado);
+    text-align: right;
+  }
+
+  .n1-titulo-columna,
+  .n1-cifra {
+    margin: 0;
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    font-size: var(--n1-tam-columna);
+    line-height: 1;
+    letter-spacing: var(--tracking-display-lg);
+  }
+
+  .n1-linea {
+    display: block;
+    width: fit-content;
+  }
+
+  .n1-parrafo {
+    margin: 2vh 0 0;
+    font-family: var(--fuente-texto);
+    font-weight: 400;
+    font-size: var(--tamano-texto-lg);
+    line-height: 1.4;
+    letter-spacing: var(--tracking-texto-lg);
+  }
+
+  .n1-envoltura-cta {
+    width: fit-content;
+    margin-top: 2.6vh;
+  }
+
+  /* El enlace de la columna: icono de puntos a la izquierda, texto en mayúsculas y subrayado. */
   .n1-cta {
     display: inline-flex;
     align-items: center;
+    gap: var(--espacio-xs);
+    color: inherit;
+    font-family: var(--fuente-texto);
+    font-weight: 600;
+    font-size: var(--tamano-texto-sm);
+    line-height: var(--linea-rotulo);
+    letter-spacing: var(--tracking-rotulo);
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+
+  .n1-cta-texto {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.45em;
+  }
+
+  /* El icono entra con set:html: los estilos con ámbito de Astro no lo alcanzan, por eso :global. */
+  :global(.n1-icono) {
+    flex: none;
+    width: 0.85em;
+    height: 0.85em;
+    fill: currentColor;
+  }
+
+  /* Dos bloques de 14 % del alto: la cifra arranca al 21,4 % y la siguiente al 35,4 %. */
+  .n1-dato {
+    height: 14vh;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .n1-dato .n1-envoltura {
+    width: fit-content;
+  }
+
+  .n1-pie {
+    margin: 1.2vh 0 0;
+    font-family: var(--fuente-texto);
+    font-weight: 600;
+    font-size: var(--tamano-texto-sm);
+    line-height: var(--linea-texto-sm);
+    letter-spacing: var(--tracking-texto-sm);
+  }
+
+  .n1-enlace {
+    color: inherit;
+    font-family: var(--fuente-texto);
+    font-weight: 600;
+    font-size: var(--tamano-rotulo);
+    line-height: var(--linea-rotulo);
+    letter-spacing: var(--tracking-rotulo);
+    text-transform: uppercase;
+    text-decoration: none;
+    text-underline-offset: 4px;
+  }
+
+  .n1-enlace:hover,
+  .n1-cta:hover .n1-cta-texto {
+    text-decoration: underline;
+  }
+
+  /* El foco visible sobre crema es #111111 (§ 5): los textos están mezclados con `difference`, así que su
+     contorno lleva el color claro, que sobre el crema da #111111. */
+  .n1-cta:focus-visible,
+  .n1-enlace:focus-visible {
+    outline: 2px solid var(--color-texto-diferencia);
+    outline-offset: 3px;
+  }
+
+  /* ---------- Arriba a la derecha ---------- */
+
+  /* El botón del 78,2 % al 96,4 % del ancho y del 3,6 % al 9,8 % del alto; «Sobre mí» a su izquierda. */
+  .n1-arriba {
+    position: absolute;
+    top: 3.6%;
+    right: var(--n1-lado-boton);
+    height: 6.2%;
+    min-height: 3rem;
+    display: flex;
+    align-items: center;
     gap: var(--espacio-md);
-    padding: var(--espacio-xs) var(--espacio-md);
+  }
+
+  .n1-envoltura-contacto {
+    width: 18.2vw;
+    min-width: 11rem;
+    height: 100%;
+  }
+
+  /* El botón es opaco: relleno #111111 con texto crema (en el prototipo es al revés; el home es crema). No lleva
+     modo de mezcla. */
+  .n1-contacto {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    gap: var(--espacio-sm);
+    padding: 0.3rem var(--espacio-sm) 0.3rem 0.3rem;
     border-radius: var(--radio-full);
-    background-color: var(--texto-activo);
+    background-color: var(--color-texto-oscuro);
     color: var(--color-crema-base);
     font-family: var(--fuente-texto);
     font-weight: 600;
@@ -240,59 +488,53 @@ const letras = Array.from(home.nombre);
     transition: opacity var(--duracion-corta) var(--curva-entrada);
   }
 
-  .n1-cta:hover {
-    opacity: 0.8;
+  .n1-contacto:hover {
+    opacity: 0.85;
   }
 
-  .n1-enlace {
-    color: var(--texto-activo);
-    font-family: var(--fuente-texto);
-    font-weight: 600;
-    font-size: var(--tamano-rotulo);
-    line-height: var(--linea-rotulo);
-    letter-spacing: var(--tracking-rotulo);
-    text-transform: uppercase;
-    text-decoration: none;
-    text-underline-offset: 4px;
-  }
-
-  .n1-enlace:hover {
-    text-decoration: underline;
-  }
-
-  /* § 5: el foco visible sobre crema es #111111 (el texto oscuro), no la amatista del foco global. */
-  .n1-cta:focus-visible,
-  .n1-enlace:focus-visible {
+  .n1-contacto:focus-visible {
     outline: 2px solid var(--color-texto-oscuro);
     outline-offset: 3px;
   }
 
-  .n1-arriba-derecha {
-    position: absolute;
-    top: var(--espacio-sm);
-    right: var(--n1-margen);
-    z-index: 2;
+  /* La miniatura: el personaje recortado en la cabeza y los hombros (la cara queda al centro del círculo). */
+  .n1-contacto-foto {
+    position: relative;
+    flex: none;
+    height: 100%;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: var(--radio-full);
+    background-color: var(--color-crema-base);
   }
 
-  .n1-rotulo {
+  .n1-contacto-foto img {
     position: absolute;
-    left: var(--n1-margen);
-    bottom: var(--espacio-sm);
-    z-index: 2;
-    margin: 0;
-    font-family: var(--fuente-texto);
-    font-weight: 600;
-    font-size: var(--tamano-texto-sm);
-    line-height: var(--linea-texto-sm);
-    letter-spacing: var(--tracking-texto-lg);
-    color: var(--texto-activo);
+    width: 270%;
+    max-width: none;
+    height: auto;
+    left: -80%;
+    top: -9%;
+    user-select: none;
   }
 
-  .n1-abajo-derecha {
+  .n1-contacto-texto {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--espacio-xs);
+  }
+
+  /* ---------- Las redes, encima del titular a la derecha ---------- */
+
+  .n1-redes {
     position: absolute;
-    right: var(--n1-margen);
-    bottom: var(--espacio-sm);
-    z-index: 2;
+    right: var(--n1-lado);
+    /* El borde de arriba de las letras lo mide lib/n1/titular.ts; las redes quedan 1 rem por encima. */
+    bottom: calc(100% - var(--n1-letras-arriba, 70%) + var(--espacio-sm));
+    width: fit-content;
+  }
+
+  .n1-redes-fila {
     display: flex;
     align-items: center;
     gap: var(--espacio-sm);
@@ -302,28 +544,37 @@ const letras = Array.from(home.nombre);
     font-family: var(--fuente-texto);
     font-weight: 600;
     font-size: var(--tamano-rotulo);
-    color: var(--texto-activo);
   }
 
-  /* El video se queda en el DOM, sin verse: la tinta lo toma como textura. */
-  .n1-video {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  /* Celular (el ajuste fino es del pulido): la frase no pisa «Disciplinas ::» y el rótulo sube sobre
-     los enlaces para que no se encimen. */
+  /* Celular (el ajuste fino es de T39; aquí solo que no se rompa): las dos columnas se apilan arriba a la
+     izquierda, el botón se achica y el personaje sigue detrás de las letras. */
   @media (max-width: 768px) {
-    .n1-frase {
-      font-size: var(--tamano-texto-md);
-      max-width: calc(100vw - 2 * var(--n1-margen) - 8rem);
+    .n1-seccion {
+      --n1-tam-columna: min(7.4vw, 4.4vh);
+      /* El personaje baja bajo las columnas (que ocupan del 15 % al 36 % del alto) y se achica. */
+      --n1-personaje-arriba: 37vh;
+      --n1-personaje-alto: 61vh;
     }
 
-    .n1-rotulo {
-      bottom: calc(var(--espacio-sm) + var(--espacio-lg));
+    .n1-columna-izquierda {
+      top: 15%;
+      width: 62%;
+    }
+
+    .n1-columna-derecha {
+      top: 15%;
+    }
+
+    .n1-dato {
+      height: 11vh;
+    }
+
+    .n1-envoltura-contacto {
+      width: 11rem;
+    }
+
+    .n1-arriba {
+      top: 2.5%;
     }
   }
 </style>

@@ -28,6 +28,11 @@ const ENTRE_PUNTOS = 46;
 /** Desvío de la orilla recta y de las astillas, en fracciones del ancho del marco. */
 const DESVIO_RECTO = 0.7;
 const DESVIO_ASTILLA = 1.3;
+/**
+ * La orilla de afuera nunca entra en la foto: queda al menos esta fracción del ancho del marco por fuera del
+ * rectángulo (T38, E2 de la auditoría r3: en el marco 9:16 una esquina de golpe se metía y asomaba la foto).
+ */
+const FUERA_MIN = 0.3;
 /** Cuánto entra la orilla de adentro sobre la foto, en fracciones del ancho del marco: poco en general y más en las zonas de golpe. */
 const ENTRA_RECTO = 1.0;
 const ENTRA_ASTILLA = 2.6;
@@ -108,7 +113,8 @@ export function formaMarco(ancho: number, alto: number, margen: number, semilla 
     const haciaDentro: [number, number] = esEsquina ? [-Math.sign(p[0]) * 0.7071, -Math.sign(p[1]) * 0.7071] : [-afuera[0], -afuera[1]];
     interior.push([p[0] + haciaDentro[0] * entra, p[1] + haciaDentro[1] * entra, zFrente]);
     // La orilla de afuera: el rectángulo grande, irregular; en las zonas de golpe se mete o se sale más
-    const desvio = esEsquina ? -a * margen * DESVIO_ASTILLA : (r() - 0.5) * 2 * margen * (DESVIO_RECTO + a * DESVIO_ASTILLA);
+    const libre = esEsquina ? -a * margen * DESVIO_ASTILLA : (r() - 0.5) * 2 * margen * (DESVIO_RECTO + a * DESVIO_ASTILLA);
+    const desvio = Math.max(libre, -(1 - FUERA_MIN) * margen);
     const q = enRect(t, w + margen, h + margen).p;
     exterior.push([q[0] + afuera[0] * desvio, q[1] + afuera[1] * desvio, zOrilla]);
   });

@@ -18,11 +18,19 @@ export const NOMBRE_TIPO: Record<TipoPaso, string> = {
   resultado: 'Resultado',
 };
 
-/** Un paso como lo necesita la escena: solo lo que se imprime en el cristal. */
+/** El corto de un resultado final (T38): ya con su URL resuelta, y si el marco de su foto es vertical (9:16). */
+export interface VideoPaso {
+  corto: string;
+  enlace: string;
+  vertical: boolean;
+}
+
+/** Un paso como lo necesita la escena: solo lo que se imprime en el cristal (y, si lo trae, su corto). */
 export interface PasoVista {
   tipo: TipoPaso;
   destacado?: string;
   texto: string;
+  video?: VideoPaso;
 }
 
 /** Una imagen del caso: la portada (medio −1) y la foto de cada paso (medio k). */

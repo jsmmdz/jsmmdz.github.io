@@ -7,8 +7,8 @@
  * cuadro a 60 fps). El dedo (un toque arrastrado, con eventos de puntero) mueve el objetivo 1 a 1 con los px del gesto. No hay `requestAnimationFrame` propio: `update(dt)` lo llama el reloj único.
  *
  * Tramos: P = 0,5 alturas de ventana. El título ocupa [0, P); el cristal k cruza el centro de la
- * pantalla en `cₖ = (k + 1,5)·P`. El objetivo se acota a [0, c_{N−1}] (o hasta el tramo de la paleta, si el caso la trae): termina con el último
- * cristal al centro.
+ * pantalla en `cₖ = (k + 1,5)·P`. El objetivo se acota a [0, c_{N−1}]: termina con el último cristal al centro.
+ * Si el caso trae design system, sus tramos (y la ancla del centro de la sección) los da `tramos`.
  */
 
 // Damp de Zero: 0,075 por cuadro a 60 fps
@@ -36,8 +36,8 @@ export interface OpcionesScrollCaso {
   alto: () => number;
   /** Cantidad de pasos de la historia. */
   pasos: () => number;
-  /** Tramos que van después de la historia (la paleta del design system: 0 o 1). */
-  extra?: () => number;
+  /** Los tramos de las anclas de AvPág, en orden (el último es el final); por omisión, 0 … N − 1. */
+  tramos?: () => number[];
   /** Las entradas se ignoran (mientras vuela la pieza). */
   bloqueado: () => boolean;
   /** Si el foco está en un control propio, las teclas no mueven el caso. */
@@ -64,14 +64,16 @@ export class ScrollCaso {
     return TRAMO_POR_ALTO * Math.max(1, this.opc.alto());
   }
 
-  /** Tramos después de la historia. */
-  private get extra(): number {
-    return Math.max(0, this.opc.extra?.() ?? 0);
+  /** Los tramos de las anclas: los de `tramos` o, sin ellos, uno por paso. */
+  private get tramosAncla(): number[] {
+    const ts = this.opc.tramos?.();
+    return ts && ts.length > 0 ? ts : Array.from({ length: Math.max(1, this.opc.pasos()) }, (_, k) => k);
   }
 
-  /** Donde termina el caso: el último cristal (o el último tramo extra, la paleta) al centro. */
+  /** Donde termina el caso: la última ancla (el último cristal) al centro. */
   get final(): number {
-    return centroDelPaso(Math.max(1, this.opc.pasos()) - 1 + this.extra, this.tramo);
+    const ts = this.tramosAncla;
+    return centroDelPaso(ts[ts.length - 1], this.tramo);
   }
 
   /** Paso en el que está la posición. */
@@ -84,10 +86,9 @@ export class ScrollCaso {
     return this.final > 0 ? Math.min(1, Math.max(0, this.pos / this.final)) : 0;
   }
 
-  /** Las anclas de AvPág y RePág: 0 y el centro de cada cristal. */
+  /** Las anclas de AvPág y RePág: 0 y el centro de cada cristal (y el de la sección del design system). */
   private anclas(): number[] {
-    const n = Math.max(1, this.opc.pasos()) + this.extra;
-    return [0, ...Array.from({ length: n }, (_, k) => centroDelPaso(k, this.tramo))];
+    return [0, ...this.tramosAncla.map((t) => centroDelPaso(t, this.tramo))];
   }
 
   private acotar(v: number): number {

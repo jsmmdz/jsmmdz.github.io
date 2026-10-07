@@ -8,7 +8,7 @@ export interface DatosN2 {
   marca: string;
   /** Esquina inferior izquierda: cómo se navega. */
   instruccion: string;
-  /** El único CTA (D5 C, R6). Abajo a la derecha. */
+  /** El único CTA (D5 C, R6). Abajo a la derecha: desde T35 lleva a «Sobre mí» (/#sobre-mi). */
   cta: { texto: string; href: string };
   /** Botón redondo de la pastilla y rótulo sobre el segmento enfocado (Aikawa: «VIEW»). */
   textoEntrar: string;
@@ -20,6 +20,6 @@ export const n2: DatosN2 = {
   titular: 'PORTAFOLIO',
   marca: 'JSMMDZ',
   instruccion: '[TEXTO DEL AUTOR] ← → para cambiar',
-  cta: { texto: '[TEXTO DEL AUTOR] Contacto', href: conBase('#contacto') },
+  cta: { texto: 'Sobre mí', href: conBase('#sobre-mi') }, // T35: lleva a la sección «Sobre mí y contacto»
   textoEntrar: 'Ver',
 };

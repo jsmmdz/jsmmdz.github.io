@@ -3,15 +3,20 @@ import FilmLayout from '@/layouts/FilmLayout.astro';
 import N0Preloader from '@/components/actos/N0Preloader.astro';
 import N1Home from '@/components/actos/N1Home.astro';
 import N2Menu from '@/components/actos/N2Menu.astro';
+import SobreMi from '@/components/actos/SobreMi.astro';
+import { SOBRE_MI_VISIBLE } from '@/lib/sobre-mi/visible';
 ---
 
 <!-- T20 (docs/2-TECNICO.md): La película completa en una sola página.
-     Monta N0, N1 y N2 en secuencia continua; N3 y N4 viven en sus rutas profundas y aparecen sin recargar. -->
+     Monta N0, N1 y N2 en secuencia continua; N3 y N4 viven en sus rutas profundas y aparecen sin recargar.
+     T35: debajo del N2, la sección negra «Sobre mí y contacto» (nivel SM, /#sobre-mi). En GitHub Pages no se
+     monta mientras el autor la termina (lib/sobre-mi/visible.ts, tools/publicar.mjs). -->
 <FilmLayout initialLevel="N0" title="JSMMDZ — Portafolio Fílmico Multidisciplinar">
   <N0Preloader />
   <div class="pelicula-flujo">
     <N1Home />
     <N2Menu />
+    {SOBRE_MI_VISIBLE && <SobreMi />}
   </div>
 </FilmLayout>
 

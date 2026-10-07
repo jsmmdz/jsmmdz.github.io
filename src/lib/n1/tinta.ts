@@ -6,6 +6,10 @@
  * solo vive en el home, se mueve con `gsap.ticker` (no abre su propio loop) y se pausa fuera del home
  * sin soltar el contexto. Este módulo importa three: se carga siempre con `import()`, nunca en el JS
  * inicial de `/`.
+ *
+ * T36: en el mismo renderer corre el efecto del titular del N2 (Aikawa) solo sobre las letras: el fluido
+ * del ratón (`FluidoN2`) las desplaza y alrededor del cursor el borde toma el filo de arcoíris. La tinta y
+ * el video de materiales no se deforman: la máscara de la tinta se lee en el uv sin desplazar.
  */
 import gsap from 'gsap';
 import {
@@ -31,6 +35,8 @@ import {
   type Texture,
   type TextureDataType,
 } from 'three';
+import { FluidoN2 } from '@/lib/three/n2/fluido';
+import { radioDelEfecto, RADIO } from '@/lib/three/n2/efecto-titular';
 import { ADVECTAR, DIVERGENCIA, GRADIENTE, MEZCLA, PRESION, REDUCIR, SALPICAR, VERTICE } from './shaders';
 
 /**
@@ -39,12 +45,16 @@ import { ADVECTAR, DIVERGENCIA, GRADIENTE, MEZCLA, PRESION, REDUCIR, SALPICAR, V
  * pasa de abrir el 3,5 % de la franja del titular al 18,9 %, y se disipa en 2,75 s en lugar de 1,25 s.
  * Subir `fuerza` casi no abre más (la salpicadura de velocidad se pierde en la advección del mismo cuadro)
  * y sí agranda la diferencia entre 60 y 120 Hz.
+ *
+ * T36: el autor pidió que la tinta se repare un 25 % más rápido. El decaimiento es `disipación^cuadros`,
+ * así que el tiempo hasta limpiarse es proporcional a `1 / −ln(disipación)`: para tardar un 25 % menos,
+ * `ln(d) = ln(0,988) / 0,75`, es decir `d = 0,988^(1/0,75) = 0,98404 ≈ 0,984`.
  */
 const AJUSTES = {
   resolucionVelocidad: 256,
   resolucionTinta: 512,
   disipacionVelocidad: 0.962,
-  disipacionTinta: 0.988,
+  disipacionTinta: 0.984,
   iteracionesPresion: 20,
   radio: 4e-4,
   fuerza: 5900,
@@ -167,16 +177,27 @@ export function crearTinta(opciones: OpcionesTinta): ControladorTinta {
       uTinta: { value: null },
       uFondo: { value: colorAVector(leerToken('--color-crema-base')) },
       uFondoLavado: { value: colorAVector(leerToken('--fondo-crema-web')) },
-      uTexto: { value: colorAVector(leerToken('--color-casa')) },
+      uTexto: { value: colorAVector(leerToken('--color-texto-oscuro')) },
       uLavado: { value: 0 },
       uTieneVideo: { value: 0 },
       uAspectoVideo: { value: 16 / 9 },
       uAspectoPlano: { value: 1 },
+      uCentroTitular: { value: 0.5 },
       uTamano: { value: AJUSTES.tamanoRevelado },
       uBordeSuave: { value: AJUSTES.bordeSuave },
       uAnchoBorde: { value: AJUSTES.anchoBorde },
+      // El efecto del titular del N2 (T36), solo sobre las letras
+      uFluido: { value: null },
+      uConFluido: { value: 0 },
+      uResolucion: { value: new Vector2(1, 1) },
+      uEfecto: { value: 0 },
+      uPuntero: { value: new Vector2() },
+      uRadio: { value: RADIO },
+      uDpr: { value: 1 },
     }),
   };
+  // El fluido del ratón que empuja las letras: el mismo del N2, en este renderer.
+  const fluido = new FluidoN2(renderer);
 
   const destino = (n: number, filtro: MagnificationTextureFilter, tipo: TextureDataType = HalfFloatType): WebGLRenderTarget =>
     new WebGLRenderTarget(n, n, { minFilter: filtro, magFilter: filtro, format: RGBAFormat, type: tipo, depthBuffer: false });
@@ -232,7 +253,9 @@ export function crearTinta(opciones: OpcionesTinta): ControladorTinta {
    */
   const rasterizarTitular = (): void => {
     const dpr = renderer.getPixelRatio();
-    const caja = seccion.getBoundingClientRect();
+    // Se mide contra el lienzo y no contra la sección: la capa de atrás se corre con el paralaje y las letras
+    // van con ella, así que sus posiciones solo calzan relativas al lienzo.
+    const caja = lienzo.getBoundingClientRect();
     const ancho = Math.max(1, Math.round(caja.width * dpr));
     const alto = Math.max(1, Math.round(caja.height * dpr));
     const cambioTamano = lienzoBase.width !== ancho || lienzoBase.height !== alto;
@@ -265,6 +288,11 @@ export function crearTinta(opciones: OpcionesTinta): ControladorTinta {
     }
     texBase.needsUpdate = true;
     mat.mezcla.uniforms.uAspectoPlano.value = caja.width / Math.max(1, caja.height);
+    // El centro vertical de las letras (la mitad de la altura de la mayúscula sobre la línea base), en uv con
+    // y hacia arriba: hacia ahí se lleva el centro del video para que sus letras calcen con las del titular.
+    const medida = ctxBase.measureText('M');
+    const altoMayuscula = medida.actualBoundingBoxAscent;
+    mat.mezcla.uniforms.uCentroTitular.value = 1 - (lineaBase - altoMayuscula / 2) / Math.max(1, caja.height);
   };
 
   // ---- Estado ----
@@ -275,6 +303,9 @@ export function crearTinta(opciones: OpcionesTinta): ControladorTinta {
   let inmovil = 0;
   let proximaRevision = DORMIR_TRAS_MS;
   const puntero = { x: 0, y: 0, tienePrevio: false, previoX: 0, previoY: 0, nuevo: false };
+  // El filo de arcoíris sigue al cursor mientras esté sobre la página (o el dedo sobre la pantalla).
+  let efectoActivo = false;
+  const medidaLienzo = new Vector2();
 
   const cambiarEstado = (nuevo: EstadoTinta): void => {
     if (estado === nuevo) return;
@@ -293,6 +324,22 @@ export function crearTinta(opciones: OpcionesTinta): ControladorTinta {
       m.uAspectoVideo.value = video.videoWidth / video.videoHeight;
     }
     m.uTieneVideo.value = conCuadros ? 1 : 0;
+
+    // El efecto del titular del N2: el fluido desplaza las letras y el cursor les da el filo de arcoíris.
+    const textura = fluido.textura;
+    const conFluido = fluido.activo && textura !== null;
+    m.uFluido.value = conFluido ? textura : null;
+    m.uConFluido.value = conFluido ? 1 : 0;
+    m.uEfecto.value = efectoActivo ? 1 : 0;
+    if (efectoActivo) {
+      const caja = lienzo.getBoundingClientRect();
+      const dpr = renderer.getPixelRatio();
+      renderer.getDrawingBufferSize(medidaLienzo);
+      m.uResolucion.value.copy(medidaLienzo);
+      m.uDpr.value = dpr;
+      m.uPuntero.value.set((puntero.x - caja.left) * dpr, (caja.height - (puntero.y - caja.top)) * dpr);
+      m.uRadio.value = radioDelEfecto(caja.width) * dpr;
+    }
     paso(mat.mezcla, null);
   };
 
@@ -300,6 +347,7 @@ export function crearTinta(opciones: OpcionesTinta): ControladorTinta {
     const caja = seccion.getBoundingClientRect();
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(Math.max(1, caja.width), Math.max(1, caja.height), false);
+    fluido.redimensionar(caja.width, caja.height);
     rasterizarTitular();
     // setSize borra el buffer: si no se dibuja ahora, el canvas queda en blanco hasta el próximo cuadro.
     if (estado !== 'pausada') dibujar();
@@ -313,6 +361,7 @@ export function crearTinta(opciones: OpcionesTinta): ControladorTinta {
     if (puntero.nuevo) {
       const x = (puntero.x - caja.left) / Math.max(1, caja.width);
       const y = 1 - (puntero.y - caja.top) / Math.max(1, caja.height);
+      fluido.mover(puntero.x - caja.left, puntero.y - caja.top);
       if (!puntero.tienePrevio) {
         puntero.previoX = x;
         puntero.previoY = y;
@@ -404,6 +453,7 @@ export function crearTinta(opciones: OpcionesTinta): ControladorTinta {
     }
     // K4: las salpicaduras bajan con p² al salir del home.
     simular(k, 1 - progreso * progreso);
+    fluido.paso(deltaMs / 1000);
     dibujar();
     if (inmovil >= proximaRevision) {
       if (quedaTinta()) proximaRevision = inmovil + REVISAR_CADA_MS;
@@ -432,6 +482,7 @@ export function crearTinta(opciones: OpcionesTinta): ControladorTinta {
     puntero.x = x;
     puntero.y = y;
     puntero.nuevo = true;
+    efectoActivo = true;
     if (estado === 'dormida') arrancar();
   };
   const alPuntero = (e: PointerEvent): void => alMover(e.clientX, e.clientY);
@@ -439,8 +490,20 @@ export function crearTinta(opciones: OpcionesTinta): ControladorTinta {
     const toque = e.touches[0];
     if (toque) alMover(toque.clientX, toque.clientY);
   };
+  const quitarEfecto = (): void => {
+    if (!efectoActivo) return;
+    efectoActivo = false;
+    fluido.soltar();
+    // Dormida nadie dibuja: el filo se quita aquí.
+    if (estado === 'dormida') dibujar();
+  };
   const alSalirElPuntero = (): void => {
     puntero.tienePrevio = false;
+    quitarEfecto();
+  };
+  const alSoltarElDedo = (): void => {
+    puntero.tienePrevio = false;
+    quitarEfecto();
   };
   // Un dedo nuevo no debe trazar una línea desde donde terminó el anterior.
   const alEmpezarAToca = (e: TouchEvent): void => {
@@ -454,6 +517,8 @@ export function crearTinta(opciones: OpcionesTinta): ControladorTinta {
   window.addEventListener('pointermove', alPuntero, { passive: true });
   window.addEventListener('touchstart', alEmpezarAToca, { passive: true });
   window.addEventListener('touchmove', alTocar, { passive: true });
+  window.addEventListener('touchend', alSoltarElDedo, { passive: true });
+  window.addEventListener('touchcancel', alSoltarElDedo, { passive: true });
   document.documentElement.addEventListener('pointerleave', alSalirElPuntero);
   lienzo.addEventListener('webglcontextlost', alPerderContexto);
 
@@ -479,6 +544,8 @@ export function crearTinta(opciones: OpcionesTinta): ControladorTinta {
       limpiar();
       puntero.nuevo = false;
       puntero.tienePrevio = false;
+      efectoActivo = false;
+      fluido.detener();
       cambiarEstado('pausada');
     },
     reanudar: (): void => {
@@ -491,10 +558,13 @@ export function crearTinta(opciones: OpcionesTinta): ControladorTinta {
       window.removeEventListener('pointermove', alPuntero);
       window.removeEventListener('touchstart', alEmpezarAToca);
       window.removeEventListener('touchmove', alTocar);
+      window.removeEventListener('touchend', alSoltarElDedo);
+      window.removeEventListener('touchcancel', alSoltarElDedo);
       document.documentElement.removeEventListener('pointerleave', alSalirElPuntero);
       lienzo.removeEventListener('webglcontextlost', alPerderContexto);
       for (const rt of [velocidad.leer, velocidad.escribir, presion.leer, presion.escribir, tinta.leer, tinta.escribir, divergencia, reduccion]) rt.dispose();
       for (const m of Object.values(mat)) m.dispose();
+      fluido.dispose();
       const texturas: Array<Texture | null> = [texBase, texVideo];
       for (const t of texturas) t?.dispose();
       geometria.dispose();

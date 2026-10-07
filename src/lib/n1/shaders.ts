@@ -3,6 +3,7 @@
  * presión, gradiente) y la mezcla final. La técnica es la de noth.in (ficha K1), reimplementada.
  * Son solo cadenas de GLSL: este módulo no importa three, así que pesa casi nada.
  */
+import { GLSL_EFECTO_TITULAR } from '@/lib/three/n2/efecto-titular';
 
 export const VERTICE = /* glsl */ `
 varying vec2 vUv;
@@ -114,6 +115,10 @@ void main() {
  * con ella y el lavado se compone la capa de abajo (fondo + titular). Dentro de la tinta se ve la capa
  * revelada: el video de materiales ajustado al ancho y centrado en alto (K2), negro fuera de él.
  * Los colores llegan como uniformes ya en el espacio de la pantalla: no hay conversión de color.
+ *
+ * T36: solo las letras llevan el efecto del titular del N2 (el fluido las desplaza y el cursor les da el
+ * filo de arcoíris: `lib/three/n2/efecto-titular.ts`). La máscara de la tinta y el video se leen en el uv
+ * sin desplazar, así que no se deforman.
  */
 export const MEZCLA = /* glsl */ `
 precision highp float;
@@ -128,19 +133,47 @@ uniform float uLavado;
 uniform float uTieneVideo;
 uniform float uAspectoVideo;
 uniform float uAspectoPlano;
+uniform float uCentroTitular;
 uniform float uTamano;
 uniform float uBordeSuave;
 uniform float uAnchoBorde;
+uniform sampler2D uFluido;
+uniform float uConFluido;
+uniform vec2 uResolucion;   // px del lienzo (con DPR)
+uniform float uEfecto;      // 1 con el cursor sobre la página
+uniform vec2 uPuntero;      // px del lienzo, y hacia arriba
+uniform float uRadio;       // px del lienzo
+uniform float uDpr;
+
+// La cobertura de las letras en un punto (0 fuera del lienzo).
+float alfa(vec2 uv) {
+  if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return 0.0;
+  return texture2D(uBase, uv).r;
+}
+
+${GLSL_EFECTO_TITULAR}
+
 void main() {
   float tinta = texture2D(uTinta, vUv).r * uTamano;
   float mascara = smoothstep(uBordeSuave, uBordeSuave + uAnchoBorde, tinta);
 
   vec3 fondo = mix(uFondo, uFondoLavado, uLavado);
-  vec3 base = mix(fondo, uTexto, texture2D(uBase, vUv).r);
+  // Las letras con el efecto del N2. Sin cursor ni fluido, la opacidad es la cobertura de siempre.
+  vec2 fuente = uConFluido > 0.5 ? fuenteDesplazada(uFluido, vUv) : vUv;
+  float cobertura = alfa(fuente);
+  vec3 colorLetras = uTexto;
+  float opacidad = cobertura;
+  if (uEfecto > 0.5) {
+    aplicarFiloArcoiris(vUv, fuente, cobertura, uResolucion, uPuntero, uRadio, uDpr, colorLetras, opacidad);
+  }
+  vec3 base = mix(fondo, colorLetras, opacidad);
 
-  // El video ocupa todo el ancho; su alto es ancho / aspecto, y se centra. v = 0,5 + (y - 0,5) / f,
-  // con f = aspectoPlano / aspectoVideo la fracción de alto que ocupa.
-  float v = (vUv.y - 0.5) * (uAspectoVideo / uAspectoPlano) + 0.5;
+  // El video ocupa todo el ancho; su alto es ancho / aspecto. Sus letras están en el centro del cuadro (medido
+  // en 6 cuadros del clip: el centro vertical de las letras cae entre 0,478 y 0,500 del alto), así que el centro
+  // del cuadro se pone en el centro del titular (uCentroTitular, en uv): v = 0,5 + (y - centro) / f, con
+  // f = aspectoPlano / aspectoVideo la fracción de alto que ocupa. Con el titular abajo (T36), centrar el video
+  // en el lienzo dejaba la tinta sobre la parte negra del clip.
+  float v = (vUv.y - uCentroTitular) * (uAspectoVideo / uAspectoPlano) + 0.5;
   float dentro = step(0.0, v) * step(v, 1.0) * step(0.5, uTieneVideo);
   vec3 revelado = texture2D(uRevelado, vec2(vUv.x, clamp(v, 0.0, 1.0))).rgb * dentro;
 

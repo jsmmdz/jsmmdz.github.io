@@ -56,6 +56,11 @@
   --color-crema-base: #FAF8F5;   /* Crema neutro base para N0, N1 y N2 */
   --color-texto-oscuro: #111111; /* Texto principal en fondos crema */
   --color-texto-claro: #FAF8F5;  /* Texto principal en fondo negro N3/N4 */
+  /* Texto del home (T36): se pinta con `mix-blend-mode: difference`. El resultado es |fondo − este color|,
+   * así que sobre el crema da exactamente #111111 (crema − #111111, canal a canal: E9E7E4) y donde la
+   * tinta oscurece el fondo el texto se ve claro. Los colores que salen de esa inversión son una excepción
+   * a la paleta (docs/1-PRODUCTO.md § 7, «Planeación de T34–T38»). */
+  --color-texto-diferencia: #E9E7E4;
   /* Historial typewriter y metadatos. Alfa 0.62: con 0.55 daba 3,97:1 sobre el crema de la
    * casa, bajo el 4,5:1 del texto; el mínimo que cumple en los seis cremas es 0.60
    * (scripts/contraste.mjs § 4). Corregido por el orquestador en la auditoría de T3a.
@@ -110,6 +115,9 @@
   --z-hinge: 5;
   --z-stage: 10;
   --z-hud: 20;
+  /* La sección «Sobre mí» (T35) sube por encima del HUD y del canvas del N2, y por debajo del destello de la
+     caída (35) y de la bisagra activa. */
+  --z-sobre-mi: 30;
   --z-hinge-active: 100;
 
   /* ===================================================================
@@ -137,6 +145,61 @@
   --radio-sm: 2px;
   --radio-md: 4px;
   --radio-full: 9999px;
+
+  /* ===================================================================
+   * 6B. SOBRE MÍ Y CONTACTO (T35) — medidas calcadas de noth.in y Digitalists a 1440 × 900
+   * (fabrica/proyecto/referentes/T35.json, K1–K12). Los anchos y márgenes van en vw para que la
+   * composición escale; el ajuste fino con textos reales y el celular son del pulido y de T39.
+   * =================================================================== */
+  /* Colores de la sección, siempre de la paleta: ámbar (botón y foco), esmeralda (campo válido). */
+  --sm-fondo: var(--color-negro);
+  --sm-texto: var(--color-texto-claro);
+  --sm-texto-tenue: rgba(250, 248, 245, 0.72);
+  --sm-acento: var(--color-motion);
+  --sm-ok: var(--color-3d);
+  --sm-texto-boton: var(--color-texto-oscuro);
+
+  /* Columnas de noth.in (x a 1440: 36, 311, 622 | 308, 620, 1021). */
+  --sm-margen: 1.25vw;
+  --sm-x-rotulo: 2.5vw;
+  --sm-x-pequena: 21.6vw;
+  --sm-x-columna: 43.2vw;
+  --sm-x-gusta-rotulo: 21.4vw;
+  --sm-x-gusta-lista: 43vw;
+  --sm-x-gusta-frase: 70.9vw;
+  --sm-ancho-parrafo: 35vw;
+  --sm-ancho-pequena: 13.5vw;
+  --sm-ancho-grande: 43.1vw;
+
+  /* Digitalists: 80 px arriba y 50 px a los lados, columna de 400 px, formulario de 500 px. */
+  --sm-contacto-arriba: 5.556vw;
+  --sm-contacto-lados: 3.472vw;
+  --sm-contacto-columna: min(400px, 27.8vw);
+  --sm-contacto-formulario: min(500px, 34.7vw);
+  --sm-imagen-contacto: 5.5vw;
+
+  /* Tipografía: texto-lg hace de 22,5 px de noth.in; titulares en Unbounded; la frase gigante, 12,75vw. */
+  --sm-tam-titular: clamp(2rem, 3.6vw, 4.5rem);
+  --sm-tam-titular-contacto: clamp(1.5rem, 2.5vw, 2.5rem);
+  --sm-tam-titulo-formulario: clamp(1.125rem, 1.75vw, 1.75rem);
+  --sm-tam-campo: 0.875rem;
+  --sm-tam-frase-gigante: min(12.75vw, 12rem);
+  --sm-tam-errores: 0.8125rem;
+  --sm-tam-boton: 0.875rem;
+
+  /* Espacios del contacto (Digitalists) y medidas de los campos del formulario. */
+  --sm-espacio-sm: 20px;
+  --sm-espacio-md: 30px;
+  --sm-espacio-lg: 40px;
+  --sm-campo-alto-etiqueta: 1.15rem;
+  --sm-campo-reserva-estado: 1.6rem;
+
+  /* El botón (K5): 0,4 s con rebote hacia adelante. La casilla (K6): 20 px y 16 px por dentro. */
+  --sm-duracion-boton: 0.4s;
+  --sm-curva-boton: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --sm-radio-boton: 7px;
+  --sm-casilla: 20px;
+  --sm-casilla-marca: 16px;
 }
 
 /* =====================================================================
@@ -158,6 +221,11 @@ body[data-current-level="N1"] {
   --fondo-activo: var(--fondo-crema-casa);
   --texto-activo: var(--color-texto-oscuro);
   --acento-activo: var(--color-casa);
+}
+
+/* El morado sale del home (T36): el foco sobre el crema es #111111, el texto oscuro (§ 5). */
+body[data-current-level="N1"] {
+  --color-foco: var(--color-texto-oscuro);
 }
 
 /* --- N2 Menú Circular de 5 Disciplinas (Crema teñido por disciplina) --- */
@@ -242,6 +310,15 @@ body[data-current-level="N3"][data-discipline="editorial"],
 body[data-current-level="N4"][data-discipline="editorial"] {
   --color-activo: var(--color-editorial);
   --acento-activo: var(--color-crema-base);
+}
+
+/* --- SM · Sobre mí y contacto (T35): toda negra, texto crema ---
+ * La sección va debajo del N2 y sube por encima de las capas fijas del menú. El foco sobre negro es el
+ * crema (10,89:1 sobre #000000); la amatista da 2,62:1. */
+body[data-current-level="SM"] {
+  --fondo-activo: var(--color-negro);
+  --texto-activo: var(--color-texto-claro);
+  --color-foco: var(--color-crema-base);
 }
 
 /* =====================================================================

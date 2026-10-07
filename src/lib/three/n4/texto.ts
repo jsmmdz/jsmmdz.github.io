@@ -8,6 +8,20 @@
  */
 import type { PasoVista } from '@/lib/n4/historia';
 
+/** Un rectángulo dentro de la textura, en fracciones de su ancho y de su alto (y medido desde arriba). */
+export interface RectTextura {
+  x: number;
+  y: number;
+  ancho: number;
+  alto: number;
+}
+
+/** El texto de un cristal ya dibujado y, si el paso trae video, dónde quedó la línea «Ver completo ↗». */
+export interface TextoDibujado {
+  lienzo: HTMLCanvasElement;
+  enlace: RectTextura | null;
+}
+
 /** Ancho de la textura (px): el alto sale de la proporción del área de texto del cristal. */
 const ANCHO_TEXTURA = 1024;
 // Toda espera tiene salida: sin las fuentes a tiempo se dibuja con las de respaldo
@@ -50,14 +64,14 @@ function envolver(ctx: CanvasRenderingContext2D, texto: string, ancho: number): 
  * va arriba, pequeño y en mayúsculas, para que se sepa qué parte de la historia cuenta cada cristal
  * (autor, 2026-10-02).
  */
-export function dibujarTextoCristal(paso: PasoVista, proporcion: number, color: string, rotulo?: string): HTMLCanvasElement {
+export function dibujarTextoCristal(paso: PasoVista, proporcion: number, color: string, rotulo?: string): TextoDibujado {
   const W = ANCHO_TEXTURA;
   const H = Math.round(W / proporcion);
   const lienzo = document.createElement('canvas');
   lienzo.width = W;
   lienzo.height = H;
   const ctx = lienzo.getContext('2d');
-  if (!ctx) return lienzo;
+  if (!ctx) return { lienzo, enlace: null };
   ctx.fillStyle = color;
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
@@ -67,6 +81,10 @@ export function dibujarTextoCristal(paso: PasoVista, proporcion: number, color: 
   // El rótulo: Space Grotesk en mayúsculas con aire entre letras, del tamaño de una línea pequeña
   const fsR = rotulo ? Math.min(0.1 * H, 0.05 * W) : 0;
   const altoRotulo = rotulo ? fsR * 1.9 : 0;
+
+  // «Ver completo ↗» (T38): una línea al pie del cristal cuando el paso trae el enlace a su video completo
+  const fsE = paso.video ? Math.min(0.075 * H, 0.05 * W) : 0;
+  const altoEnlace = paso.video ? fsE * 2.2 : 0;
 
   // La cifra grande: lo mayor que quepa de ancho, sin pasar de 0,3 del alto
   let fsD = 0;
@@ -82,7 +100,7 @@ export function dibujarTextoCristal(paso: PasoVista, proporcion: number, color: 
   let fsT = 0.07 * H;
   let lineas: string[] = [];
   for (let intento = 0; intento < 6; intento++) {
-    const libre = H - 2 * margen - altoRotulo - (fsD ? fsD * 1.15 : 0);
+    const libre = H - 2 * margen - altoRotulo - altoEnlace - (fsD ? fsD * 1.15 : 0);
     const maximo = paso.destacado ? 0.14 * H : 0.2 * H;
     let encontrado = false;
     for (let f = maximo; f >= 0.07 * H; f -= 0.004 * H) {
@@ -105,7 +123,7 @@ export function dibujarTextoCristal(paso: PasoVista, proporcion: number, color: 
 
   // El bloque va centrado en vertical dentro del área
   const altoBloque = altoRotulo + (fsD ? fsD * 1.15 : 0) + lineas.length * fsT * alturaLinea;
-  let y = Math.max(margen, (H - altoBloque) / 2);
+  let y = Math.max(margen, (H - altoEnlace - altoBloque) / 2);
   if (rotulo) {
     ctx.font = `600 ${fsR}px ${FUENTE_TEXTO}`;
     ctx.letterSpacing = `${(0.12 * fsR).toFixed(1)}px`;
@@ -128,7 +146,46 @@ export function dibujarTextoCristal(paso: PasoVista, proporcion: number, color: 
     ctx.fillText(l, margen, y);
     y += fsT * (alturaLinea - 0.95);
   }
-  return lienzo;
+  // Dónde queda la línea sale de aquí, de lo que se dibujó: el mundo la proyecta a la ventana para poner el enlace
+  const caja = paso.video ? dibujarVerCompleto(ctx, fsE, margen, H - margen - fsE * 0.35) : null;
+  return { lienzo, enlace: caja ? { x: caja.x / W, y: caja.y / H, ancho: caja.ancho / W, alto: caja.alto / H } : null };
+}
+
+/**
+ * «Ver completo» subrayado y una flecha ↗ trazada a mano (la fuente del texto no trae el glifo), con su base en
+ * (x, y). Devuelve la caja que cubre texto, subrayado y flecha, en px de la textura.
+ */
+function dibujarVerCompleto(ctx: CanvasRenderingContext2D, fs: number, x: number, y: number): { x: number; y: number; ancho: number; alto: number } {
+  ctx.font = `600 ${fs}px ${FUENTE_TEXTO}`;
+  ctx.fillText('Ver completo', x, y);
+  const medida = ctx.measureText('Ver completo');
+  const ancho = medida.width;
+  ctx.lineWidth = Math.max(2, fs * 0.07);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.beginPath();
+  ctx.moveTo(x, y + fs * 0.18);
+  ctx.lineTo(x + ancho, y + fs * 0.18);
+  ctx.stroke();
+  // La flecha: una diagonal hacia arriba y a la derecha con su punta
+  const ax = x + ancho + fs * 0.4;
+  const lado = fs * 0.6;
+  const base = y - fs * 0.05;
+  ctx.beginPath();
+  ctx.moveTo(ax, base);
+  ctx.lineTo(ax + lado, base - lado);
+  ctx.moveTo(ax + lado * 0.1, base - lado);
+  ctx.lineTo(ax + lado, base - lado);
+  ctx.lineTo(ax + lado, base - lado * 0.1);
+  ctx.stroke();
+  // La caja: de la flecha (arriba) o de las mayúsculas al subrayado o los rabos de las letras (abajo)
+  const medio = ctx.lineWidth / 2;
+  const arriba = y - Math.max(medida.actualBoundingBoxAscent, y - (base - lado)) - medio;
+  const abajo = y + Math.max(medida.actualBoundingBoxDescent, fs * 0.18) + medio;
+  const izquierda = x - medio;
+  const derecha = ax + lado + medio;
+  return { x: izquierda, y: arriba, ancho: derecha - izquierda, alto: abajo - arriba };
 }
 
 /** Una fuente del design system del caso: `familia` es la de su `@font-face` (ver `design-system.ts`). */

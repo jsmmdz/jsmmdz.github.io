@@ -1,6 +1,8 @@
 import { conBase } from '@/lib/rutas';
+import { SOBRE_MI_VISIBLE } from '@/lib/sobre-mi/visible';
 import type {
   Level,
+  SmAncla,
   DisciplineSlug,
   NavigationState,
   TransitionTrigger,
@@ -31,7 +33,10 @@ export const LEGAL_TRANSITIONS: LegalTransitionRule[] = [
   { from: 'N3', to: 'N4', requiresBlackHinge: true, description: 'Desplegar caso de estudio de una pieza' },
   { from: 'N4', to: 'N3', requiresBlackHinge: true, description: 'Botón volver: de caso de estudio al plano infinito' },
   { from: 'N3', to: 'N2', requiresBlackHinge: true, description: 'Botón volver: del plano infinito al menú circular' },
-  { from: 'N2', to: 'N1', requiresBlackHinge: false, description: 'Subir del menú circular al Home' }
+  { from: 'N2', to: 'N1', requiresBlackHinge: false, description: 'Subir del menú circular al Home' },
+  { from: 'N2', to: 'SM', requiresBlackHinge: false, description: 'La sección negra «Sobre mí» sube por encima del menú' },
+  { from: 'SM', to: 'N2', requiresBlackHinge: false, description: 'Desde el borde de la sección, la rueda baja el menú otra vez' },
+  { from: 'N1', to: 'SM', requiresBlackHinge: false, description: 'El enlace «Sobre mí» del home (corte, sin pasar por el menú)' }
 ];
 
 export class NavigationMachine {
@@ -43,6 +48,7 @@ export class NavigationMachine {
       currentLevel: initialState?.currentLevel ?? 'N0',
       activeDiscipline: initialState?.activeDiscipline ?? 'web',
       activeProject: initialState?.activeProject ?? null,
+      smAncla: initialState?.smAncla ?? 'sobre-mi',
       isTransitioning: false,
       canGoBack: false,
       historyAction: 'none'
@@ -107,7 +113,8 @@ export class NavigationMachine {
     let targetLevel: Level = this.state.currentLevel;
     let targetDiscipline = this.state.activeDiscipline;
     let targetProject = this.state.activeProject;
-    let historyAction: 'replaceState' | 'none' = 'none';
+    let targetAncla: SmAncla = this.state.smAncla;
+    let historyAction: 'replaceState' | 'pushState' | 'none' = 'none';
     let setsTransitionLock = false;
 
     switch (trigger.type) {
@@ -130,6 +137,27 @@ export class NavigationMachine {
         if (this.state.currentLevel !== 'N2') return false;
         targetLevel = 'N1';
         targetDiscipline = 'web';
+        historyAction = 'replaceState';
+        setsTransitionLock = false;
+        break;
+
+      case 'ENTER_SM':
+        // Desde el N2 (rueda o enlace del HUD) o desde el home (enlace). Con la rueda se reemplaza la
+        // entrada del historial, como N1 <-> N2; con el enlace se agrega una, para que «atrás» vuelva.
+        if (this.state.currentLevel !== 'N1' && this.state.currentLevel !== 'N2') return false;
+        if (trigger.via === 'rueda' && this.state.currentLevel !== 'N2') return false;
+        targetLevel = 'SM';
+        targetProject = null;
+        // El botón «Contacto» del home abre la sección en el bloque del formulario (T36, /#contacto).
+        targetAncla = trigger.ancla ?? 'sobre-mi';
+        historyAction = trigger.via === 'enlace' ? 'pushState' : 'replaceState';
+        setsTransitionLock = false;
+        break;
+
+      case 'EXIT_SM':
+        if (this.state.currentLevel !== 'SM') return false;
+        targetLevel = 'N2';
+        targetDiscipline = targetDiscipline ?? 'web';
         historyAction = 'replaceState';
         setsTransitionLock = false;
         break;
@@ -202,6 +230,7 @@ export class NavigationMachine {
       currentLevel: targetLevel,
       activeDiscipline: targetDiscipline,
       activeProject: targetProject,
+      smAncla: targetAncla,
       isTransitioning: setsTransitionLock,
       historyAction
     };
@@ -232,7 +261,7 @@ export class NavigationMachine {
    * Genera la URL canónica según el estado actual
    */
   public generateCanonicalUrl(): string {
-    const { currentLevel, activeDiscipline, activeProject } = this.state;
+    const { currentLevel, activeDiscipline, activeProject, smAncla } = this.state;
     switch (currentLevel) {
       case 'N0':
       case 'N1':
@@ -243,19 +272,22 @@ export class NavigationMachine {
         return conBase(`${activeDiscipline ?? 'web'}/`);
       case 'N4':
         return conBase(`${activeDiscipline ?? 'web'}/${activeProject ?? ''}/`);
+      case 'SM':
+        return conBase(`#${smAncla}`);
     }
   }
 
   /**
    * Sincroniza el URL con la History API del navegador
    */
-  private syncBrowserUrl(action: 'replaceState' | 'none'): void {
+  private syncBrowserUrl(action: 'replaceState' | 'pushState' | 'none'): void {
     if (typeof window === 'undefined' || action === 'none') return;
     const url = this.generateCanonicalUrl();
     const currentFull = window.location.pathname + window.location.hash;
     if (currentFull === url || currentFull.replace(/\/$/, '') === url.replace(/\/$/, '')) return;
 
-    window.history.replaceState(this.getState(), '', url);
+    if (action === 'pushState') window.history.pushState(this.getState(), '', url);
+    else window.history.replaceState(this.getState(), '', url);
   }
 
   /**
@@ -273,7 +305,12 @@ export class NavigationMachine {
     const segments = relativePath.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
 
     if (segments.length === 0 || segments[0] === '') {
-      if (hashPart === 'disciplinas' || isValidDisciplineSlug(hashPart)) {
+      // Sin la sección (GitHub Pages, lib/sobre-mi/visible.ts), /#sobre-mi y /#contacto abren el home.
+      if (SOBRE_MI_VISIBLE && (hashPart === 'sobre-mi' || hashPart === 'contacto')) {
+        this.state.currentLevel = 'SM';
+        this.state.smAncla = hashPart;
+        this.state.activeDiscipline = this.state.activeDiscipline ?? 'web';
+      } else if (hashPart === 'disciplinas' || isValidDisciplineSlug(hashPart)) {
         this.state.currentLevel = 'N2';
         this.state.activeDiscipline = isValidDisciplineSlug(hashPart) ? hashPart : (this.state.activeDiscipline ?? 'web');
       } else {

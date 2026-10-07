@@ -1,5 +1,6 @@
 import Lenis from 'lenis';
 import gsap from 'gsap';
+import { filtrarRueda } from './estado-paso';
 
 let lenisInstancia: Lenis | null = null;
 let tickerCallback: ((time: number) => void) | null = null;
@@ -27,6 +28,9 @@ export function iniciarLenis(): void {
 
   lenisInstancia = new Lenis({
     autoRaf: false,
+    // T35: en el N2 la rueda no recorre la página (baja a la sección o sube al home), y en el borde de la
+    // sección hacia arriba vuelve al N2. Lenis solo procesa los gestos que le tocan (estado-paso.ts).
+    virtualScroll: filtrarRueda,
   });
 
   // Un solo reloj (D2): el ticker de GSAP mueve Lenis y el render de three

@@ -9,7 +9,7 @@ import '@/styles/reduced-motion.css';
 interface Props {
   title?: string;
   description?: string;
-  initialLevel?: 'N0' | 'N1' | 'N2' | 'N3' | 'N4';
+  initialLevel?: 'N0' | 'N1' | 'N2' | 'N3' | 'N4' | 'SM';
   initialDiscipline?: string;
   initialProject?: string;
 }
@@ -35,9 +35,13 @@ const {
     <link rel="icon" type="image/svg+xml" href={conBase('favicon.svg')} />
     <!-- Visitas con GoatCounter (docs/2-TECNICO.md § Hosting): sin cookies, solo en el sitio publicado
          y con su script copiado en public/, así que no corre código de terceros. -->
-    <script define:vars={{ contador: conBase('goatcounter.js') }}>
+    <!-- La ruta va en data-src y no en define:vars: astro check no conoce las variables de define:vars
+         y la compuerta check exige 0 avisos. -->
+    <script is:inline data-src={conBase('goatcounter.js')}>
       (function () {
         if (location.hostname !== 'jsmmdz.github.io') return;
+        var contador = document.currentScript && document.currentScript.dataset.src;
+        if (!contador) return;
         var gc = (window.goatcounter = { endpoint: 'https://jsmmdz.goatcounter.com/count', no_onload: true });
         var q = new URLSearchParams(location.search);
         var origen = q.get('ref');

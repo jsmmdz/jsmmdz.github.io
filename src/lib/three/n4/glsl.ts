@@ -489,9 +489,15 @@ void main() {
 export const TEXTO_FRAGMENT = /* glsl */ `
 uniform sampler2D u_mapa;
 uniform float u_alfa;
+// «Ver completo ↗» (T38): su rectángulo en la textura (x0, y0, x1, y1 en uv) y cuánto se ve; solo en el cristal
+// del paso activo. Sin enlace el rectángulo es vacío y no toca nada.
+uniform vec4 u_enlace;
+uniform float u_alfaEnlace;
 varying vec2 vUv;
 void main() {
   // La textura ya viene premultiplicada por su alfa
-  gl_FragColor = texture2D(u_mapa, vUv) * u_alfa;
+  vec4 color = texture2D(u_mapa, vUv) * u_alfa;
+  bool enEnlace = vUv.x >= u_enlace.x && vUv.x <= u_enlace.z && vUv.y >= u_enlace.y && vUv.y <= u_enlace.w;
+  gl_FragColor = enEnlace ? color * u_alfaEnlace : color;
 }
 `;

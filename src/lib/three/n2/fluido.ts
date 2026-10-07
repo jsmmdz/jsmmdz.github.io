@@ -280,6 +280,13 @@ export class FluidoN2 {
     this.empuje.set(0, 0);
   }
 
+  /** Para del todo y deja la velocidad en cero (T36: el home lo usa al salir de él). El N2 no la llama. */
+  detener(): void {
+    this.ultimoMovimiento = -Infinity;
+    this.soltar();
+    if (!this.limpio) this.limpiar();
+  }
+
   /** Un paso de la simulación. `dt` en segundos (se limita a 1/60 como Aikawa). */
   paso(dtSegundos: number): void {
     if (!this.velocidad || !this.presion || !this.divergencia || !this.rotacional) return;

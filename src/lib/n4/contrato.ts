@@ -1,11 +1,14 @@
 /**
  * El contrato de la plantilla del N4 (docs/2-TECNICO.md § Base de datos, autor, 2026-10-01).
  *
- * Un caso se arma solo con su frontmatter: una lista de pasos con tipo (`historia`, de 4 a 9) y el color
+ * Un caso se arma solo con su frontmatter: una lista de pasos con tipo (`historia`, de 4 a 12) y el color
  * del caso (`fondo`). Cada paso es un cristal a la izquierda y su foto a la derecha. Las reglas viven
  * aquí, sin depender de `astro:content`, para que `content.config.ts` las use al construir el sitio y
- * las pruebas las importen directo. Cada error nombra su campo.
+ * las pruebas las importen directo. Cada error nombra su campo. Corre solo en Node (al construir y en las
+ * pruebas): por eso puede comprobar que un corto existe en `public/media/`.
  */
+import { existsSync } from 'node:fs';
+import { join, normalize, sep } from 'node:path';
 import { z } from 'astro/zod';
 import { TIPOS_PASO } from './historia';
 
@@ -13,7 +16,10 @@ import { TIPOS_PASO } from './historia';
 export const MAX_PALABRAS_TEXTO = 20;
 export const MAX_CARACTERES_DESTACADO = 12;
 export const MIN_PASOS = 4;
-export const MAX_PASOS = 9;
+/** Hasta 12 pasos (T38, autor 2026-10-04): los resultados finales con su video suman pasos al final. */
+export const MAX_PASOS = 12;
+/** Cuántos pasos de un caso pueden llevar el corto de su video (T38). */
+export const MAX_VIDEOS = 3;
 /** Colores de la sección del design system: exactamente 5 (autor, 2026-10-02). */
 export const COLORES_PALETA = 5;
 /** Fuentes de la sección del design system: de 1 a 3, cada una con su archivo .woff2 en `public/`. */
@@ -31,6 +37,25 @@ export const CONTRASTE_MINIMO = 4.5;
 const CREMA = '#FAF8F5';
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
+// El video completo vive en Google Drive: un archivo o una carpeta, siempre por https
+const ENLACE_DRIVE = /^https:\/\/drive\.google\.com\/\S+$/;
+
+/** Carpetas donde puede estar `public/media/`: el script corre desde `sitio/` (build y pruebas) o desde la raíz. */
+function carpetasMedia(): string[] {
+  return [join(process.cwd(), 'public', 'media'), join(process.cwd(), 'sitio', 'public', 'media')];
+}
+
+/** ¿`corto` es un .mp4 de `public/media/`, sin salir de esa carpeta? */
+function cortoEsMp4DentroDeMedia(corto: string): boolean {
+  const ruta = normalize(corto).split(sep).join('/');
+  const absoluta = ruta.startsWith('/') || /^[a-z]:/i.test(ruta);
+  return /\.mp4$/i.test(ruta) && !absoluta && ruta !== '..' && !ruta.startsWith('../');
+}
+
+/** ¿El corto existe dentro de alguna carpeta `public/media/`? */
+function cortoExiste(corto: string): boolean {
+  return carpetasMedia().some((base) => existsSync(join(base, normalize(corto))));
+}
 
 /** Luminancia relativa de WCAG de un color `#RRGGBB`. */
 export function luminancia(hex: string): number {
@@ -65,6 +90,17 @@ function esquemaPaso<I extends z.ZodTypeAny>(image: () => I) {
       .refine((t) => palabras(t) <= MAX_PALABRAS_TEXTO, `texto pasa de ${MAX_PALABRAS_TEXTO} palabras`),
     foto: image(),
     alt: z.string().trim().min(1, 'alt es obligatorio: describe la foto'),
+    // El corto que reemplaza la foto del paso y el enlace al video completo (T38). Solo en pasos `resultado`.
+    video: z
+      .object({
+        corto: z
+          .string()
+          .trim()
+          .refine(cortoEsMp4DentroDeMedia, 'video.corto debe ser un .mp4 dentro de public/media/ (ruta relativa, sin salir de la carpeta)')
+          .refine((c) => !cortoEsMp4DentroDeMedia(c) || cortoExiste(c), 'video.corto no existe en public/media/'),
+        enlace: z.string().trim().regex(ENLACE_DRIVE, 'video.enlace debe empezar con https://drive.google.com/'),
+      })
+      .optional(),
   });
 }
 
@@ -119,6 +155,9 @@ export function esquemaProyecto<I extends z.ZodTypeAny, D extends z.ZodTypeAny =
             .max(MAX_FUENTES, `designSystem.fuentes admite a lo sumo ${MAX_FUENTES} fuentes`),
         })
         .optional(),
+      // La sección de resultados (autor, 2026-10-06; hoy solo Bernarte): los pasos con video salen de la historia y
+      // van juntos, cada corto en su marco, a pantalla completa en el tramo de la sección, antes del paso que los sigue
+      galeria: z.boolean().optional(),
     })
     .superRefine((caso, ctx) => {
       const pasos = caso.historia;
@@ -129,6 +168,26 @@ export function esquemaProyecto<I extends z.ZodTypeAny, D extends z.ZodTypeAny =
       }
       if (pasos[pasos.length - 1].tipo !== 'resultado') {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['historia', pasos.length - 1, 'tipo'], message: 'historia: el último paso debe ser de tipo resultado' });
+      }
+      // El video solo acompaña a un resultado, y no más de MAX_VIDEOS por caso
+      pasos.forEach((p, i) => {
+        if (p.video && p.tipo !== 'resultado') {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['historia', i, 'video'], message: 'historia: video solo va en pasos de tipo resultado' });
+        }
+      });
+      if (pasos.filter((p) => p.video).length > MAX_VIDEOS) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['historia'], message: `historia: a lo sumo ${MAX_VIDEOS} pasos pueden llevar video` });
+      }
+      if (caso.galeria) {
+        const conVideo = pasos.flatMap((p, i) => (p.video ? [i] : []));
+        if (caso.designSystem) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['galeria'], message: 'galeria: no va con designSystem (las dos usan el tramo de la sección)' });
+        }
+        if (conVideo.length < 2) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['galeria'], message: 'galeria: necesita al menos 2 pasos con video' });
+        } else if (conVideo[conVideo.length - 1] - conVideo[0] !== conVideo.length - 1) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['galeria'], message: 'galeria: los pasos con video van seguidos' });
+        }
       }
       for (const tipo of ['problema', 'rol'] as const) {
         if (!pasos.some((p) => p.tipo === tipo)) {
