@@ -48,7 +48,7 @@ export interface Disposicion {
 export function disposicion(ancho: number, alto: number, foto: RectPortada): Disposicion {
   const angosto = ancho < N4_MEDIO.anchoMinEscritorioPx;
   if (!angosto) {
-    const rem = remDeVentana(ancho);
+    const rem = remDeVentana(ancho, alto);
     return {
       angosto,
       ancho,

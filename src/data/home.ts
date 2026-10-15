@@ -1,8 +1,8 @@
 // Textos y datos del home (N1). La diagramación es la del prototipo del autor (docs/1-PRODUCTO.md § 7, «Home
-// rediseñado con su diagramación · T36», 2026-10-04): el personaje en el centro delante del titular, una
-// columna de texto a cada lado y el botón «Contacto» arriba a la derecha. Los textos de las columnas los
-// reescribe el autor: hasta entonces llevan [EJEMPLO] aquí, en el código, no en pantalla. Las posiciones
-// salen de fabrica/proyecto/referentes/T36.json («diagramacion_autor»).
+// rediseñado con su diagramación · T36», 2026-10-04): el personaje en el centro (desde T44, un video detrás del
+// titular), una columna de texto a cada lado y el botón «Contacto» arriba a la derecha. Los textos de las columnas son del autor
+// (docs/1-PRODUCTO.md § 7, «Los textos del home», 2026-10-13). Las posiciones salen de
+// fabrica/proyecto/referentes/T36.json («diagramacion_autor»).
 
 import { conBase, conMedia } from '@/lib/rutas';
 
@@ -22,21 +22,29 @@ export interface DatosHome {
   nombre: string;
   /** Columna izquierda: titular de dos líneas, párrafo de dos líneas y el enlace que baja al menú. */
   columnaIzquierda: {
-    /** [EJEMPLO]: lo reescribe el autor. Cada elemento es una línea (la subida entra línea por línea). */
+    /** Cada elemento es una línea (la subida entra línea por línea). */
     titular: readonly string[];
-    /** [EJEMPLO]: lo reescribe el autor. */
+    /** Dos líneas cortas (≤ 27 letras): más largas se parten y empujan el enlace. */
     parrafo: readonly string[];
-    /** «Ver mi trabajo»: baja al menú (lo intercepta lib/pelicula/scroll.ts). */
+    /** «Ver los casos»: baja al menú (lo intercepta lib/pelicula/scroll.ts). */
     cta: Enlace;
   };
-  /** Columna derecha: dos cifras con su pie. [EJEMPLO]: las reescribe el autor. */
+  /** Columna derecha: dos cifras con su pie. La primera la actualiza el autor al publicar un caso; la segunda es el
+   *  dato vivo del home pintado (T44): aquí va su valor inicial. */
   columnaDerecha: readonly [Dato, Dato];
-  /** El personaje verde de 3D, recortado. Por ahora una imagen; el modelo 3D lo cambia (lib/n1/personaje.ts). */
+  /**
+   * El personaje animado del home (T44). `src` es el póster (el primer cuadro del video, con transparencia): marca
+   * la caja del personaje y es lo que se ve mientras el canvas de la tinta no lo dibuja. `video` es el mp4 de color
+   * (mitad izquierda, premultiplicado) y máscara (mitad derecha). `miniatura` es la del botón «Contacto».
+   */
   personaje: {
     src: string;
     alt: string;
+    /** Tamaño del cuadro del póster y de cada mitad del video, en px. */
     ancho: number;
     alto: number;
+    video: string;
+    miniatura: string;
   };
   /** Arriba a la derecha: el botón con miniatura del personaje. Lleva al formulario (`/#contacto`). */
   contacto: Enlace;
@@ -51,31 +59,34 @@ export interface DatosHome {
 
 // @deprecated: `home.tarjeta` ya no se dibuja en el home (la tarjeta «Trabajemos juntos» salió con Mr. BLACK).
 // Sigue aquí solo porque `N0Preloader.astro` la precarga (línea 37) y N0 es de T34, que la quita. Apunta al
-// mismo personaje que el home usa para que el preloader no baje la lámina azul de 800 KB. Se marca con un
+// misma miniatura del botón «Contacto» del home, así el preloader baja una imagen chica. Se marca con un
 // comentario y no con la etiqueta JSDoc: la etiqueta hace que `astro check` avise (hint) en N0, que no es de
 // esta tarea, y la compuerta `check` exige 0 hints.
 export interface DatosHomeHeredados {
   tarjeta: Enlace & { miniatura: string; alt: string };
 }
 
-const PERSONAJE = conMedia('personaje/laterales/03-verde-3d.png');
+const POSTER = conMedia('home/personaje/personaje-home-poster.webp');
+const MINIATURA = conMedia('home/personaje/personaje-home-miniatura.webp');
 
 export const home: DatosHome & DatosHomeHeredados = {
   nombre: 'JSMMDZ',
   columnaIzquierda: {
-    titular: ['Creación', 'digital.'], // [EJEMPLO]
-    parrafo: ['Web, motion, 3D,', 'videojuegos y editorial.'], // [EJEMPLO]
-    cta: { texto: 'Ver mi trabajo', href: '#disciplinas' },
+    titular: ['Aprendo', 'jugando.'],
+    parrafo: ['Soy Junior. Nada de esto', 'lo sabía hacer antes.'],
+    cta: { texto: 'Ver los casos', href: '#disciplinas' },
   },
   columnaDerecha: [
-    { cifra: '5', pie: 'Disciplinas' }, // [EJEMPLO]
-    { cifra: '4', pie: 'Casos de estudio' }, // [EJEMPLO]
+    { cifra: '55 %', pie: 'Del sitio construido' },
+    { cifra: '0 %', pie: 'Pintado por ti' },
   ],
   personaje: {
-    src: PERSONAJE,
-    alt: 'El autor como personaje 3D, de cuerpo entero: chaleco acolchado verde sobre una sudadera gris, pantalón cargo oscuro y tenis verdes.',
-    ancho: 1248,
-    alto: 1872,
+    src: POSTER,
+    alt: 'El autor como personaje 3D, de cuerpo entero: puffer negro corto con un panel azul en diagonal, el logo «Creación Digital» en el pecho y una correa ámbar, pantalón negro ancho con un bolsillo verde y tenis negros con suela crema.',
+    ancho: 1080,
+    alto: 1920,
+    video: conMedia('home/personaje/personaje-home-mascara.mp4'),
+    miniatura: MINIATURA,
   },
   contacto: { texto: 'Contacto', href: conBase('#contacto') },
   sobreMi: { texto: 'Sobre mí', href: conBase('#sobre-mi') },
@@ -90,7 +101,7 @@ export const home: DatosHome & DatosHomeHeredados = {
   tarjeta: {
     texto: '',
     href: conBase('#contacto'),
-    miniatura: PERSONAJE,
+    miniatura: MINIATURA,
     alt: '',
   },
 };

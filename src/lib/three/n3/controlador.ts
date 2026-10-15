@@ -252,7 +252,7 @@ export class ControladorN3 {
   abrirCaso(slug: string): boolean {
     if (this.mundo.volando) return true;
     const i = this.e.tarjetas.findIndex((t) => t.slug === slug);
-    const destino = rectPortadaN4(window.innerWidth);
+    const destino = rectPortadaN4(window.innerWidth, window.innerHeight);
     if (i < 0 || !destino || this.e.reducido()) return false;
     this.slugEnVuelo = slug;
     this.indiceEnVuelo = i;

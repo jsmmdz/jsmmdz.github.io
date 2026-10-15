@@ -1,0 +1,550 @@
+---
+/**
+ * El contacto (T45, K21–K23): la piel y el comportamiento del RSVP de Tonami con los campos de T35 y el envío a
+ * Web3Forms. El título grande queda fijo a media pantalla mientras sube el cuerpo y luego se va hacia arriba con
+ * el scroll, como el «RSVP» de Tonami (E2, autor, 2026-10-15): a la izquierda la tarjeta de papel (presentación, el correo como texto y las redes) y a la derecha el formulario. La validación, el borrador,
+ * el envío y los diálogos están en `lib/sobre-mi/formulario.ts`. Sin la ventana de confirmar (decisión del autor,
+ * 2026-10-14). `data-sm="contacto"` y `tabindex="-1"` los usan `/#contacto` y las pruebas de T36.
+ */
+import { sobreMi as datos } from '@/data/sobre-mi';
+import Destello from './Destello.astro';
+
+const c = datos.contacto;
+const f = c.formulario;
+const w = datos.web3forms;
+---
+
+<div class="sm-contacto" data-sm-bloque="contacto" data-sm="contacto" tabindex="-1">
+  <div class="sm-c-cabeza">
+    <div class="sm-c-marco">
+      <h2 class="sm-c-titulo" data-sm="contacto-titulo">{c.titulo}</h2>
+      <p class="sm-c-subtitulo">{c.subtitulo}</p>
+    </div>
+  </div>
+
+  <div class="sm-c-cuerpo">
+    <!-- La tarjeta de papel (K21): presentación, el correo como texto (sin mailto) y las redes en otra pestaña -->
+    <div class="sm-c-tarjeta" data-sm="tarjeta">
+      <div class="sm-c-presentacion">{c.tarjeta.texto.map((t) => <p>{t}</p>)}</div>
+      <div class="sm-c-datos">
+        <p class="sm-c-rotulo">{c.tarjeta.correoRotulo}</p>
+        <p class="sm-c-correo" data-sm-correo>{c.correo}</p>
+        <p class="sm-c-rotulo">{c.tarjeta.redesRotulo}</p>
+        <ul class="sm-c-redes">
+          {c.redes.map((r) => (
+            <li><a class="sm-c-red toque" href={r.href} target="_blank" rel="noopener noreferrer">{r.texto}</a></li>
+          ))}
+        </ul>
+      </div>
+    </div>
+
+    <form class="sm-c-form" data-sm-formulario data-estado="reposo" novalidate aria-busy="false" aria-label={c.titulo}>
+      <!-- Web3Forms: la clave es pública por diseño; la trampa de spam, oculta -->
+      <input type="hidden" name="access_key" value={w.claveAcceso} />
+      <input type="hidden" name="subject" value={w.asunto} />
+      <input type="hidden" name="from_name" value={w.remitente} />
+      <input type="checkbox" name="botcheck" class="sm-trampa" tabindex="-1" autocomplete="off" aria-hidden="true" />
+
+      <div class="sm-c-campo" data-sm-campo="name">
+        <label class="sm-c-etiqueta" for="sm-name"><span>{f.etiquetas.nombre}</span><Destello class="sm-c-etiqueta-destello" /></label>
+        <div class="sm-c-caja">
+          <input id="sm-name" name="name" type="text" autocomplete="name" aria-required="true" aria-describedby="sm-error-name" />
+          <Destello class="sm-c-caja-destello" />
+        </div>
+        <p class="sm-c-error" id="sm-error-name" data-sm-error-campo="name"></p>
+      </div>
+
+      <div class="sm-c-campo" data-sm-campo="company">
+        <label class="sm-c-etiqueta" for="sm-company"><span>{f.etiquetas.empresa} <span class="sm-solo-lectores">{f.opcional}</span></span><Destello class="sm-c-etiqueta-destello" /></label>
+        <div class="sm-c-caja">
+          <input id="sm-company" name="company" type="text" autocomplete="organization" />
+          <Destello class="sm-c-caja-destello" />
+        </div>
+        <p class="sm-c-error" aria-hidden="true"></p>
+      </div>
+
+      <div class="sm-c-campo" data-sm-campo="email">
+        <label class="sm-c-etiqueta" for="sm-email"><span>{f.etiquetas.correo}</span><Destello class="sm-c-etiqueta-destello" /></label>
+        <div class="sm-c-caja">
+          <input id="sm-email" name="email" type="email" autocomplete="email" aria-required="true" aria-describedby="sm-error-email" />
+          <Destello class="sm-c-caja-destello" />
+        </div>
+        <p class="sm-c-error" id="sm-error-email" data-sm-error-campo="email"></p>
+      </div>
+
+      <div class="sm-c-campo" data-sm-campo="message">
+        <label class="sm-c-etiqueta" for="sm-message"><span>{f.etiquetas.mensaje}</span><Destello class="sm-c-etiqueta-destello" /></label>
+        <div class="sm-c-caja">
+          <textarea id="sm-message" name="message" rows="4" aria-required="true" aria-describedby="sm-error-message"></textarea>
+          <Destello class="sm-c-caja-destello" />
+        </div>
+        <p class="sm-c-error" id="sm-error-message" data-sm-error-campo="message"></p>
+      </div>
+
+      <div class="sm-c-campo sm-c-campo-casilla" data-sm-campo="autorizacion">
+        <label class="sm-c-autoriza">
+          <input type="checkbox" id="sm-autorizacion" name="autorizacion" aria-required="true" aria-describedby="sm-error-autorizacion" />
+          <span class="sm-c-casilla" data-sm-casilla aria-hidden="true">
+            <svg viewBox="0 0 16 16" focusable="false"><path d="M3 8.5 6.5 12 13 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          </span>
+          <span class="sm-c-autoriza-texto">{f.autorizacion}</span>
+        </label>
+        <p class="sm-c-error" id="sm-error-autorizacion" data-sm-error-campo="autorizacion"></p>
+      </div>
+
+      <!-- Lo que anuncia el lector de pantalla al enviar con errores (K23): cuántos y a cuál se llevó el foco -->
+      <p class="sm-c-resumen" data-sm-resumen aria-live="assertive" aria-atomic="true"></p>
+
+      <button type="submit" class="sm-c-enviar toque" data-sm-enviar>
+        <span class="sm-c-enviar-texto">{f.boton}</span>
+        <span class="sm-c-esquina sm-c-esquina-sup" aria-hidden="true"></span>
+        <span class="sm-c-esquina sm-c-esquina-inf" aria-hidden="true"></span>
+        <Destello class="sm-c-enviar-estrella sm-c-enviar-estrella-1" />
+        <Destello class="sm-c-enviar-estrella sm-c-enviar-estrella-2" />
+        <Destello class="sm-c-enviar-estrella sm-c-enviar-estrella-3" />
+      </button>
+    </form>
+  </div>
+</div>
+
+<style is:global>
+  /* T36 (/#contacto): el bloque lleva su borde de arriba al de la pantalla; la página solo llega hasta ahí si el
+     bloque mide al menos el alto de la pantalla. */
+  .sm-contacto {
+    /* E2 (autor, 2026-10-15), calcado del RSVP de Tonami (grabaciones a 1440 y 390): el cuerpo entra desde abajo de
+       la pantalla (su borde de arriba a 1,26 alturas del inicio; a 390, 1,08) y el título queda fijo hasta que el
+       cuerpo llega a una holgura bajo el subtítulo; desde ahí se va hacia arriba con el scroll, sin fundido. */
+    --sm-c-entrada: calc(1.2645 * var(--sm-vh));
+    --sm-c-suelta: calc(180 * var(--sm-p));
+    --sm-c-cabeza: calc(0.5 * var(--sm-vh) + var(--sm-c-entrada) - var(--sm-c-suelta));
+    position: relative;
+    min-height: var(--sm-vh);
+    padding-bottom: calc(110 * var(--sm-p));
+  }
+
+  .sm-seccion [data-sm="contacto"]:focus {
+    outline: none;
+  }
+
+  /* El título grande queda fijo a media pantalla mientras sube el cuerpo (K21); la cabeza termina cuando el cuerpo
+     llega a la holgura bajo el subtítulo (--sm-c-suelta desde el centro) y el marco sale con el scroll. */
+  .sm-c-cabeza {
+    height: var(--sm-c-cabeza);
+  }
+
+  .sm-c-marco {
+    position: sticky;
+    top: 0;
+    z-index: 0;
+    height: var(--sm-vh);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: calc(14 * var(--sm-p));
+    pointer-events: none;
+  }
+
+  .sm-c-titulo {
+    margin: 0;
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    font-size: calc(104 * var(--sm-p));
+    line-height: 1;
+    letter-spacing: -0.03em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  .sm-c-subtitulo {
+    margin: 0;
+    font-size: var(--sm-letra-md);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .sm-c-cuerpo {
+    position: relative;
+    z-index: 1;
+    margin-top: calc(-1 * var(--sm-c-cabeza));
+    padding-top: var(--sm-c-entrada);
+    display: grid;
+    grid-template-columns: 10.9% 37.7% 8.1% minmax(0, 27.1%) 1fr;
+    align-items: start;
+  }
+
+  /* La tarjeta de papel (K21): x 10,9 %, 37,7 % de ancho, radio 20, relleno 40, con su sombra de papel. */
+  .sm-c-tarjeta {
+    grid-column: 2;
+    position: sticky;
+    top: calc(0.3 * var(--sm-vh));
+    padding: calc(40 * var(--sm-p));
+    border: 1px solid var(--sm-linea);
+    border-radius: calc(20 * var(--sm-p));
+    background-color: var(--sm-papel);
+    box-shadow: var(--sm-sombra-papel);
+  }
+
+  .sm-c-presentacion p {
+    margin: 0 0 calc(16 * var(--sm-p));
+    font-size: var(--sm-letra-md);
+    line-height: 2;
+  }
+
+  .sm-c-datos {
+    margin-top: calc(24 * var(--sm-p));
+    padding-top: calc(20 * var(--sm-p));
+    border-top: 1px solid var(--sm-linea);
+  }
+
+  .sm-c-rotulo {
+    margin: 0 0 calc(4 * var(--sm-p));
+    font-size: var(--sm-letra-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+
+  .sm-c-correo {
+    margin: 0 0 calc(20 * var(--sm-p));
+    font-size: var(--sm-letra-md);
+    font-weight: 700;
+    user-select: text;
+    cursor: text;
+    overflow-wrap: anywhere;
+  }
+
+  .sm-c-redes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 calc(28 * var(--sm-p));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .sm-c-red {
+    /* El área de toque (T39): la caja del enlace mide lo que pide el dedo (44 px) o el ratón (24 px). */
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--toque);
+    color: var(--sm-primario);
+    font-size: var(--sm-letra-md);
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+
+  /* ---------- El formulario ---------- */
+
+  .sm-c-form {
+    grid-column: 4;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sm-c-campo {
+    margin: 0;
+  }
+
+  /* La etiqueta numerada con su subrayado de 1 px que termina en un destello (K22). */
+  .sm-c-etiqueta {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: min(100%, calc(193 * var(--sm-p)));
+    padding-bottom: calc(5 * var(--sm-p));
+    border-bottom: 1px solid var(--sm-primario);
+    font-size: var(--sm-letra-md);
+    line-height: 1.3;
+    cursor: pointer;
+  }
+
+  .sm-destello {
+    flex: none;
+    display: block;
+    width: calc(15 * var(--sm-p));
+    height: calc(15 * var(--sm-p));
+    color: var(--sm-primario);
+  }
+
+  .sm-c-etiqueta-destello {
+    margin-right: calc(-7 * var(--sm-p));
+    margin-bottom: calc(-11 * var(--sm-p));
+    align-self: flex-end;
+    background-color: var(--sm-pagina);
+  }
+
+  /* La caja de papel de 48 px con la letra de 16 px (el mensaje, más alto); el subrayado cierra la caja. */
+  .sm-c-caja {
+    position: relative;
+    margin-top: calc(10 * var(--sm-p));
+  }
+
+  .sm-c-caja input,
+  .sm-c-caja textarea {
+    display: block;
+    width: 100%;
+    height: 48px;
+    margin: 0;
+    padding: 0 calc(16 * var(--sm-p));
+    border: 0;
+    border-bottom: 1px solid var(--sm-primario);
+    border-radius: 0;
+    background-color: var(--sm-papel);
+    box-shadow: var(--sm-sombra-papel);
+    color: var(--sm-primario);
+    font-family: var(--fuente-texto);
+    font-size: var(--sm-tam-campo);
+    line-height: 1.3;
+    caret-color: var(--sm-primario);
+  }
+
+  .sm-c-caja textarea {
+    height: calc(140 * var(--sm-p));
+    min-height: 96px;
+    padding-top: calc(13 * var(--sm-p));
+    resize: vertical;
+  }
+
+  .sm-c-caja-destello {
+    position: absolute;
+    right: calc(-9 * var(--sm-p));
+    bottom: calc(-8 * var(--sm-p));
+    background-color: var(--sm-pagina);
+  }
+
+  /* El área de toque (T39): la caja mide 48 px y la etiqueta sirve de blanco hacia arriba. */
+  .sm-c-caja input:-webkit-autofill {
+    -webkit-text-fill-color: var(--sm-primario);
+    transition: background-color 600000s 0s;
+  }
+
+  /* Error (K22): el subrayado y el texto en el color de error, con el mensaje en una franja reservada bajo el campo. */
+  .sm-c-error {
+    min-height: calc(14 * 1.25 * var(--sm-p));
+    margin: calc(6 * var(--sm-p)) 0 calc(14 * var(--sm-p));
+    color: var(--sm-error);
+    font-size: max(var(--letra-min), calc(14 * var(--sm-p)));
+    line-height: 1.25;
+  }
+
+  .sm-c-campo[data-error="true"] .sm-c-etiqueta,
+  .sm-c-campo[data-error="true"] .sm-c-caja input,
+  .sm-c-campo[data-error="true"] .sm-c-caja textarea {
+    border-bottom-color: var(--sm-error);
+    color: var(--sm-error);
+  }
+
+  .sm-c-campo[data-error="true"] .sm-destello {
+    color: var(--sm-error);
+  }
+
+  /* Válido: la marca final del subrayado pasa de contorno a llena. */
+  .sm-c-campo[data-valido="true"] .sm-destello path {
+    fill: currentColor;
+  }
+
+  /* La casilla dibujada: se ve enfocada con el teclado (Tonami no lo tiene). */
+  .sm-c-campo-casilla {
+    margin-top: calc(6 * var(--sm-p));
+  }
+
+  .sm-c-autoriza {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: calc(12 * var(--sm-p));
+    font-size: var(--sm-letra-sm);
+    line-height: 1.45;
+    cursor: pointer;
+  }
+
+  .sm-c-autoriza input {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: calc(22 * var(--sm-p));
+    height: calc(22 * var(--sm-p));
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .sm-c-casilla {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: calc(22 * var(--sm-p));
+    height: calc(22 * var(--sm-p));
+    min-width: 20px;
+    min-height: 20px;
+    border: 1px solid var(--sm-primario);
+    background-color: var(--sm-papel);
+    color: var(--sm-papel);
+  }
+
+  .sm-c-casilla svg {
+    width: 80%;
+    height: 80%;
+  }
+
+  .sm-c-autoriza input:checked + .sm-c-casilla {
+    background-color: var(--sm-primario);
+  }
+
+  .sm-c-autoriza input:focus-visible + .sm-c-casilla {
+    outline: 2px solid var(--color-foco);
+    outline-offset: 3px;
+  }
+
+  .sm-c-campo[data-error="true"] .sm-c-casilla {
+    border-color: var(--sm-error);
+  }
+
+  .sm-c-resumen {
+    min-height: calc(20 * var(--sm-p));
+    margin: 0 0 calc(10 * var(--sm-p));
+    color: var(--sm-error);
+    font-size: max(var(--letra-min), calc(14 * var(--sm-p)));
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  /* El botón de enviar: caja de papel con borde, esquinas decorativas y las estrellas que brotan al pasar el cursor (K22). */
+  .sm-c-enviar {
+    position: relative;
+    align-self: flex-start;
+    min-width: calc(190 * var(--sm-p));
+    min-height: max(var(--toque), calc(54 * var(--sm-p)));
+    padding: 0 calc(36 * var(--sm-p));
+    border: 1px solid var(--sm-primario);
+    background-color: var(--sm-papel);
+    box-shadow: var(--sm-sombra-papel);
+    color: var(--sm-primario);
+    font-family: var(--fuente-texto);
+    font-size: var(--sm-letra-md);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background-color var(--sm-d-rapida) var(--sm-curva-salida), color var(--sm-d-rapida) var(--sm-curva-salida);
+  }
+
+  .sm-c-enviar:hover:not(:disabled),
+  .sm-c-enviar:focus-visible {
+    background-color: var(--sm-primario);
+    color: var(--sm-pagina);
+  }
+
+  .sm-c-enviar:disabled {
+    cursor: progress;
+    opacity: 0.7;
+  }
+
+  .sm-c-esquina {
+    position: absolute;
+    width: calc(11 * var(--sm-p));
+    height: calc(11 * var(--sm-p));
+    border: 0 solid var(--sm-primario);
+    pointer-events: none;
+  }
+
+  .sm-c-esquina-sup {
+    left: calc(-6 * var(--sm-p));
+    top: calc(-6 * var(--sm-p));
+    border-top-width: 1px;
+    border-left-width: 1px;
+  }
+
+  .sm-c-esquina-inf {
+    right: calc(-6 * var(--sm-p));
+    bottom: calc(-6 * var(--sm-p));
+    border-bottom-width: 1px;
+    border-right-width: 1px;
+  }
+
+  .sm-c-enviar-estrella {
+    position: absolute;
+    color: var(--sm-primario);
+    opacity: 0;
+    scale: 0.2;
+    pointer-events: none;
+    transition: opacity var(--sm-d-base) var(--sm-curva-salida), scale var(--sm-d-base) var(--sm-curva-atras), translate var(--sm-d-base) var(--sm-curva-atras);
+  }
+
+  .sm-c-enviar-estrella-1 {
+    right: calc(-14 * var(--sm-p));
+    top: calc(-14 * var(--sm-p));
+  }
+
+  .sm-c-enviar-estrella-2 {
+    left: calc(-12 * var(--sm-p));
+    bottom: calc(-14 * var(--sm-p));
+  }
+
+  .sm-c-enviar-estrella-3 {
+    right: 22%;
+    bottom: calc(-16 * var(--sm-p));
+  }
+
+  .sm-c-enviar:hover:not(:disabled) .sm-c-enviar-estrella,
+  .sm-c-enviar:focus-visible .sm-c-enviar-estrella {
+    opacity: 1;
+    scale: 1.1;
+  }
+
+  .sm-c-enviar:hover:not(:disabled) .sm-c-enviar-estrella-1,
+  .sm-c-enviar:focus-visible .sm-c-enviar-estrella-1 {
+    translate: calc(6 * var(--sm-p)) calc(-6 * var(--sm-p));
+  }
+
+  .sm-c-enviar:hover:not(:disabled) .sm-c-enviar-estrella-2,
+  .sm-c-enviar:focus-visible .sm-c-enviar-estrella-2 {
+    translate: calc(-6 * var(--sm-p)) calc(6 * var(--sm-p));
+  }
+
+  /* La trampa de Web3Forms: ni se ve ni se tabula. */
+  .sm-trampa {
+    display: none;
+  }
+
+  /* Celular (K29): una sola columna de 358 px; la tarjeta arriba y el formulario debajo. */
+  @media (max-width: 767px), (max-aspect-ratio: 1/1) {
+    .sm-contacto {
+      --sm-c-entrada: calc(1.08 * var(--sm-vh));
+      --sm-c-suelta: calc(96 * var(--sm-p));
+    }
+
+    .sm-c-titulo {
+      font-size: calc(46 * var(--sm-p));
+    }
+
+    .sm-c-cuerpo {
+      grid-template-columns: calc(16 * var(--sm-p)) minmax(0, 1fr) calc(16 * var(--sm-p));
+      row-gap: calc(28 * var(--sm-p));
+    }
+
+    .sm-c-tarjeta {
+      grid-column: 2;
+      position: relative;
+      top: auto;
+      padding: calc(24 * var(--sm-p));
+    }
+
+    .sm-c-presentacion p {
+      line-height: 1.7;
+    }
+
+    .sm-c-form {
+      grid-column: 2;
+    }
+
+    .sm-c-enviar {
+      align-self: stretch;
+    }
+  }
+</style>

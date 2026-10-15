@@ -1,6 +1,17 @@
 ---
 import { ClientRouter } from 'astro:transitions';
 import { conBase } from '@/lib/rutas';
+import {
+  LETRA_CAMPO_PX,
+  LETRA_MIN_PX,
+  PISO_PX,
+  REM_LANDBERG_MIN_PX,
+  REM_LANDBERG_REF_PX,
+  TOQUE_RATON_PX,
+  TOQUE_TACTIL_PX,
+  UNIDAD_REF,
+  UNIDAD_TOPE_ANCHO,
+} from '@/lib/unidad';
 import webPoster from '@/assets/disciplinas/web-poster.jpg';
 import '@/styles/tokens.css';
 import '@/styles/tipografia.css';
@@ -21,18 +32,56 @@ const {
   initialDiscipline = "web",
   initialProject = ""
 } = Astro.props;
+
+// La unidad del responsive (T39) en CSS: la misma fórmula y las mismas cifras de `lib/unidad.ts`, que escribe el
+// layout para que ninguna se copie a mano. `--u` vale 1 px a 1440 × 900 y deja de crecer en 2560 de ancho. Va con
+// `dvh` donde exista, porque es lo que mide `innerHeight` (la unidad de JS) con las barras del celular.
+// `--uvw` es lo que antes valía 1 vw a 1440 (14,4 px), escalado: los `vw` del sitio pasan a él. `--rem-landberg` es
+// el rem del N3 y del N4 (remLandberg en JS). `--toque`, `--letra-min` y `--letra-campo` son las reglas de toque y letra.
+const unidadCss = (alto: string) =>
+  `min(100vw / ${UNIDAD_REF.ancho}, ${alto} / ${UNIDAD_REF.alto}, ${UNIDAD_TOPE_ANCHO}px / ${UNIDAD_REF.ancho})`;
+const estiloUnidad = [
+  `:root{--u:${unidadCss('100vh')};--uvw:calc(var(--u) * ${UNIDAD_REF.ancho / 100});--uvh:calc(var(--u) * ${UNIDAD_REF.alto / 100});`,
+  `--rem-landberg:max(${REM_LANDBERG_MIN_PX}px, calc(var(--u) * ${REM_LANDBERG_REF_PX}));`,
+  `--toque:${TOQUE_RATON_PX}px;--letra-min:${LETRA_MIN_PX}px;--letra-campo:${LETRA_CAMPO_PX}px}`,
+  `@supports (height:100dvh){:root{--u:${unidadCss('100dvh')}}}`,
+  `@media (any-pointer:coarse){:root{--toque:${TOQUE_TACTIL_PX}px}}`,
+].join('');
+
+// El piso de 360 (truco de Aikawa): bajo ese ancho de pantalla la página se arma a 360 y el celular la reduce. Va en
+// línea en el <head>, antes del primer pintado. El ClientRouter cambia el <meta> por el del documento nuevo al
+// navegar, así que se vuelve a aplicar después de cada cambio de página, y al girar el aparato.
+const scriptPiso = `(function () {
+  var normal = 'width=device-width, initial-scale=1';
+  function ajustar() {
+    var meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) return;
+    var quiero = screen.width < ${PISO_PX} ? 'width=${PISO_PX}' : normal;
+    if (meta.getAttribute('content') !== quiero) meta.setAttribute('content', quiero);
+  }
+  ajustar();
+  window.addEventListener('orientationchange', ajustar);
+  window.addEventListener('resize', ajustar);
+  document.addEventListener('astro:after-swap', ajustar);
+})();`;
 ---
 
 <!doctype html>
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script is:inline set:html={scriptPiso}></script>
+    <style is:inline set:html={estiloUnidad}></style>
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
+    <!-- El ícono: la «J» del titular en Unbounded 800, negra sobre crema (autor, 2026-10-13). El PNG es el respaldo
+         de los navegadores que no leen SVG y el de 180 px, el de la pantalla de inicio del iPhone. -->
     <link rel="icon" type="image/svg+xml" href={conBase('favicon.svg')} />
+    <link rel="icon" type="image/png" sizes="32x32" href={conBase('favicon-32.png')} />
+    <link rel="apple-touch-icon" href={conBase('apple-touch-icon.png')} />
     <!-- Visitas con GoatCounter (docs/2-TECNICO.md § Hosting): sin cookies, solo en el sitio publicado
          y con su script copiado en public/, así que no corre código de terceros. -->
     <!-- La ruta va en data-src y no en define:vars: astro check no conoce las variables de define:vars

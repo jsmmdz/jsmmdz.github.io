@@ -13,6 +13,10 @@
  *
  * T36: además de la tinta, junta el paralaje del personaje y la capa de atrás (el titular, la tinta y el
  * video: `[data-n1-capa-atras]`) y la entrada de los textos de las columnas.
+ *
+ * T44: el personaje es un video que la tinta dibuja en su canvas (`#act-n1[data-personaje-lienzo]` cuando ya lo
+ * dibuja). Aquí se calcula su caja, se pide el video cuando la tinta se monta (corre mientras se está en el home)
+ * y se publica el dato vivo «N % · Pintado por ti» (`#act-n1[data-pintado]` y la segunda cifra de la derecha).
  */
 import gsap from 'gsap';
 import { suscribirProgresoCaida } from '@/lib/pelicula/caida-hook';
@@ -76,7 +80,9 @@ export function iniciarHome(): ControladorHome | null {
   let promesaModulo: Promise<ModuloTinta> | null = null;
   let cancelarEntrada: (() => void) | null = null;
   let cancelarTextos: (() => void) | null = null;
-  let personaje: PersonajeMontado | null = null;
+  const personaje: PersonajeMontado | null = montarPersonaje(seccion);
+  const videoPersonaje = personaje?.video ?? null;
+  const cifraPintado = seccion.querySelector<HTMLElement>('[data-n1-cifra][data-n1-pintado]');
   let paralaje: ControladorParalaje | null = null;
   let respaldoEntrada: number | null = null;
   let esperaRedimensionar: gsap.core.Tween | null = null;
@@ -118,6 +124,25 @@ export function iniciarHome(): ControladorHome | null {
     }
   };
 
+  // El video del personaje corre mientras se está en el home (activa o dormida) y se pausa fuera (pausada) o sin tinta.
+  // No se pide antes de que la tinta se monte: sin tinta (movimiento reducido, sin WebGL) nunca se pide.
+  const sincronizarPersonaje = (estado: EstadoHome): void => {
+    if (!videoPersonaje) return;
+    if (estado === 'activa' || estado === 'dormida') {
+      // Si el autoplay se bloquea, el póster se queda quieto en su caja: el home sigue funcionando.
+      videoPersonaje.play().catch(() => undefined);
+    } else {
+      videoPersonaje.pause();
+    }
+  };
+
+  // El dato vivo: el % del home con tinta visible. Solo cambia el texto cuando cambia el número (la cifra no es
+  // una región viva: no se anuncia a los lectores de pantalla).
+  const fijarPintado = (porcentaje: number): void => {
+    seccion.dataset.pintado = String(porcentaje);
+    if (cifraPintado) cifraPintado.textContent = `${porcentaje} %`;
+  };
+
   const apagar = (): void => {
     apagada = true;
     tinta?.destruir();
@@ -125,6 +150,11 @@ export function iniciarHome(): ControladorHome | null {
     lienzo?.remove();
     lienzo = null;
     delete seccion.dataset.tintaLienzo;
+    // El póster vuelve a verse quieto (sin data-personaje-lienzo) y el dato vivo, a «0 %».
+    delete seccion.dataset.personajeCuadros;
+    seccion.removeAttribute('data-personaje-lienzo');
+    sincronizarPersonaje('apagada');
+    fijarPintado(0);
     sincronizarVideo('apagada');
     fijarEstado('apagada');
   };
@@ -175,11 +205,14 @@ export function iniciarHome(): ControladorHome | null {
           lienzo: nuevo,
           titular,
           video,
+          personaje: personaje && videoPersonaje ? { caja: personaje.elemento, video: videoPersonaje } : undefined,
           alCambiarEstado: (estado) => {
             fijarEstado(estado);
             sincronizarVideo(estado);
+            sincronizarPersonaje(estado);
           },
           alPerderContexto: apagar,
+          alCambiarPintado: fijarPintado,
         });
       } catch {
         // Sin contexto WebGL: el titular se queda en el DOM, quieto.
@@ -261,6 +294,8 @@ export function iniciarHome(): ControladorHome | null {
 
   const redimensionar = (): void => {
     ajustarTitular(titular);
+    // La caja del personaje depende de la línea base de las letras y de las columnas: va después del titular.
+    personaje?.recalcular();
     tinta?.redimensionar();
   };
   const alCambiarTamano = (): void => {
@@ -268,6 +303,8 @@ export function iniciarHome(): ControladorHome | null {
     esperaRedimensionar = gsap.delayedCall(RETARDO_REDIMENSIONAR_S, redimensionar);
   };
   ajustarTitular(titular);
+  personaje?.recalcular();
+  seccion.dataset.pintado = '0';
   const observadorTamano = new ResizeObserver(alCambiarTamano);
   observadorTamano.observe(seccion);
   // La fuente real cambia las medidas: se vuelve a ajustar y a rasterizar cuando llega.
@@ -285,7 +322,6 @@ export function iniciarHome(): ControladorHome | null {
   }
 
   // El paralaje del ratón: solo con movimiento normal y mientras se está en el home.
-  personaje = montarPersonaje(seccion);
   if (personaje && !reducido) {
     paralaje = iniciarParalaje({
       personaje: personaje.elemento,
@@ -327,6 +363,7 @@ export function iniciarHome(): ControladorHome | null {
       if (respaldoEntrada !== null) window.clearTimeout(respaldoEntrada);
       if (esperaVideo !== null) window.clearTimeout(esperaVideo);
       video.pause();
+      videoPersonaje?.pause();
       tinta?.destruir();
       tinta = null;
       lienzo?.remove();

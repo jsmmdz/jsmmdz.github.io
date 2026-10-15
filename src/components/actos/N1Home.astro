@@ -1,13 +1,14 @@
 ---
 /**
  * N1Home.astro — Acto 1: el home con la diagramación del autor (T36, decisiones del 2026-10-04).
- * El personaje verde en el centro, delante del titular «JSMMDZ» gigante que va abajo; a la izquierda un
+ * El personaje animado en el centro, detrás del titular «JSMMDZ» gigante que va abajo (T44); a la izquierda un
  * titular, un párrafo y el enlace que baja al menú; a la derecha dos cifras; arriba a la derecha el botón
  * «Contacto». Sobre el titular corre la tinta que sigue al cursor y deja ver el video de materiales (T33,
  * lib/n1/). Referentes: noth.in (titular, tinta, entrada de los textos) y Digitalists (paralaje de dos capas).
  *
- * Capas, de abajo hacia arriba: la capa de atrás (`data-n1-capa-atras`: el titular, el canvas de la tinta y el
- * video), el personaje y los textos. Los textos van en negro sobre el crema y, donde pasa la tinta, invertidos
+ * Capas, de abajo hacia arriba: la capa de atrás (`data-n1-capa-atras`: el titular, el canvas de la tinta —que
+ * dibuja también al personaje— y los dos videos), el póster del personaje (solo se ve hasta que el canvas lo
+ * dibuja, o si no hay canvas) y los textos. Los textos van en negro sobre el crema y, donde pasa la tinta, invertidos
  * con `mix-blend-mode: difference` (E1 de T33): por eso ningún ancestro de un texto crea un contexto de apilado
  * (sin z-index, opacidad ni transform), o el modo de mezcla solo vería su propia caja.
  */
@@ -55,9 +56,24 @@ const iconoPuntos =
       aria-hidden="true"
       tabindex="-1"
     ></video>
+
+    <!-- El personaje (T44): un mp4 de color (mitad izquierda, premultiplicado) y máscara (mitad derecha) que la
+         tinta dibuja en su canvas, detrás de las letras. Tampoco entra a la precarga: se pide al montar la tinta. -->
+    <video
+      class="n1-video"
+      data-n1-personaje-video
+      src={home.personaje.video}
+      muted
+      loop
+      playsinline
+      preload="none"
+      aria-hidden="true"
+      tabindex="-1"
+    ></video>
   </div>
 
-  <!-- El personaje, delante del titular (hoy una imagen; lib/n1/personaje.ts es el punto para cambiarla por el modelo 3D) -->
+  <!-- El póster del personaje: su caja (lib/n1/personaje.ts la calcula y el canvas dibuja el video exactamente
+       sobre ella). Se ve hasta que el canvas dibuja el primer cuadro; después sigue en el árbol de accesibilidad. -->
   <img
     class="n1-personaje"
     data-n1-personaje
@@ -84,18 +100,19 @@ const iconoPuntos =
       ))}
     </p>
     <span class="n1-envoltura n1-mezcla n1-envoltura-cta">
-      <a class="n1-cta" href={izquierda.cta.href} data-n1-cta data-n1-sube>
+      <a class="n1-cta toque" href={izquierda.cta.href} data-n1-cta data-n1-sube>
         <Fragment set:html={iconoPuntos} />
         <span class="n1-cta-texto">{izquierda.cta.texto}</span>
       </a>
     </span>
   </div>
 
-  <!-- Columna derecha: dos cifras con su pie. Entran como el texto, sin contar. -->
+  <!-- Columna derecha: dos cifras con su pie. Entran como el texto, sin contar. La segunda es el dato vivo (T44):
+       el % del home con tinta ahora; lib/n1/home.ts le cambia el texto. -->
   <div class="n1-columna n1-columna-derecha" data-n1-columna="derecha">
-    {home.columnaDerecha.map((dato) => (
+    {home.columnaDerecha.map((dato, i) => (
       <div class="n1-dato">
-        <div class="n1-envoltura n1-mezcla"><p class="n1-cifra" data-n1-cifra data-n1-sube>{dato.cifra}</p></div>
+        <div class="n1-envoltura n1-mezcla"><p class="n1-cifra" data-n1-cifra data-n1-pintado={i === 1 ? '' : undefined} data-n1-sube>{dato.cifra}</p></div>
         <div class="n1-envoltura n1-mezcla"><p class="n1-pie" data-n1-sube>{dato.pie}</p></div>
       </div>
     ))}
@@ -107,12 +124,12 @@ const iconoPuntos =
   {SOBRE_MI_VISIBLE && (
     <nav class="n1-arriba" aria-label="Secciones">
       <span class="n1-envoltura n1-mezcla">
-        <a class="n1-enlace" href={home.sobreMi.href} data-n1-sobre-mi data-n1-sube>{home.sobreMi.texto}</a>
+        <a class="n1-enlace toque" href={home.sobreMi.href} data-n1-sobre-mi data-n1-sube>{home.sobreMi.texto}</a>
       </span>
       <span class="n1-envoltura n1-envoltura-contacto">
         <a class="n1-contacto" href={home.contacto.href} data-n1-contacto data-n1-sube>
           <span class="n1-contacto-foto">
-            <img src={home.personaje.src} alt="" width={home.personaje.ancho} height={home.personaje.alto} decoding="async" loading="eager" draggable="false" />
+            <img src={home.personaje.miniatura} alt="" width="256" height="256" decoding="async" loading="eager" draggable="false" />
           </span>
           <span class="n1-contacto-texto">
             <Fragment set:html={iconoPuntos} />
@@ -126,9 +143,9 @@ const iconoPuntos =
   <!-- Encima del titular, a la derecha: las redes -->
   <nav class="n1-redes n1-envoltura n1-mezcla" aria-label="Redes" data-n1-redes>
     <div class="n1-redes-fila" data-n1-sube>
-      <a class="n1-enlace" href={home.linkedin.href} target="_blank" rel="noopener noreferrer">{home.linkedin.texto}</a>
+      <a class="n1-enlace toque" href={home.linkedin.href} target="_blank" rel="noopener noreferrer">{home.linkedin.texto}</a>
       <span class="n1-separador" aria-hidden="true">/</span>
-      <a class="n1-enlace" href={home.instagram.href} target="_blank" rel="noopener noreferrer">{home.instagram.texto}</a>
+      <a class="n1-enlace toque" href={home.instagram.href} target="_blank" rel="noopener noreferrer">{home.instagram.texto}</a>
     </div>
   </nav>
 </section>
@@ -256,6 +273,15 @@ const iconoPuntos =
     user-select: none;
   }
 
+  /* Con movimiento reducido, styles/reduced-motion.css pone una transición de 1 ms a todo (también a lo que cambia
+     por herencia): el `top` y el tamaño que calcula lib/n1/titular.ts, y con ellos la línea base de las letras, se
+     leerían un instante atrasados y los pies del personaje quedarían hasta 44 px fuera de sitio. El titular no se
+     anima por CSS: sin transición, ni él ni sus letras. */
+  .n1-titular,
+  .n1-titular * {
+    transition: none !important;
+  }
+
   /* Cuando el canvas dibuja el titular, el h1 deja de verse pero sigue en el árbol de accesibilidad. */
   .n1-seccion[data-tinta-lienzo] .n1-titular {
     opacity: 0;
@@ -290,21 +316,31 @@ const iconoPuntos =
 
   /* ---------- El personaje ---------- */
 
-  /* Del 2,7 % al 96,5 % del alto se ve la figura: la imagen mide el alto de la pantalla (el PNG trae la figura
-     del 2,9 % al 97,1 % de su alto, medido por la transparencia). El eje de la figura va al 48 % del ancho (la
-     diagramación del autor); en el PNG la figura está centrada en el 49,76 % de su ancho (de 345 a 897 de 1248
-     px), de ahí el 0,4976. No lleva transform en CSS: el paralaje lo mueve con GSAP y lo pisaría. Con los pies
-     sobre las letras y por encima de la tinta. */
+  /* El póster es la caja del personaje: el canvas de la tinta dibuja el cuadro del video exactamente sobre ella.
+     Su tamaño y su posición los calcula lib/n1/personaje.ts (`--n1-personaje-alto`, `-arriba` e `-izquierda`, en
+     px): las suelas en la línea base de las letras y el eje del cuadro al 48 % del ancho. Los valores de aquí son
+     solo el respaldo de 1440 × 900 (89 % de alto de figura) para antes de que corra el script. No lleva transform
+     en CSS: el paralaje lo mueve con GSAP y lo pisaría. */
   .n1-personaje {
     position: absolute;
-    top: var(--n1-personaje-arriba, 0px);
-    left: calc(48% - var(--n1-personaje-alto, 100vh) * 1248 / 1872 * 0.4976);
-    height: var(--n1-personaje-alto, 100vh);
+    top: var(--n1-personaje-arriba, 1.3vh);
+    left: var(--n1-personaje-izquierda, calc(48% - 26.2vh));
+    height: var(--n1-personaje-alto, 93.1vh);
     width: auto;
-    aspect-ratio: 1248 / 1872;
+    aspect-ratio: 1080 / 1920;
     pointer-events: none;
     user-select: none;
     will-change: transform;
+  }
+
+  /* Cuando el canvas ya dibuja al personaje, el póster deja de verse pero sigue en el árbol de accesibilidad. */
+  .n1-seccion[data-personaje-lienzo] .n1-personaje {
+    opacity: 0;
+  }
+
+  /* El gancho de las pruebas (lo pone solo una prueba): sin personaje ni en el canvas ni en el póster. */
+  .n1-seccion[data-personaje-oculto] .n1-personaje {
+    visibility: hidden;
   }
 
   /* ---------- Los textos: negros sobre el crema, invertidos donde pasa la tinta ---------- */
@@ -497,7 +533,7 @@ const iconoPuntos =
     outline-offset: 3px;
   }
 
-  /* La miniatura: el personaje recortado en la cabeza y los hombros (la cara queda al centro del círculo). */
+  /* La miniatura (T44): ya viene recortada en la cabeza y los hombros, así que llena el círculo. */
   .n1-contacto-foto {
     position: relative;
     flex: none;
@@ -510,11 +546,10 @@ const iconoPuntos =
 
   .n1-contacto-foto img {
     position: absolute;
-    width: 270%;
-    max-width: none;
-    height: auto;
-    left: -80%;
-    top: -9%;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
     user-select: none;
   }
 
@@ -546,14 +581,12 @@ const iconoPuntos =
     font-size: var(--tamano-rotulo);
   }
 
-  /* Celular (el ajuste fino es de T39; aquí solo que no se rompa): las dos columnas se apilan arriba a la
-     izquierda, el botón se achica y el personaje sigue detrás de las letras. */
+  /* Celular (el ajuste fino es de T43; aquí solo que no se rompa): las dos columnas se apilan arriba a la
+     izquierda, el botón se achica y el personaje (lib/n1/personaje.ts lo baja bajo las columnas) sigue detrás de
+     las letras. */
   @media (max-width: 768px) {
     .n1-seccion {
       --n1-tam-columna: min(7.4vw, 4.4vh);
-      /* El personaje baja bajo las columnas (que ocupan del 15 % al 36 % del alto) y se achica. */
-      --n1-personaje-arriba: 37vh;
-      --n1-personaje-alto: 61vh;
     }
 
     .n1-columna-izquierda {

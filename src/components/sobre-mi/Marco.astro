@@ -1,0 +1,273 @@
+---
+/**
+ * El marco de la sección (T45, K7): los dos rieles laterales con sus cruces y su rótulo vertical en español, que
+ * cambia según el bloque que más se ve, y el interruptor Día / Noche en el riel izquierdo (en celular, al pie).
+ * Arriba sigue el menú del sitio: no hay el encabezado de Tonami (decisión del autor, 2026-10-14). Los rieles son
+ * fijos y solo se ven con el nivel en `SM`.
+ */
+import { sobreMi as d } from '@/data/sobre-mi';
+
+const inicial = d.rieles.portada;
+---
+
+<div class="sm-riel sm-riel-izquierdo" data-sm-riel="izquierdo">
+  <svg class="sm-mira" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+    <circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="1" />
+    <path d="M10 1v18M1 10h18" fill="none" stroke="currentColor" stroke-width="1" />
+  </svg>
+  <span class="sm-cruz sm-cruz-alta" aria-hidden="true"></span>
+  <span class="sm-cruz sm-cruz-baja" aria-hidden="true"></span>
+  <p class="sm-riel-rotulo sm-riel-rotulo-izquierdo" data-sm-riel-rotulo="izquierdo" aria-hidden="true">
+    <span class="sm-riel-texto" data-sm-riel-texto>{inicial.izquierdo}</span>
+    <span class="sm-riel-banda" data-sm-riel-banda></span>
+  </p>
+  <button type="button" class="sm-interruptor" data-sm-interruptor aria-pressed="false" aria-label={d.interruptor.nombre}>
+    <span class="sm-interruptor-area" data-sm-interruptor-area aria-hidden="true"></span>
+    <span class="sm-interruptor-opcion" data-sm-opcion="noche" aria-hidden="true"><span class="sm-interruptor-marca"></span>{d.interruptor.noche}</span>
+    <span class="sm-interruptor-opcion" data-sm-opcion="dia" aria-hidden="true"><span class="sm-interruptor-marca"></span>{d.interruptor.dia}</span>
+  </button>
+</div>
+
+<div class="sm-riel sm-riel-derecho" data-sm-riel="derecho">
+  <span class="sm-cruz sm-cruz-alta" aria-hidden="true"></span>
+  <span class="sm-cruz sm-cruz-baja" aria-hidden="true"></span>
+  <p class="sm-riel-rotulo sm-riel-rotulo-derecho" data-sm-riel-rotulo="derecho" aria-hidden="true">
+    <span class="sm-riel-texto" data-sm-riel-texto>{inicial.derecho}</span>
+    <span class="sm-riel-banda" data-sm-riel-banda></span>
+  </p>
+</div>
+
+<style is:global>
+  /* Los rieles solo se ven con el nivel en SM: en N1 y N2 la sección no está o todavía sube. */
+  .sm-riel {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    z-index: 4;
+    width: calc(34 * var(--sm-p));
+    pointer-events: none;
+    color: var(--sm-escena-tinta, var(--sm-primario));
+  }
+
+  body:not([data-current-level="SM"]) .sm-riel {
+    visibility: hidden;
+  }
+
+  .sm-riel-izquierdo {
+    left: 0;
+  }
+
+  .sm-riel-derecho {
+    right: 0;
+  }
+
+  /* Las cruces de Tonami: a un tercio y a dos tercios del alto, pegadas al borde. */
+  .sm-cruz {
+    position: absolute;
+    width: calc(15 * var(--sm-p));
+    height: calc(15 * var(--sm-p));
+    translate: 0 -50%;
+  }
+
+  .sm-riel-izquierdo .sm-cruz {
+    left: calc(8.5 * var(--sm-p));
+  }
+
+  .sm-riel-derecho .sm-cruz {
+    right: calc(8.5 * var(--sm-p));
+  }
+
+  .sm-cruz::before,
+  .sm-cruz::after {
+    content: '';
+    position: absolute;
+    background-color: currentColor;
+  }
+
+  .sm-cruz::before {
+    left: 50%;
+    top: 0;
+    width: 1px;
+    height: 100%;
+  }
+
+  .sm-cruz::after {
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 1px;
+  }
+
+  .sm-cruz-alta {
+    top: 33.33%;
+  }
+
+  .sm-cruz-baja {
+    top: 66.67%;
+  }
+
+  .sm-mira {
+    position: absolute;
+    left: calc(7 * var(--sm-p));
+    top: calc(5 * var(--sm-p));
+    width: calc(19 * var(--sm-p));
+    height: calc(19 * var(--sm-p));
+  }
+
+  /* El rótulo vertical, en el centro del riel entre las dos cruces. */
+  .sm-riel-rotulo {
+    position: absolute;
+    top: 50%;
+    margin: 0;
+    padding: 0;
+    writing-mode: vertical-rl;
+    white-space: nowrap;
+    font-family: var(--fuente-texto);
+    font-weight: 400;
+    font-size: var(--sm-letra-xs);
+    line-height: 1;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+
+  .sm-riel-rotulo-izquierdo {
+    left: calc(7.5 * var(--sm-p));
+    translate: 0 -50%;
+    rotate: 180deg;
+  }
+
+  .sm-riel-rotulo-derecho {
+    right: calc(7.5 * var(--sm-p));
+    translate: 0 -50%;
+  }
+
+  .sm-riel-texto {
+    display: block;
+  }
+
+  /* La banda que barre el texto al cambiar de rótulo (K7): entra en 0,2 s, se cambia el texto y sale en 0,4 s. */
+  .sm-riel-banda {
+    position: absolute;
+    inset: -2px -3px;
+    background-color: currentColor;
+    clip-path: inset(0 0 100% 0);
+    pointer-events: none;
+  }
+
+  /* El interruptor Día / Noche (K28): dos opciones en vertical, con la marca llena en la que está activa. */
+  .sm-interruptor {
+    position: absolute;
+    left: calc(7 * var(--sm-p));
+    bottom: calc(18 * var(--sm-p));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(14 * var(--sm-p));
+    width: calc(20 * var(--sm-p));
+    padding: 0;
+    pointer-events: auto;
+    /* El área de toque (T39) crece hacia el espacio libre: el botón está pegado al borde izquierdo. */
+    --toque-dx: max(0px, calc(24px - 13 * var(--sm-p)));
+    color: inherit;
+    font-family: var(--fuente-texto);
+    font-size: var(--sm-letra-xs);
+    line-height: 1;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    cursor: pointer;
+    background: none;
+    border: 0;
+    transition: opacity var(--sm-d-rapida) var(--sm-curva-salida);
+  }
+
+  /* El área de toque de T39 (la misma geometría que `.toque::after`, tokens.css § 9), pero en un elemento de verdad:
+     `lib/sobre-mi/interruptor.ts` la mide para saber si un control del contenido pasa por debajo. */
+  .sm-interruptor-area {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, var(--toque-area));
+    height: max(100%, var(--toque-area));
+    translate: calc(-50% + var(--toque-dx, 0px)) calc(-50% + var(--toque-dy, 0px));
+  }
+
+  /* Cuando un control del contenido pasa bajo el área de toque (en celular, los campos y la tarjeta del contacto
+     suben por el borde), el interruptor cede el paso: no recibe toques y se desvanece, para que el toque llegue al
+     control. Vuelve en cuanto el borde queda libre. Con el teclado se sigue alcanzando y se ve al tener el foco. */
+  .sm-interruptor[data-sm-cede="true"] {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .sm-interruptor[data-sm-cede="true"]:focus-visible {
+    opacity: 1;
+  }
+
+  .sm-interruptor-opcion {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: calc(6 * var(--sm-p));
+    writing-mode: vertical-rl;
+    rotate: 180deg;
+    white-space: nowrap;
+  }
+
+  .sm-interruptor-marca {
+    display: block;
+    width: calc(11 * var(--sm-p));
+    height: calc(11 * var(--sm-p));
+    border: 1px solid currentColor;
+    background-color: transparent;
+    rotate: 180deg;
+  }
+
+  /* Día activo: la marca de «Día» llena; con aria-pressed = «Noche» activa, la de «Noche». */
+  .sm-interruptor[aria-pressed="false"] [data-sm-opcion="dia"] .sm-interruptor-marca,
+  .sm-interruptor[aria-pressed="true"] [data-sm-opcion="noche"] .sm-interruptor-marca {
+    background-color: currentColor;
+  }
+
+  /* Al pie del riel en celular, con el rótulo un poco más arriba. */
+  @media (max-width: 767px), (max-aspect-ratio: 1/1) {
+    .sm-riel {
+      width: calc(24 * var(--sm-p));
+    }
+
+    .sm-riel-izquierdo .sm-cruz {
+      left: calc(4 * var(--sm-p));
+    }
+
+    .sm-riel-derecho .sm-cruz {
+      right: calc(4 * var(--sm-p));
+    }
+
+    .sm-riel-rotulo-izquierdo {
+      left: calc(4 * var(--sm-p));
+    }
+
+    .sm-riel-rotulo-derecho {
+      right: calc(4 * var(--sm-p));
+    }
+
+    /* A 390 el contenido llega a 16-20 px del borde y el área de toque del interruptor (T39: 44 px) mide 46: al pie
+       tapaba a «Anterior» y al campo «Nombre». Va en la parte baja del riel, bajo el rótulo y la cruz, donde la
+       historia no tiene controles a la izquierda; en el contacto cede el paso (arriba). El dibujo cabe en el riel
+       (x 2-16 a 390): cada marca va bajo su palabra y no al lado, para no tocar el texto que arranca en x 20 (H13). */
+    .sm-interruptor {
+      left: calc(2 * var(--sm-p));
+      /* Justo bajo la cruz de abajo (66,67 % ± 7,5): así cabe entre ella y los botones de la historia también en
+         tablet vertical, donde la unidad crece con el ancho. Mide ≈ 122 unidades de alto y nunca pasa del pie. */
+      top: min(calc(66.67% + 11 * var(--sm-p)), calc(100% - 134 * var(--sm-p)));
+      bottom: auto;
+      width: calc(14 * var(--sm-p));
+      gap: calc(12 * var(--sm-p));
+      /* El área (46 px) se corre a la derecha para arrancar en el borde de la pantalla: su centro sin correr está en x 9. */
+      --toque-dx: max(0px, calc(24px - 9 * var(--sm-p)));
+    }
+
+    .sm-interruptor-opcion {
+      flex-direction: row;
+    }
+  }
+</style>

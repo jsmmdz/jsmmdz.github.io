@@ -1,0 +1,14 @@
+---
+/**
+ * La estrella de cuatro puntas de Tonami (K5, K12, K16): decorativa. Se pinta con `currentColor`; el contorno
+ * lo pone quien la usa (`stroke`) si lo necesita.
+ */
+interface Props {
+  class?: string;
+}
+const { class: clase = '' } = Astro.props;
+---
+
+<svg class={`sm-estrella ${clase}`} viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+  <path d="M50 0C53 29 71 47 100 50C71 53 53 71 50 100C47 71 29 53 0 50C29 47 47 29 50 0Z" fill="currentColor" />
+</svg>

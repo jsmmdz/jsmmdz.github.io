@@ -1,0 +1,690 @@
+---
+/**
+ * La historia por semestres (T45, K13–K18): un bloque alto con su escenario fijo (sticky). Cuatro capítulos, uno por
+ * semestre, de 1 a 4 imágenes de proyectos cada uno; cada capítulo ocupa 1,5 pantallas de scroll y cada imagen
+ * tiene su parada (`lib/sobre-mi/historia.ts` las calcula y las publica en `data-sm-paradas-y`). El imán, los
+ * botones, la rueda de dígitos, el círculo con la película en WebGL y el cierre con la inversión de la escena viven
+ * en ese módulo y en `lib/three/sobre-mi/pelicula.ts`. Los textos son [EJEMPLO] (`data/sobre-mi.ts`).
+ */
+import { sobreMi as datos } from '@/data/sobre-mi';
+import { aX } from '@/lib/sobre-mi/bloqueo';
+import { SOBRE_MI_BLOQUEADA } from '@/lib/sobre-mi/visible';
+import { pantallasHistoria } from '@/lib/sobre-mi/geometria';
+import Estrella from './Estrella.astro';
+import Flor from './Flor.astro';
+
+const h = datos.historia;
+const capitulos = h.capitulos;
+const primero = capitulos[0];
+const imagenes = capitulos.flatMap((c, ci) => c.imagenes.map((im, ii) => ({ ...im, ci, ii })));
+const columnas = [...primero.digitos];
+// La corona de K16: seis flores de papel sobre el aro, repartidas a lo largo de su vuelta. Cada una se abre cuando la
+// estrella pasa por ella (lib/sobre-mi/historia.ts), así que llegan todas abiertas a la última imagen.
+const FLORES_CORONA = 6;
+const corona = Array.from({ length: FLORES_CORONA }, (_, i) => {
+  const angulo = -Math.PI / 2 + (2 * Math.PI * (i + 0.5)) / FLORES_CORONA;
+  return { x: 50 + 50 * Math.cos(angulo), y: 50 + 50 * Math.sin(angulo), giro: (i % 2 ? 1 : -1) * (10 + i * 7) };
+});
+---
+
+<div
+  class="sm-historia"
+  data-sm-bloque="historia"
+  data-sm-paradas-y="[]"
+  data-sm-parada-actual="0"
+  data-sm-capitulo-actual="0"
+  style={`--sm-pantallas: ${pantallasHistoria(capitulos.length)}`}
+>
+  <div class="sm-h-escenario" data-sm="historia-escenario">
+    <!-- Todo lo que hace el paneo del cierre (K18): el título, el semestre, el círculo, los botones y los textos -->
+    <div class="sm-h-escena" data-sm-h="escena">
+      <p class="sm-h-rotulo-titulo">{h.rotulo}</p>
+      <h2 class="sm-h-titulo">{h.titulo}</h2>
+
+      <!-- El semestre grande, con un dígito por columna (K15): la rueda de dígitos mueve solo los que cambian -->
+      <p class="sm-h-anio" data-sm="historia-anio" aria-hidden="true">
+        {columnas.map((d) =>
+          d === '.' ? (
+            <span class="sm-h-punto">.</span>
+          ) : (
+            <span class="sm-h-digito" data-sm-digito>
+              <span class="sm-h-pista" data-sm-pista><span class="sm-h-glifo">{d}</span></span>
+            </span>
+          ),
+        )}
+      </p>
+      <span class="sm-h-linea-h" aria-hidden="true"></span>
+      <span class="sm-h-linea-v" aria-hidden="true"></span>
+
+      <div class="sm-h-botones">
+        <button type="button" class="sm-h-boton toque" data-sm-historia="anterior" disabled>
+          <svg viewBox="0 0 16 10" aria-hidden="true" focusable="false"><path d="M8 0 1 5l7 5zM15 0 8 5l7 5z" fill="currentColor" /></svg>
+          <span>{h.botones.anterior}</span>
+        </button>
+        <button type="button" class="sm-h-boton toque" data-sm-historia="siguiente">
+          <span>{h.botones.siguiente}</span>
+          <svg viewBox="0 0 16 10" aria-hidden="true" focusable="false"><path d="M1 0l7 5-7 5zM8 0l7 5-7 5z" fill="currentColor" /></svg>
+        </button>
+        <button type="button" class="sm-h-boton toque" data-sm-historia="saltar">
+          <span>{h.botones.saltar}</span>
+          <svg viewBox="0 0 18 10" aria-hidden="true" focusable="false"><path d="M1 0l7 5-7 5zM8 0l7 5-7 5zM16 0h2v10h-2z" fill="currentColor" /></svg>
+        </button>
+      </div>
+
+      <!-- El círculo: la película dentro (un lienzo de WebGL; sin WebGL, la imagen de la parada), su aro y su arco -->
+      <div class="sm-h-circulo" data-sm="historia-circulo" data-modo="img">
+        <div class="sm-h-foto">
+          <canvas class="sm-h-lienzo" data-sm-lienzo="pelicula" role="img" aria-label={imagenes[0].alt}></canvas>
+          <div class="sm-h-fotos">
+            {imagenes.map((im, i) => (
+              <img
+                src={im.src}
+                alt={im.alt}
+                width={im.ancho}
+                height={im.alto}
+                loading={i === 0 ? 'eager' : 'lazy'}
+                decoding="async"
+                data-sm-foto={i}
+                data-actual={i === 0 ? 'true' : 'false'}
+              />
+            ))}
+          </div>
+        </div>
+        <svg class="sm-h-aro" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+          <circle class="sm-h-aro-base" cx="50" cy="50" r="49.4" fill="none" />
+          <circle class="sm-h-aro-arco" data-sm-h="arco" cx="50" cy="50" r="49" fill="none" pathLength="100" transform="rotate(-90 50 50)" />
+        </svg>
+        <div class="sm-h-corona" data-sm="historia-corona" aria-hidden="true">
+          {corona.map((f) => (
+            <svg
+              class="sm-h-corona-flor"
+              data-sm-corona-flor
+              data-abierta="false"
+              viewBox="-60 -60 120 120"
+              focusable="false"
+              style={`left:${f.x.toFixed(2)}%;top:${f.y.toFixed(2)}%;--sm-giro:${f.giro}deg`}
+            >
+              <Flor />
+            </svg>
+          ))}
+        </div>
+        <span class="sm-h-estrella-aro" data-sm-h="estrella-aro" aria-hidden="true"><Estrella /></span>
+      </div>
+
+      <!-- Los semestres en columna, con la flecha del capítulo (K13) -->
+      <nav class="sm-h-anios" data-sm="historia-anios" aria-label={h.aniosTitulo}>
+        <svg class="sm-h-flecha" data-sm-h="flecha" viewBox="0 0 14 16" aria-hidden="true" focusable="false"><path d="M1 1 13 8 1 15Z" fill="none" stroke="currentColor" stroke-width="1" /></svg>
+        {capitulos.map((c, i) => (
+          <button type="button" class="sm-h-anio-boton toque" data-sm-anio={i} aria-label={`Ver ${c.id}`} aria-current={i === 0 ? 'true' : undefined}>{SOBRE_MI_BLOQUEADA ? aX(c.id) : c.id}</button>
+        ))}
+      </nav>
+
+      <p class="sm-h-pie" data-sm="historia-pie"><span class="sm-h-pie-texto" data-sm-relevo="pie">{imagenes[0].pie}</span></p>
+
+      <div class="sm-h-columna">
+        <p class="sm-h-rotulo-capitulo">
+          <span class="sm-h-rotulo-texto" data-sm="historia-rotulo">{primero.rotulo}</span>
+          <span class="sm-h-banda" data-sm-h="banda"></span>
+        </p>
+        <p class="sm-h-texto" data-sm-relevo="texto">{primero.texto}</p>
+      </div>
+      <p class="sm-h-extra" data-sm-relevo="extra">{primero.extra}</p>
+
+      <!-- «¿Sabías que?»: un dato por capítulo, abajo a la izquierda del círculo (K17) -->
+      <div class="sm-h-sabias" data-sm="historia-sabias">
+        <p class="sm-h-placa">{h.sabiasRotulo}</p>
+        <p class="sm-h-sabias-texto" data-sm-relevo="sabias">{primero.sabias}</p>
+      </div>
+    </div>
+
+    <!-- El cierre (K18): la estrella sola sobre la línea y el interludio, fuera del paneo -->
+    <div class="sm-h-cierre" data-sm-h="cierre" aria-hidden="false">
+      <span class="sm-h-cierre-linea" data-sm-h="cierre-linea" aria-hidden="true"></span>
+      <span class="sm-h-cierre-estrella" data-sm-h="cierre-estrella" aria-hidden="true"><Estrella /></span>
+      <p class="sm-h-interludio" data-sm="interludio">{h.interludio}</p>
+    </div>
+
+    <!-- Lo que anuncia el lector de pantalla cuando cambia el semestre -->
+    <p class="sm-solo-lectores" data-sm="historia-vivo" aria-live="polite" aria-atomic="true">Semestre {primero.id}</p>
+  </div>
+</div>
+
+<style is:global>
+  .sm-historia {
+    position: relative;
+    height: calc(var(--sm-pantallas) * var(--sm-vh));
+  }
+
+  .sm-h-escenario {
+    position: sticky;
+    top: 0;
+    height: var(--sm-vh);
+    overflow: hidden;
+  }
+
+  .sm-h-escena {
+    position: absolute;
+    inset: 0;
+    will-change: transform;
+  }
+
+  .sm-h-escena > * {
+    position: absolute;
+    margin: 0;
+  }
+
+  /* ---------- Título y semestre grande ---------- */
+
+  .sm-h-rotulo-titulo {
+    left: 2.8%;
+    top: 1.8%;
+    font-size: var(--sm-letra-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .sm-h-titulo {
+    left: 2.8%;
+    top: 4.4%;
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    font-size: calc(46 * var(--sm-p));
+    line-height: 1;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .sm-h-anio {
+    right: 3%;
+    top: 9.5%;
+    display: flex;
+    align-items: flex-end;
+    font-family: var(--fuente-display);
+    font-weight: 700;
+    font-size: calc(78 * var(--sm-p));
+    line-height: 1;
+    letter-spacing: -0.04em;
+  }
+
+  .sm-h-digito {
+    position: relative;
+    display: block;
+    width: 0.82em;
+    height: 1.14em;
+    overflow: hidden;
+    text-align: center;
+  }
+
+  .sm-h-pista {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    will-change: transform;
+  }
+
+  .sm-h-glifo {
+    display: block;
+    height: 1.14em;
+    line-height: 1.14;
+  }
+
+  .sm-h-punto {
+    display: block;
+    line-height: 1.14;
+    padding-inline: 0.04em;
+  }
+
+  .sm-h-linea-h {
+    left: 40.3%;
+    right: 0;
+    top: 20.8%;
+    height: 1px;
+    background-color: var(--sm-primario);
+  }
+
+  .sm-h-linea-v {
+    left: 27.1%;
+    top: 41.7%;
+    bottom: 0;
+    width: 1px;
+    background-color: var(--sm-primario);
+  }
+
+  /* ---------- Botones: anterior · siguiente · saltar ---------- */
+
+  .sm-h-botones {
+    right: 2.8%;
+    top: 22.7%;
+    display: flex;
+    gap: calc(14 * var(--sm-p));
+  }
+
+  .sm-h-boton {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(14 * var(--sm-p));
+    min-width: calc(86 * var(--sm-p));
+    padding: calc(1 * var(--sm-p)) calc(8 * var(--sm-p));
+    border: 1px solid var(--sm-primario);
+    background-color: transparent;
+    color: var(--sm-primario);
+    font-family: var(--fuente-texto);
+    font-size: var(--sm-letra-xs);
+    line-height: 1.5;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+
+  .sm-h-boton svg {
+    flex: none;
+    width: calc(15 * var(--sm-p));
+    height: calc(10 * var(--sm-p));
+  }
+
+  .sm-h-boton:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .sm-h-boton:not(:disabled):hover {
+    background-color: var(--sm-primario);
+    color: var(--sm-pagina);
+  }
+
+  /* ---------- El círculo ---------- */
+
+  .sm-h-circulo {
+    left: 27.1%;
+    top: 20.8%;
+    width: calc(374 * var(--sm-p));
+    aspect-ratio: 1;
+  }
+
+  .sm-h-foto {
+    position: absolute;
+    inset: 2%;
+    border-radius: 50%;
+    overflow: hidden;
+    background-color: var(--sm-placa);
+  }
+
+  .sm-h-lienzo {
+    display: none;
+    width: 100%;
+    height: 100%;
+  }
+
+  .sm-h-circulo[data-modo="webgl"] .sm-h-lienzo {
+    display: block;
+  }
+
+  .sm-h-fotos img {
+    display: none;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .sm-h-circulo:not([data-modo="webgl"]) .sm-h-fotos img[data-actual="true"] {
+    display: block;
+    position: absolute;
+    inset: 0;
+  }
+
+  .sm-h-aro {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .sm-h-aro-base {
+    stroke: var(--sm-primario);
+    stroke-width: 0.45;
+  }
+
+  .sm-h-aro-arco {
+    stroke: var(--sm-primario);
+    stroke-width: 2.2;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+  }
+
+  /* La corona (K16): seis flores sobre el aro, cerradas hasta que la estrella pasa. */
+  .sm-h-corona {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .sm-h-corona-flor {
+    position: absolute;
+    width: 24%;
+    height: 24%;
+    translate: -50% -50%;
+    overflow: visible;
+    scale: 0.1;
+    rotate: calc(var(--sm-giro) - 70deg);
+    opacity: 0;
+    transition:
+      scale var(--sm-d-lenta) var(--sm-curva-atras),
+      rotate var(--sm-d-lenta) var(--sm-curva-atras),
+      opacity var(--sm-d-base) var(--sm-curva-salida);
+  }
+
+  .sm-h-corona-flor[data-abierta="true"] {
+    scale: 1;
+    rotate: var(--sm-giro);
+    opacity: 1;
+  }
+
+  .sm-h-estrella-aro {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: calc(40 * var(--sm-p));
+    height: calc(40 * var(--sm-p));
+    margin: calc(-20 * var(--sm-p)) 0 0 calc(-20 * var(--sm-p));
+    color: var(--sm-pagina);
+    pointer-events: none;
+  }
+
+  .sm-h-estrella-aro .sm-estrella {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .sm-h-estrella-aro path {
+    stroke: var(--sm-primario);
+    stroke-width: 2.5;
+  }
+
+  /* ---------- Los semestres, el pie y los textos ---------- */
+
+  .sm-h-anios {
+    left: 18.2%;
+    top: 47.4%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: calc(3 * var(--sm-p));
+    width: 6.1%;
+  }
+
+  .sm-h-anio-boton {
+    padding: calc(2 * var(--sm-p)) 0;
+    border: 0;
+    background: none;
+    color: var(--sm-primario);
+    font-family: var(--fuente-texto);
+    font-size: var(--sm-letra-xs);
+    line-height: 1.5;
+    cursor: pointer;
+    opacity: 0.62;
+    white-space: nowrap;
+  }
+
+  .sm-h-anio-boton[aria-current="true"] {
+    opacity: 1;
+    font-weight: 700;
+  }
+
+  .sm-h-flecha {
+    position: absolute;
+    left: calc(28 * var(--sm-p));
+    top: 0;
+    width: calc(14 * var(--sm-p));
+    height: calc(16 * var(--sm-p));
+    color: var(--sm-primario);
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .sm-h-pie {
+    left: 48.5%;
+    top: 59.6%;
+    max-width: 14%;
+  }
+
+  .sm-h-pie-texto,
+  .sm-h-placa {
+    display: inline-block;
+    padding: calc(1 * var(--sm-p)) calc(3 * var(--sm-p));
+    background-color: var(--sm-placa);
+    color: var(--sm-placa-texto);
+    font-size: var(--sm-letra-xs);
+    font-weight: 600;
+    line-height: 1.3;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .sm-h-columna {
+    left: 67.6%;
+    top: 38.3%;
+    width: 21.7%;
+  }
+
+  .sm-h-rotulo-capitulo {
+    position: relative;
+    display: inline-block;
+    margin: 0 0 calc(40 * var(--sm-p));
+    font-size: var(--sm-letra-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .sm-h-rotulo-texto {
+    display: block;
+  }
+
+  .sm-h-banda {
+    position: absolute;
+    inset: -2px -4px;
+    background-color: var(--sm-primario);
+    clip-path: inset(0 100% 0 0);
+    pointer-events: none;
+  }
+
+  .sm-h-texto,
+  .sm-h-extra,
+  .sm-h-sabias-texto {
+    margin: 0;
+    font-size: var(--sm-letra-sm);
+    line-height: 1.55;
+  }
+
+  .sm-h-extra {
+    left: 67.6%;
+    top: 73.3%;
+    width: 21.7%;
+    font-size: var(--sm-letra-xs);
+    line-height: 1.35;
+    text-transform: uppercase;
+    text-align: justify;
+  }
+
+  .sm-h-sabias {
+    left: 29.2%;
+    top: 73%;
+    width: 21.65%;
+  }
+
+  .sm-h-placa {
+    margin: 0 0 calc(8 * var(--sm-p));
+  }
+
+  /* ---------- El cierre ---------- */
+
+  .sm-h-cierre {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    color: var(--sm-escena-tinta, var(--sm-primario));
+  }
+
+  .sm-h-cierre-linea {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 20.8%;
+    height: 1px;
+    background-color: currentColor;
+    opacity: 0;
+  }
+
+  .sm-h-cierre-estrella {
+    position: absolute;
+    left: 0;
+    top: 20.8%;
+    width: calc(46 * var(--sm-p));
+    height: calc(46 * var(--sm-p));
+    margin: calc(-23 * var(--sm-p)) 0 0 calc(-23 * var(--sm-p));
+    opacity: 0;
+  }
+
+  .sm-h-cierre-estrella .sm-estrella {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .sm-h-interludio {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 56%;
+    margin: 0 auto;
+    max-width: 62%;
+    text-align: center;
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    font-size: calc(46 * var(--sm-p));
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    opacity: 0;
+  }
+
+  /* ---------- Celular (K29): escenario vertical ---------- */
+  @media (max-width: 767px), (max-aspect-ratio: 1/1) {
+    .sm-h-rotulo-titulo {
+      left: 5.1%;
+      top: 2.2%;
+    }
+
+    .sm-h-titulo {
+      left: 5.1%;
+      top: 4.6%;
+      font-size: calc(16 * var(--sm-p));
+    }
+
+    .sm-h-anio {
+      right: 4.6%;
+      top: 5.2%;
+      font-size: calc(38 * var(--sm-p));
+    }
+
+    .sm-h-linea-h {
+      left: 36%;
+      top: 12.3%;
+    }
+
+    /* La tangente del círculo, de su borde de arriba al de abajo: más abajo cruzaba los años y los textos. */
+    .sm-h-linea-v {
+      left: 10.3%;
+      top: 12.3%;
+      bottom: auto;
+      height: calc(252 * var(--sm-p));
+    }
+
+    .sm-h-circulo {
+      left: 10.3%;
+      top: 12.3%;
+      width: calc(252 * var(--sm-p));
+    }
+
+    .sm-h-botones {
+      left: 5.1%;
+      right: 5.1%;
+      top: auto;
+      bottom: 2.6%;
+      justify-content: space-between;
+      gap: calc(8 * var(--sm-p));
+    }
+
+    .sm-h-boton {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .sm-h-anios {
+      left: 5.1%;
+      right: 5.1%;
+      top: 43.2%;
+      width: auto;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0;
+    }
+
+    .sm-h-flecha {
+      display: none;
+    }
+
+    .sm-h-anio-boton {
+      padding: calc(6 * var(--sm-p)) calc(4 * var(--sm-p));
+    }
+
+    .sm-h-pie {
+      left: 10.3%;
+      top: 49.4%;
+      max-width: 80%;
+    }
+
+    .sm-h-columna {
+      left: 5.1%;
+      top: 55.2%;
+      width: 89.8%;
+    }
+
+    .sm-h-rotulo-capitulo {
+      margin-bottom: calc(10 * var(--sm-p));
+    }
+
+    .sm-h-extra {
+      left: 5.1%;
+      top: 69.5%;
+      width: 89.8%;
+    }
+
+    .sm-h-sabias {
+      left: 5.1%;
+      top: 79.4%;
+      width: 89.8%;
+    }
+
+    .sm-h-interludio {
+      top: 44%;
+      max-width: 82%;
+      font-size: calc(26 * var(--sm-p));
+    }
+  }
+
+  /* Con movimiento reducido no hay imán, ni paneo, ni la estrella que viaja: el escenario sigue fijo para navegar
+     con los botones, y el interludio y la inversión de la escena se cortan según el scroll (lib/sobre-mi/historia.ts). */
+  @media (prefers-reduced-motion: reduce) {
+    .sm-h-cierre-linea,
+    .sm-h-cierre-estrella {
+      display: none;
+    }
+  }
+</style>

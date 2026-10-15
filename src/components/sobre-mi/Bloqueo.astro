@@ -1,0 +1,68 @@
+---
+/**
+ * La sección bloqueada (autor, 2026-10-15; `lib/sobre-mi/visible.ts`): una capa del alto de la pantalla, fija
+ * arriba mientras la sección pasa (sticky: entra y sale con ella), que pone media escala de grises sobre lo que hay
+ * detrás y lleva seis cintas de «En construcción» cruzadas. Con `backdrop-filter` y no con `filter` en la sección,
+ * para no cambiarles el bloque contenedor a los rieles fijos. No recibe el puntero: la sección va `inert`.
+ */
+const CINTAS = [
+  { arriba: 9, giro: -9 },
+  { arriba: 22, giro: 5 },
+  { arriba: 40, giro: -4 },
+  { arriba: 56, giro: 9 },
+  { arriba: 71, giro: -6 },
+  { arriba: 88, giro: 3 },
+];
+const TEXTO = 'En construcción';
+---
+
+<div class="sm-bloqueo" aria-hidden="true">
+  {CINTAS.map((c) => (
+    <div class="sm-cinta" style={`top: ${c.arriba}%; rotate: ${c.giro}deg`}>
+      {Array.from({ length: 16 }, () => <span>{TEXTO}</span>)}
+    </div>
+  ))}
+</div>
+<p class="sm-solo-lectores">Sección en construcción.</p>
+
+<style is:global>
+  .sm-bloqueo {
+    position: sticky;
+    top: 0;
+    z-index: 7;
+    height: var(--sm-vh);
+    margin-bottom: calc(-1 * var(--sm-vh));
+    overflow: hidden;
+    pointer-events: none;
+    -webkit-backdrop-filter: grayscale(0.5) contrast(0.925) brightness(1.02);
+    backdrop-filter: grayscale(0.5) contrast(0.925) brightness(1.02);
+  }
+
+  .sm-cinta {
+    position: absolute;
+    left: -20%;
+    width: 140%;
+    height: max(40px, calc(56 * var(--sm-p)));
+    display: flex;
+    align-items: center;
+    gap: calc(28 * var(--sm-p));
+    overflow: hidden;
+    border-block: 4px solid #111;
+    background: repeating-linear-gradient(135deg, #f2c200 0 22px, #111 22px 44px);
+    box-shadow: 0 6px 18px rgb(0 0 0 / 0.25);
+  }
+
+  .sm-cinta span {
+    flex: none;
+    padding: 6px 12px;
+    background-color: #f2c200;
+    color: #111;
+    font-family: var(--fuente-display);
+    font-size: max(12px, calc(18 * var(--sm-p)));
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+</style>

@@ -1,0 +1,133 @@
+---
+/**
+ * Los diálogos del envío (T45, K23, sin la ventana de confirmar): «enviando», «gracias» y «fallo», tres <dialog>
+ * nativos en tarjetas de papel. Los abre y los cierra `lib/sobre-mi/formulario.ts`; mientras uno está abierto, Lenis
+ * se detiene. El de fallo trae el correo del autor y el botón de reintentar.
+ */
+import { sobreMi as datos } from '@/data/sobre-mi';
+import Destello from './Destello.astro';
+
+const f = datos.contacto.formulario;
+const correo = datos.contacto.correo;
+---
+
+<dialog class="sm-dialogo" data-sm-dialogo="enviando" aria-labelledby="sm-d-enviando-titulo">
+  <div class="sm-dialogo-caja">
+    <Destello class="sm-dialogo-destello sm-dialogo-giro" />
+    <p class="sm-dialogo-titulo" id="sm-d-enviando-titulo">{f.enviando.titulo}</p>
+    <p class="sm-dialogo-texto">{f.enviando.texto}</p>
+  </div>
+</dialog>
+
+<dialog class="sm-dialogo" data-sm-dialogo="gracias" aria-labelledby="sm-d-gracias-titulo">
+  <div class="sm-dialogo-caja">
+    <Destello class="sm-dialogo-destello" />
+    <p class="sm-dialogo-titulo" id="sm-d-gracias-titulo">{f.gracias.titulo}</p>
+    <p class="sm-dialogo-texto">{f.gracias.texto}</p>
+    <button type="button" class="sm-dialogo-boton toque" data-sm-cerrar autofocus>{f.gracias.cerrar}</button>
+  </div>
+</dialog>
+
+<dialog class="sm-dialogo" data-sm-dialogo="fallo" aria-labelledby="sm-d-fallo-titulo">
+  <div class="sm-dialogo-caja">
+    <p class="sm-dialogo-titulo" id="sm-d-fallo-titulo">{f.fallo.titulo}</p>
+    <p class="sm-dialogo-texto" role="alert">{f.fallo.texto} <span class="sm-dialogo-correo">{correo}</span>.</p>
+    <div class="sm-dialogo-acciones">
+      <button type="button" class="sm-dialogo-boton toque" data-sm-reintentar>{f.fallo.reintentar}</button>
+      <button type="button" class="sm-dialogo-boton sm-dialogo-boton-claro toque" data-sm-cerrar>{f.fallo.cerrar}</button>
+    </div>
+  </div>
+</dialog>
+
+<style is:global>
+  .sm-dialogo {
+    width: min(calc(440 * var(--sm-p)), calc(100vw - 32px));
+    padding: 0;
+    border: 1px solid var(--sm-primario);
+    border-radius: calc(20 * var(--sm-p));
+    background-color: var(--sm-papel);
+    box-shadow: var(--sm-sombra-papel);
+    color: var(--sm-primario);
+    font-family: var(--fuente-texto);
+  }
+
+  .sm-dialogo::backdrop {
+    background-color: var(--ciruela-velo);
+  }
+
+  .sm-dialogo:not([open]) {
+    display: none;
+  }
+
+  .sm-dialogo-caja {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: calc(12 * var(--sm-p));
+    padding: calc(36 * var(--sm-p));
+  }
+
+  .sm-dialogo-destello {
+    width: calc(28 * var(--sm-p));
+    height: calc(28 * var(--sm-p));
+  }
+
+  .sm-dialogo-giro {
+    animation: sm-giro 1.6s linear infinite;
+  }
+
+  @keyframes sm-giro {
+    to {
+      rotate: 360deg;
+    }
+  }
+
+  .sm-dialogo-titulo {
+    margin: 0;
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    font-size: calc(26 * var(--sm-p));
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+
+  .sm-dialogo-texto {
+    margin: 0;
+    font-size: var(--sm-letra-md);
+    line-height: 1.6;
+  }
+
+  .sm-dialogo-correo {
+    font-weight: 700;
+    user-select: text;
+    overflow-wrap: anywhere;
+  }
+
+  .sm-dialogo-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(12 * var(--sm-p));
+    margin-top: calc(8 * var(--sm-p));
+  }
+
+  /* `.sm-seccion button { color: inherit }` (0,1,1) le ganaba a esto (0,1,0) y el texto quedaba del color del
+     fondo: por eso el selector lleva `.sm-seccion` delante. */
+  .sm-seccion .sm-dialogo-boton {
+    min-height: max(var(--toque), calc(44 * var(--sm-p)));
+    padding: 0 calc(24 * var(--sm-p));
+    border: 1px solid var(--sm-primario);
+    background-color: var(--sm-primario);
+    color: var(--sm-pagina);
+    font-family: var(--fuente-texto);
+    font-size: var(--sm-letra-sm);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .sm-seccion .sm-dialogo-boton.sm-dialogo-boton-claro {
+    background-color: transparent;
+    color: var(--sm-primario);
+  }
+</style>

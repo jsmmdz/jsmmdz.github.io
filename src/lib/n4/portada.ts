@@ -6,8 +6,10 @@
  * rectángulo adonde tiene que llegar la pieza antes de que exista la página del caso. Si se cambia
  * una cifra aquí, cambian las dos cosas a la vez (T31: x 63 rem, y 6 rem, 70 rem de ancho y 16:10).
  *
- * El rem del N4 es el de Landberg y el del N3: `clamp(5px, 0,6667 vw, 20px)` (9,6 px a 1440).
+ * El rem del N4 es el de Landberg y el del N3: 9,6 px a 1440 × 900 escalado por la unidad del responsive, con piso de
+ * 5 px (`remLandberg` en `lib/unidad.ts`, T39). En CSS es `--rem-landberg`: las dos tienen que dar lo mismo.
  */
+import { remLandberg } from '@/lib/unidad';
 
 /** Medidas del medio del N4 a partir de 1024 px de ancho. */
 export const N4_MEDIO = {
@@ -23,10 +25,6 @@ export const N4_MEDIO = {
   anchoMinEscritorioPx: 1024,
 } as const;
 
-const REM_POR_VW = 0.6667 / 100;
-const REM_MIN_PX = 5;
-const REM_MAX_PX = 20;
-
 export interface RectPortada {
   x: number;
   y: number;
@@ -34,9 +32,9 @@ export interface RectPortada {
   height: number;
 }
 
-/** 1 rem del N3 y del N4 (px CSS) para un ancho de ventana (el `vw` cuenta la barra, como `innerWidth`). */
-export function remDeVentana(anchoVentana: number): number {
-  return Math.min(REM_MAX_PX, Math.max(REM_MIN_PX, anchoVentana * REM_POR_VW));
+/** 1 rem del N3 y del N4 (px CSS) para una ventana (`innerWidth` e `innerHeight`, que cuentan la barra como el CSS). */
+export function remDeVentana(anchoVentana: number, altoVentana: number): number {
+  return remLandberg(anchoVentana, altoVentana);
 }
 
 /** Variables CSS con las que el N4 maqueta su medio (sin unidad: se multiplican por 1 rem). */
@@ -54,10 +52,10 @@ export function variablesCssPortada(): string {
  * Rectángulo (px CSS de la ventana) del medio del N4 al abrir la página, o null si la ventana es más
  * angosta que el escritorio del N4. No lee el DOM: sirve antes de que la página del caso exista.
  */
-export function rectPortadaN4(anchoVentana: number): RectPortada | null {
+export function rectPortadaN4(anchoVentana: number, altoVentana: number): RectPortada | null {
   const m = N4_MEDIO;
   if (anchoVentana < m.anchoMinEscritorioPx) return null;
-  const rem = remDeVentana(anchoVentana);
+  const rem = remDeVentana(anchoVentana, altoVentana);
   const width = m.anchoRem * rem;
   return { x: m.xRem * rem, y: m.yRem * rem, width, height: width / m.proporcion };
 }

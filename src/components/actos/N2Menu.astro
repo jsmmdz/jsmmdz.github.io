@@ -49,7 +49,7 @@ const primeraDisciplina = metadatosDisciplinas[0];
         type="button"
         data-n2-ir={disc.slug}
         aria-current={idx === 0 ? 'true' : 'false'}
-        class="n2-btn-ir tipo-rotulo"
+        class="n2-btn-ir tipo-rotulo toque"
       >
         {disc.nombre}
       </button>
@@ -80,7 +80,7 @@ const primeraDisciplina = metadatosDisciplinas[0];
         type="button"
         data-n2-anterior
         aria-label="Disciplina anterior"
-        class="n2-control-btn tipo-rotulo"
+        class="n2-control-btn n2-control-btn-ant tipo-rotulo toque"
       >
         &larr;
       </button>
@@ -88,7 +88,7 @@ const primeraDisciplina = metadatosDisciplinas[0];
         type="button"
         data-n2-siguiente
         aria-label="Disciplina siguiente"
-        class="n2-control-btn tipo-rotulo"
+        class="n2-control-btn n2-control-btn-sig tipo-rotulo toque"
       >
         &rarr;
       </button>
@@ -98,7 +98,7 @@ const primeraDisciplina = metadatosDisciplinas[0];
         <a
           data-n2-entrar
           href={conBase(`${primeraDisciplina.slug}/`)}
-          class="n2-control-link tipo-rotulo"
+          class="n2-control-link tipo-rotulo toque"
           aria-label={`Entrar al mundo de ${primeraDisciplina.nombre}`}
         >
           Entrar al mundo de {primeraDisciplina.nombre}
@@ -136,7 +136,7 @@ const primeraDisciplina = metadatosDisciplinas[0];
 
     {SOBRE_MI_VISIBLE && (
       <div class="n2-hud-esquina n2-hud-abajo-der">
-        <a data-n2-cta href={n2.cta.href} class="n2-cta tipo-rotulo">
+        <a data-n2-cta href={n2.cta.href} class="n2-cta tipo-rotulo toque">
           {n2.cta.texto}
         </a>
       </div>
@@ -187,7 +187,30 @@ const primeraDisciplina = metadatosDisciplinas[0];
     pointer-events: none !important;
   }
 
+  /* La unidad del responsive (T39) en la barra y la pastilla. Solo en vertical (alto ≥ ancho) el N2 queda como
+     estaba: lo rehace T41, y escalar la barra por el ancho de un celular la dejaría de 9 px. En horizontal, también
+     bajo 769 (celular acostado, 667 × 375), escala con la unidad (autor, 2026-10-10); la letra mínima y las áreas
+     de toque ya lo cubren. */
+  :global(:root) {
+    --n2-u: var(--u);
+  }
+
+  @media (orientation: portrait) {
+    :global(:root) {
+      --n2-u: 1px;
+    }
+  }
+
   .n2-seccion {
+    /* Lo que ocupa la barra, de una sola fuente: la barra usa el nombre y la acción, y el texto de la esquina inferior
+       izquierda calcula con el ancho total hasta dónde puede llegar sin tocarla (T39, H6). El nombre y la acción no
+       bajan de lo que ocupa su texto más largo con la letra del rótulo (8,7 em) y la pequeña (19,6 em). */
+    --n2-nombre-ancho: max(calc(128 * var(--n2-u)), calc(8.7 * var(--tamano-rotulo)));
+    --n2-accion-ancho: max(calc(336 * var(--n2-u)), calc(19.6 * var(--tamano-texto-sm)));
+    --n2-barra-ancho: calc(
+      2 * var(--espacio-md) + 3 * var(--espacio-sm) + 36 * var(--n2-u) + var(--n2-nombre-ancho) + 64 * var(--n2-u) +
+        var(--espacio-3xs) + var(--n2-accion-ancho)
+    );
     position: relative;
     width: 100vw;
     height: 100vh;
@@ -250,7 +273,8 @@ const primeraDisciplina = metadatosDisciplinas[0];
     padding: 0;
     text-align: center;
     font-family: var(--fuente-display);
-    font-size: clamp(3.2rem, 10.67vw, 9.65rem);
+    /* 153,648 px a 1440 × 900 (10,67 vw) por la unidad; el tope de 9,65 rem sale: el tope es el de la unidad */
+    font-size: max(3.2rem, calc(10.67 * var(--uvw)));
     white-space: nowrap;
     font-weight: 700;
     line-height: 0.9;
@@ -272,28 +296,28 @@ const primeraDisciplina = metadatosDisciplinas[0];
   .n2-pastilla {
     --x: 0px;
     --y: 0px;
-    --radio-pastilla: clamp(4px, 0.5vw, 8px);
+    --radio-pastilla: clamp(4px, calc(0.5 * var(--uvw)), 8px);
     position: fixed;
     top: 0;
     left: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 60px;
-    height: 34px;
-    padding: 0 15px;
+    min-width: calc(60 * var(--n2-u));
+    height: calc(34 * var(--n2-u));
+    padding: 0 calc(15 * var(--n2-u));
     color: rgb(255, 255, 255);
     background-color: rgba(12, 12, 12, 0.3);
     border-radius: var(--radio-pastilla);
     font-family: var(--fuente-texto);
-    font-size: 14px;
+    font-size: max(var(--letra-min), calc(14 * var(--n2-u)));
     font-weight: 600;
     line-height: 1;
     text-transform: uppercase;
     white-space: nowrap;
     pointer-events: none;
     z-index: 100;
-    translate: calc(var(--x) - 50%) calc(var(--y) - 100% - 15px);
+    translate: calc(var(--x) - 50%) calc(var(--y) - 100% - 15 * var(--n2-u));
     clip-path: inset(0 50% 0 50% round var(--radio-pastilla));
     backdrop-filter: blur(4px) url(#n2-vidrio-distorsion) saturate(1.8);
     -webkit-backdrop-filter: blur(4px) saturate(1.8);
@@ -376,7 +400,7 @@ const primeraDisciplina = metadatosDisciplinas[0];
   /* Control de disciplina centrado debajo del reflejo (Decisión 1) */
   .n2-control {
     position: absolute;
-    bottom: 50px;
+    bottom: calc(50 * var(--n2-u));
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -394,8 +418,8 @@ const primeraDisciplina = metadatosDisciplinas[0];
   }
 
   .n2-control-thumb {
-    width: 36px;
-    height: 36px;
+    width: calc(36 * var(--n2-u));
+    height: calc(36 * var(--n2-u));
     border-radius: 50%;
     object-fit: cover;
     object-position: 15% 45%;
@@ -436,8 +460,9 @@ const primeraDisciplina = metadatosDisciplinas[0];
     color: var(--color-crema-base);
     /* Pulido (auditoría T27 · E4): ancho fijo. Si el nombre y la acción cambian de ancho, la
        pastilla centrada se reajusta al asentarse el giro y la flecha «siguiente» se corre bajo el
-       cursor: un clic seguido caía fuera del botón. 128 px cabe «Motion graphics» (126). */
-    width: 128px;
+       cursor: un clic seguido caía fuera del botón. 128 px cabe «Motion graphics» (126); con la unidad (T39) escala,
+       sin bajar de lo que ocupa el nombre más largo con la letra del rótulo (≈ 8,7 em). */
+    width: var(--n2-nombre-ancho);
     text-align: center;
     white-space: nowrap;
   }
@@ -448,9 +473,13 @@ const primeraDisciplina = metadatosDisciplinas[0];
     gap: var(--espacio-3xs);
   }
 
+  /* Las flechas miden 32 px y están a 4 px una de otra: sus áreas de toque de 44 px se repartirían el hueco, y cada
+     una completa el resto hacia afuera (--toque-dx, tokens.css § 9). El dibujo no se mueve. */
   .n2-control-btn {
-    width: 32px;
-    height: 32px;
+    --flecha: calc(32 * var(--n2-u));
+    --toque-afuera: max(0px, calc((var(--toque-area) - var(--flecha)) / 2 - var(--espacio-3xs) / 2));
+    width: var(--flecha);
+    height: var(--flecha);
     border-radius: 50%;
     background: transparent;
     border: 0;
@@ -459,9 +488,20 @@ const primeraDisciplina = metadatosDisciplinas[0];
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.1rem;
+    /* La flecha: 1,1 rem a 1440 × 900 (0,62 de la caja de 32 px), escalada con la caja y sin bajar de la letra mínima.
+       Sin relleno: el del botón (1 px 6 px) achicaba la caja interior y la flecha se salía de su área. */
+    padding: 0;
+    font-size: max(var(--letra-min), calc(0.62 * var(--flecha)));
     line-height: 1;
     transition: opacity var(--duracion-corta) var(--curva-entrada);
+  }
+
+  .n2-control-btn-ant {
+    --toque-dx: calc(-1 * var(--toque-afuera));
+  }
+
+  .n2-control-btn-sig {
+    --toque-dx: var(--toque-afuera);
   }
 
   .n2-control-btn:hover {
@@ -477,7 +517,10 @@ const primeraDisciplina = metadatosDisciplinas[0];
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 336px; /* cabe «Entrar al mundo de Motion graphics», la más larga (336) */
+    /* Cabe «Entrar al mundo de Motion graphics», la más larga (336 px a 1440 × 900, 19,6 em de la letra pequeña):
+       escala con la unidad (T39) sin bajar de lo que ocupa el texto. */
+    font-size: var(--tamano-texto-sm);
+    min-width: var(--n2-accion-ancho);
   }
 
   @media (max-width: 720px) {
@@ -536,12 +579,13 @@ const primeraDisciplina = metadatosDisciplinas[0];
     right: var(--espacio-lg);
   }
 
+  /* La regla es solo dibujo: sin clics, para no tapar los botones del menú accesible que quedan debajo (T39) */
   .n2-hud-centro-arriba {
     position: absolute;
     top: var(--espacio-lg);
     left: 50%;
     transform: translateX(-50%);
-    pointer-events: auto;
+    pointer-events: none;
   }
 
   .n2-marca,
@@ -551,6 +595,15 @@ const primeraDisciplina = metadatosDisciplinas[0];
     margin: 0;
     text-decoration: none;
     display: inline-block;
+  }
+
+  /* En horizontal, el texto de la esquina inferior izquierda se parte en renglones antes de llegar a la barra, que
+     está centrada: queda entre los dos al menos el aire de 1440 × 900 (52 px) por la unidad. A 1440 × 900 el texto
+     cabe entero y no cambia. En vertical lo rehace T41. */
+  @media (orientation: landscape) {
+    .n2-instruccion {
+      max-width: max(4rem, calc(50vw - var(--n2-barra-ancho) / 2 - var(--espacio-lg) - 52 * var(--n2-u)));
+    }
   }
 
   .n2-cta:hover,
@@ -588,6 +641,15 @@ const primeraDisciplina = metadatosDisciplinas[0];
       flex-direction: column;
       gap: var(--espacio-xs);
       padding: var(--espacio-xs) var(--espacio-sm);
+    }
+    /* En columna, «Entrar al mundo» queda debajo de las flechas: sus áreas de toque no se pisan si las flechas
+       crecen hacia arriba (hacia el nombre) y el enlace, hacia abajo (T39). */
+    .n2-control-btn {
+      --toque-dy: calc(-1 * max(0px, (var(--toque-area) - var(--flecha)) / 2));
+    }
+    /* El enlace lo reescribe el script con innerHTML, sin el atributo de ámbito de Astro: por eso :global */
+    :global(.n2-control-link) {
+      --toque-dy: 4px;
     }
     .n2-hud-arriba-izq,
     .n2-hud-abajo-izq,
@@ -821,7 +883,7 @@ const primeraDisciplina = metadatosDisciplinas[0];
       }
       if (pastillaAccion) {
         if (meta.tieneMundo) {
-          pastillaAccion.innerHTML = `<a data-n2-entrar href="${conBase(`${slug}/`)}" class="n2-control-link tipo-rotulo" aria-label="Entrar al mundo de ${meta.nombre}">Entrar al mundo de ${meta.nombre}</a>`;
+          pastillaAccion.innerHTML = `<a data-n2-entrar href="${conBase(`${slug}/`)}" class="n2-control-link tipo-rotulo toque" aria-label="Entrar al mundo de ${meta.nombre}">Entrar al mundo de ${meta.nombre}</a>`;
           const enlace = pastillaAccion.querySelector('a');
           if (enlace) {
             enlace.addEventListener('click', (e) => {

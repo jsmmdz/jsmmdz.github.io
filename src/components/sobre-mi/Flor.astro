@@ -1,0 +1,17 @@
+---
+/**
+ * La flor de papel de Tonami (K12, K16), dibujada con óvalos: no hay assets de flores (no se agrega media nueva).
+ * Va dentro de un <svg>: dibuja un grupo de 12 pétalos y un centro, de 100 unidades de ancho, centrado en 0,0.
+ */
+interface Props {
+  /** Cuántos pétalos. */
+  petalos?: number;
+}
+const { petalos = 12 } = Astro.props;
+const giros = Array.from({ length: petalos }, (_, i) => (360 / petalos) * i);
+---
+
+<g class="sm-flor-dibujo">
+  {giros.map((g) => <ellipse class="sm-petalo" cx="0" cy="-27" rx="11" ry="25" transform={`rotate(${g})`} />)}
+  <circle class="sm-flor-centro" cx="0" cy="0" r="12" />
+</g>

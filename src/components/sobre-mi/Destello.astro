@@ -1,0 +1,11 @@
+---
+/** El destello de cuatro puntas con que termina el subrayado de cada campo (K22). Decorativo. */
+interface Props {
+  class?: string;
+}
+const { class: clase = '' } = Astro.props;
+---
+
+<svg class={`sm-destello ${clase}`} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+  <path d="M10 1C10.6 6.4 13.6 9.4 19 10C13.6 10.6 10.6 13.6 10 19C9.4 13.6 6.4 10.6 1 10C6.4 9.4 9.4 6.4 10 1Z" fill="none" stroke="currentColor" stroke-width="1" />
+</svg>

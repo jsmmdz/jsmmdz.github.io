@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { ALTO_TARJETA, CintasDeTarjeta, type Disposicion, type Punto2 } from './cinta-obra';
 import { CINTA_FRAGMENT, CINTA_N2_VERTEX } from './cinta-obra/glsl';
+import { ajustarCamaraN2 } from './n2/camara-unidad';
 
 export interface N2DisciplinaItem {
   slug: string;
@@ -854,8 +855,7 @@ export class N2TarjetasManager {
   ): void {
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
+    ajustarCamaraN2(camera, width, height);
 
     const yCenter = this.group.position.y;
     const scaleY = this.group.scale.y;

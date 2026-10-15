@@ -339,8 +339,9 @@ const bloqueadas = Math.max(0, TARJETAS_DEL_BUCLE - reales.length);
 
 <style>
   .n3-escenario {
-    /* 1 rem del N3 = 0,667 vw, como Landberg. El font-size de <html> no se toca: afecta a los otros niveles */
-    --n3-rem: clamp(5px, 0.6667vw, 20px);
+    /* 1 rem del N3 = 0,667 vw a 1440 × 900, como Landberg, escalado por la unidad del responsive (T39) y con piso
+       de 5 px (lib/unidad.ts, remLandberg). El font-size de <html> no se toca: afecta a los otros niveles */
+    --n3-rem: var(--rem-landberg);
     font-size: var(--n3-rem);
     position: relative;
     width: 100%;
@@ -364,7 +365,7 @@ const bloqueadas = Math.max(0, TARJETAS_DEL_BUCLE - reales.length);
     position: fixed;
     display: block;
     pointer-events: auto;
-    font-size: var(--n3-rem);
+    font-size: max(var(--letra-min), var(--n3-rem));
     line-height: 1;
   }
 
@@ -385,7 +386,7 @@ const bloqueadas = Math.max(0, TARJETAS_DEL_BUCLE - reales.length);
 
   .n3-hud-texto {
     font-family: var(--fuente-texto);
-    font-size: var(--n3-rem);
+    font-size: max(var(--letra-min), var(--n3-rem));
     font-weight: 500;
     line-height: 1;
     text-transform: uppercase;
@@ -398,11 +399,15 @@ const bloqueadas = Math.max(0, TARJETAS_DEL_BUCLE - reales.length);
     display: inline-block;
   }
 
-  /* El texto mide 1 rem; el área de clic se agranda sin mover el texto */
+  /* El texto mide 1 rem (12 px como mínimo); el área de toque se agranda sin mover el texto (tokens.css § 9) */
   .n3-hud-volver::after {
     content: '';
     position: absolute;
-    inset: -1em -1.4em;
+    left: 50%;
+    top: 50%;
+    width: max(calc(100% + 2.8em), var(--toque-area));
+    height: max(calc(100% + 2em), var(--toque-area));
+    translate: -50% -50%;
   }
 
   .n3-hud-volver:hover {
@@ -459,7 +464,7 @@ const bloqueadas = Math.max(0, TARJETAS_DEL_BUCLE - reales.length);
     bottom: calc(1 * var(--n3-rem));
     margin: 0;
     font-family: var(--fuente-texto);
-    font-size: calc(1.8 * var(--n3-rem));
+    font-size: max(var(--letra-min), calc(1.8 * var(--n3-rem)));
     font-weight: 600;
     letter-spacing: -0.05em;
     line-height: 1.2;

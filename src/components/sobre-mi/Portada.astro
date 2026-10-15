@@ -1,0 +1,453 @@
+---
+/**
+ * La portada (T45, K5): la palabra gigante de lado a lado, el nombre con su flor, el marco con el personaje y su
+ * órbita con estrellas, las píldoras de años con sus líneas, la fecha y el lugar dispersos, la invitación en placa,
+ * el código de barras y el aviso «Baja». La entrada es una sola línea de tiempo (`lib/sobre-mi/portada.ts`) que
+ * corre una vez cuando la sección queda arriba; con movimiento reducido todo ya está en su sitio.
+ * Los textos son de `data/sobre-mi.ts` ([EJEMPLO] hasta la entrevista del pulido).
+ */
+import { sobreMi as datos } from '@/data/sobre-mi';
+import Estrella from './Estrella.astro';
+import Flor from './Flor.astro';
+
+const p = datos.portada;
+const letras = [...p.palabra];
+// Las barras del código: anchos distintos, como un código real (decorativo).
+const barras = [5, 2, 7, 3, 2, 6, 3];
+// La cuadrícula de cuadros redondeados de la esquina: 8 columnas × 7 filas; algunos llenos (decorativo, determinista).
+const cuadros = Array.from({ length: 56 }, (_, i) => ({ i, lleno: [3, 9, 12, 19, 22, 27, 30, 36, 41, 45, 49].includes(i), vacio: [0, 1, 2, 7, 8, 14].includes(i) }));
+---
+
+<div class="sm-portada" data-sm-bloque="portada" data-sm="portada">
+  <h2 class="sm-p-palabra" data-sm="portada-palabra">
+    <span class="sm-solo-lectores">{p.palabra}</span>
+    <span class="sm-p-letras" aria-hidden="true">{letras.map((l) => <span class="sm-letra" data-sm-letra>{l}</span>)}</span>
+  </h2>
+
+  <p class="sm-p-nombres" data-sm-p="nombres">
+    <span class="sm-p-nombre sm-p-nombre-lleno" data-sm-p="nombre-1">{p.nombre[0]}</span>
+    <svg class="sm-p-flor" data-sm-p="flor" viewBox="-60 -60 120 120" aria-hidden="true" focusable="false">
+      <Flor />
+    </svg>
+    <span class="sm-p-nombre sm-p-nombre-contorno" data-sm-p="nombre-2">{p.nombre[1]}</span>
+  </p>
+
+  <!-- El marco con el personaje (K5): cuadrado, centrado, con sus esquinas. -->
+  <div class="sm-p-imagen" data-sm="portada-imagen" data-sm-p="imagen">
+    <span class="sm-p-imagen-marco">
+      <img src={p.imagen.src} alt={p.imagen.alt} width={p.imagen.ancho} height={p.imagen.alto} decoding="async" />
+    </span>
+  </div>
+
+  <!-- La órbita se dibuja con stroke-dashoffset; la elipse va primero porque es el trazo que miden las pruebas. -->
+  <svg class="sm-p-orbita" data-sm="portada-orbita" viewBox="-400 -200 800 400" aria-hidden="true" focusable="false">
+    <ellipse class="sm-p-orbita-trazo" data-sm-p="orbita" cx="0" cy="8" rx="350" ry="100" transform="rotate(-23)" pathLength="1000" fill="none" />
+    <g transform="translate(128 -132)">
+      <g class="sm-p-estrella-grande" data-sm-p="estrella">
+        <path d="M0 -62C3 -18 21 0 62 0C21 3 3 21 0 62C-3 21 -21 3 -62 0C-21 -3 -3 -21 0 -62Z" />
+      </g>
+    </g>
+    <g transform="translate(-232 196)">
+      <g class="sm-p-estrella-chica" data-sm-p="estrella">
+        <path d="M0 -16C1 -5 5 0 16 0C5 1 1 5 0 16C-1 5 -5 1 -16 0C-5 -1 -1 -5 0 -16Z" />
+      </g>
+    </g>
+  </svg>
+
+  <div class="sm-p-anios" aria-hidden="true">
+    <span class="sm-p-pildora" data-sm-p="anio">{p.anios[0]}</span>
+    <span class="sm-p-linea" data-sm-p="anio-linea"></span>
+    <span class="sm-p-pildora" data-sm-p="anio">{p.anios[1]}</span>
+    <span class="sm-p-linea" data-sm-p="anio-linea"></span>
+  </div>
+
+  {p.dispersos.map((d) => (
+    <p class="sm-p-disperso" data-sm-p="disperso" style={`--sm-dx:${d.x}%;--sm-dy:${d.y}%;--sm-dy-cel:${d.yCel}%`}>
+      {d.lineas.map((l) => <span>{l}</span>)}
+    </p>
+  ))}
+
+  <p class="sm-p-invitacion" data-sm-p="invitacion">{p.invitacion}</p>
+
+  <div class="sm-p-codigo" aria-hidden="true">
+    <div class="sm-p-barras">{barras.map((a) => <span class="sm-p-barra" data-sm-p="barra" style={`--sm-ancho-barra:${a}`}></span>)}</div>
+    <span class="sm-p-codigo-texto" data-sm-p="codigo">{p.codigo.rotulo}</span>
+  </div>
+
+  <p class="sm-p-baja" data-sm-p="baja">
+    <span>{p.baja}</span>
+    <Estrella class="sm-p-baja-estrella" />
+  </p>
+
+  <div class="sm-p-cuadricula" aria-hidden="true">
+    {cuadros.map((c) => <span class:list={['sm-p-cuadro', { 'sm-p-cuadro-lleno': c.lleno, 'sm-p-cuadro-vacio': c.vacio }]} data-sm-p="cuadro"></span>)}
+  </div>
+</div>
+
+<style is:global>
+  .sm-portada {
+    position: relative;
+    height: var(--sm-vh);
+    overflow: hidden;
+  }
+
+  /* La palabra gigante: Unbounded 800. El tamaño lo ajusta lib/sobre-mi/portada.ts para ocupar el 94 % del ancho
+     (de ≈ 3 % a ≈ 97 %, como «WEDDING»); sin script queda un tamaño parecido. */
+  .sm-p-palabra {
+    position: absolute;
+    left: 50%;
+    top: 2.2%;
+    translate: -50% 0;
+    width: max-content;
+    margin: 0;
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    font-size: var(--sm-palabra-tam, calc(205 * var(--sm-p)));
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--sm-primario);
+  }
+
+  /* Sin transición, ni en la palabra ni en lo que hereda su tamaño: portada.ts mide el ancho justo después de
+     cambiarlo, y con movimiento reducido (que pone 0,001 s a todo) los hijos seguían en transición y la medida
+     salía del tamaño de partida. */
+  .sm-p-palabra,
+  .sm-p-palabra * {
+    transition: none !important;
+  }
+
+  /* Cada letra sube desde su máscara: lo que está debajo de la línea no se ve (K5). */
+  .sm-p-letras {
+    display: block;
+    overflow: hidden;
+    padding-block: 0.12em;
+    margin-block: -0.12em;
+  }
+
+  .sm-letra {
+    display: inline-block;
+    will-change: transform;
+  }
+
+  .sm-p-nombres {
+    position: absolute;
+    right: 3.4%;
+    top: 27%;
+    display: flex;
+    align-items: center;
+    gap: calc(14 * var(--sm-p));
+    margin: 0;
+    font-family: var(--fuente-display);
+    font-weight: 700;
+    font-size: calc(54 * var(--sm-p));
+    line-height: 1;
+    letter-spacing: -0.02em;
+    text-transform: lowercase;
+    z-index: 2;
+  }
+
+  .sm-p-nombre-contorno {
+    color: var(--sm-pagina);
+    -webkit-text-stroke: 1.5px var(--sm-primario);
+    paint-order: stroke fill;
+  }
+
+  .sm-p-flor {
+    flex: none;
+    width: calc(96 * var(--sm-p));
+    height: calc(96 * var(--sm-p));
+    overflow: visible;
+  }
+
+  .sm-petalo {
+    fill: var(--sm-papel);
+    stroke: var(--sm-primario);
+    stroke-width: 1.5;
+  }
+
+  .sm-flor-centro {
+    fill: var(--sm-primario);
+  }
+
+  .sm-p-imagen {
+    position: absolute;
+    left: 50%;
+    top: 40.4%;
+    translate: -50% 0;
+    width: calc(19.2 * var(--uvw));
+    aspect-ratio: 1;
+    background-color: var(--sm-placa);
+    z-index: 1;
+  }
+
+  /* El personaje llena el marco: la imagen es más ancha que él (tiene aire a los lados), así que se agranda y se
+     recorta por la cabeza y el pecho. */
+  .sm-p-imagen-marco {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .sm-p-imagen img {
+    position: absolute;
+    left: 50%;
+    top: -6%;
+    width: 172%;
+    max-width: none;
+    height: auto;
+    translate: -52% 0;
+  }
+
+  /* Las esquinas del marco: dos ángulos, arriba a la izquierda y abajo a la derecha (K5). */
+  .sm-p-imagen::before,
+  .sm-p-imagen::after {
+    content: '';
+    position: absolute;
+    width: calc(40 * var(--sm-p));
+    height: calc(40 * var(--sm-p));
+    border: 0 solid var(--sm-primario);
+    pointer-events: none;
+  }
+
+  .sm-p-imagen::before {
+    left: calc(-9 * var(--sm-p));
+    top: calc(-9 * var(--sm-p));
+    border-top-width: 1px;
+    border-left-width: 1px;
+  }
+
+  .sm-p-imagen::after {
+    right: calc(-9 * var(--sm-p));
+    bottom: calc(-9 * var(--sm-p));
+    border-bottom-width: 1px;
+    border-right-width: 1px;
+  }
+
+  /* La órbita: su centro es el del marco; 800 × 400 unidades del dibujo a 1440. */
+  .sm-p-orbita {
+    position: absolute;
+    left: 50%;
+    top: calc(40.4% + 9.6 * var(--uvw));
+    translate: -50% -50%;
+    width: calc(800 * var(--sm-p));
+    height: calc(400 * var(--sm-p));
+    overflow: visible;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .sm-p-orbita-trazo {
+    stroke: var(--sm-primario);
+    stroke-width: 1.5;
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 0;
+  }
+
+  .sm-p-estrella-grande path {
+    fill: var(--sm-pagina);
+    stroke: var(--sm-primario);
+    stroke-width: 1.5;
+  }
+
+  .sm-p-estrella-chica path {
+    fill: var(--sm-pagina);
+    stroke: var(--sm-primario);
+    stroke-width: 1.2;
+  }
+
+  .sm-p-anios {
+    position: absolute;
+    left: 67.7%;
+    top: 57.8%;
+    width: 31%;
+    display: flex;
+    align-items: center;
+  }
+
+  .sm-p-pildora {
+    flex: none;
+    padding: calc(2 * var(--sm-p)) calc(20 * var(--sm-p));
+    border: 1px solid var(--sm-primario);
+    border-radius: var(--radio-full);
+    font-size: var(--sm-letra-sm);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .sm-p-linea {
+    flex: 1;
+    height: 1px;
+    margin-inline: calc(20 * var(--sm-p));
+    background-color: var(--sm-primario);
+    transform-origin: left center;
+  }
+
+  .sm-p-disperso {
+    position: absolute;
+    left: var(--sm-dx);
+    top: var(--sm-dy);
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    font-size: var(--sm-letra-md);
+    line-height: 1.5;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .sm-p-invitacion {
+    position: absolute;
+    left: 27.1%;
+    bottom: 4.4%;
+    width: calc(193 * var(--sm-p));
+    margin: 0;
+    padding: calc(2 * var(--sm-p)) calc(3 * var(--sm-p));
+    background-color: var(--sm-placa);
+    color: var(--sm-placa-texto);
+    font-size: var(--sm-letra-xs);
+    font-weight: 600;
+    line-height: 1.25;
+    text-transform: uppercase;
+    text-align: justify;
+    text-align-last: left;
+  }
+
+  .sm-p-codigo {
+    position: absolute;
+    left: 43.4%;
+    bottom: 4.2%;
+    display: flex;
+    flex-direction: column;
+    gap: calc(4 * var(--sm-p));
+  }
+
+  .sm-p-barras {
+    display: flex;
+    gap: calc(3 * var(--sm-p));
+    height: calc(70 * var(--sm-p));
+  }
+
+  .sm-p-barra {
+    display: block;
+    width: calc(var(--sm-ancho-barra) * var(--sm-p));
+    height: 100%;
+    background-color: var(--sm-primario);
+    transform-origin: bottom center;
+  }
+
+  .sm-p-codigo-texto {
+    font-size: var(--sm-letra-xs);
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+  }
+
+  .sm-p-baja {
+    position: absolute;
+    left: 2.9%;
+    bottom: 10.4%;
+    display: flex;
+    align-items: center;
+    gap: calc(8 * var(--sm-p));
+    margin: 0;
+    font-size: var(--sm-letra-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .sm-p-baja-estrella {
+    width: calc(15 * var(--sm-p));
+    height: calc(15 * var(--sm-p));
+    color: var(--sm-primario);
+  }
+
+  .sm-p-cuadricula {
+    position: absolute;
+    right: 2.2%;
+    bottom: 1.2%;
+    display: grid;
+    grid-template-columns: repeat(8, calc(17 * var(--sm-p)));
+    gap: calc(3.5 * var(--sm-p));
+    pointer-events: none;
+  }
+
+  .sm-p-cuadro {
+    display: block;
+    aspect-ratio: 1;
+    border: 1px solid var(--sm-primario);
+    border-radius: calc(4 * var(--sm-p));
+  }
+
+  .sm-p-cuadro-lleno {
+    background-color: var(--sm-primario);
+  }
+
+  .sm-p-cuadro-vacio {
+    visibility: hidden;
+  }
+
+  /* Celular (K29): la palabra arriba, el nombre debajo, el marco más chico y la fecha pegada al borde. */
+  @media (max-width: 767px), (max-aspect-ratio: 1/1) {
+    .sm-p-palabra {
+      top: 9%;
+    }
+
+    .sm-p-nombres {
+      right: 4.1%;
+      top: 22%;
+      font-size: calc(26 * var(--sm-p));
+      gap: calc(8 * var(--sm-p));
+    }
+
+    .sm-p-flor {
+      width: calc(44 * var(--sm-p));
+      height: calc(44 * var(--sm-p));
+    }
+
+    .sm-p-imagen {
+      top: 34%;
+      width: calc(173 * var(--sm-p));
+    }
+
+    .sm-p-orbita {
+      top: calc(34% + 86.5 * var(--sm-p));
+      width: calc(420 * var(--sm-p));
+      height: calc(210 * var(--sm-p));
+    }
+
+    .sm-p-anios {
+      left: 8%;
+      top: 62%;
+      width: 84%;
+    }
+
+    .sm-p-disperso {
+      top: var(--sm-dy-cel);
+      font-size: var(--sm-letra-xs);
+      line-height: 1.4;
+    }
+
+    .sm-p-invitacion {
+      left: 8%;
+      bottom: 11.5%;
+      width: calc(190 * var(--sm-p));
+    }
+
+    .sm-p-codigo {
+      left: auto;
+      right: 8%;
+      bottom: 4.5%;
+    }
+
+    .sm-p-baja {
+      left: 8%;
+      bottom: 5%;
+    }
+
+    .sm-p-cuadricula {
+      display: none;
+    }
+  }
+</style>

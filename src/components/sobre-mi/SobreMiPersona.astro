@@ -1,0 +1,419 @@
+---
+/**
+ * «Sobre mí» con una persona (T45, K12, decisión del autor del 2026-10-14): un bloque alto con su escenario fijo
+ * (sticky) y una coreografía ligada al scroll, sin ScrollTrigger (`lib/sobre-mi/sobre.ts` calcula el avance y lo
+ * publica en `data-sm-progreso`). La «foto» es el personaje del home sobre un fondo ciruela a sangre; la cámara se
+ * acerca a él en lugar del paneo entre dos personas de Tonami. Los textos son de `data/sobre-mi.ts` ([EJEMPLO]).
+ */
+import { sobreMi as datos } from '@/data/sobre-mi';
+import { PANTALLAS_SOBRE_MI } from '@/lib/sobre-mi/geometria';
+import Estrella from './Estrella.astro';
+import Flor from './Flor.astro';
+
+const s = datos.sobre;
+const letrasTitulo = [...s.titulo.toUpperCase()];
+// El recorrido de la línea de tinta, de arriba hacia abajo sobre la foto (K12). 1440 × 900 unidades.
+const trazo =
+  'M452 -10C346 36 326 92 362 112C430 152 536 142 660 184C830 240 1020 268 1090 322C1136 360 1098 392 1030 404C892 430 748 438 646 480C556 516 510 532 524 560C548 604 690 650 804 696C906 738 962 770 956 796C950 820 840 832 744 852C706 862 684 880 688 912';
+const flores = [0.17, 0.37, 0.58, 0.81];
+---
+
+<div
+  class="sm-sobre"
+  data-sm-bloque="sobre-mi"
+  data-sm-progreso="0.000"
+  style={`--sm-pantallas: ${PANTALLAS_SOBRE_MI}`}
+>
+  <div class="sm-s-escenario" data-sm="sobre-escenario">
+    <!-- La entrada: el título con letras que parpadean, el rótulo y la estrella que gira y crece (K12) -->
+    <div class="sm-s-intro">
+      <p class="sm-s-rotulo" data-sm-chr-grupo>{s.rotulo}</p>
+      <h2 class="sm-s-titulo" data-sm="sobre-titulo">
+        <span class="sm-solo-lectores">{s.titulo}</span>
+        <span class="sm-s-titulo-letras" aria-hidden="true">
+          {letrasTitulo.map((l) => <span class="sm-s-letra" data-sm-parpadeo>{l === ' ' ? ' ' : l}</span>)}
+        </span>
+      </h2>
+      <Estrella class="sm-s-intro-estrella" />
+    </div>
+
+    <!-- La «foto»: el personaje del home sobre el fondo ciruela, revelada con clip-path inset y escala -->
+    <div class="sm-s-foto" data-sm="sobre-foto">
+      <div class="sm-s-camara" data-sm-camara>
+        <img class="sm-s-img" src={s.foto.src} alt={s.foto.alt} width={s.foto.ancho} height={s.foto.alto} decoding="async" />
+      </div>
+      <span class="sm-s-atenuacion" data-sm-atenuacion aria-hidden="true"></span>
+    </div>
+
+    <!-- La línea de tinta con sus flores y la estrella que rueda por ella -->
+    <svg class="sm-s-svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+      <path class="sm-s-linea" data-sm="sobre-linea" d={trazo} fill="none" />
+      {flores.map((f) => (
+        <g class="sm-s-flor" data-sm-flor data-abierta="false" data-sm-fraccion={f}>
+          <g class="sm-s-flor-giro"><Flor /></g>
+        </g>
+      ))}
+      <g class="sm-s-estrella" data-sm="sobre-estrella">
+        <path d="M0 -40C2 -12 14 0 40 0C14 2 2 14 0 40C-2 14 -14 2 -40 0C-14 -2 -2 -14 0 -40Z" />
+      </g>
+    </svg>
+
+    <!-- La columna de la izquierda: rol en píldora, nombre, perfil y personalidad (K12) -->
+    <div class="sm-s-columna">
+      <p class="sm-s-rol" data-sm-s="rol">{s.rol}</p>
+      <p class="sm-s-nombre-caja">
+        <span class="sm-s-nombre" data-sm="sobre-nombre">{s.nombre}</span>
+      </p>
+      <p class="sm-s-apellido-caja">
+        <span class="sm-s-apellido" data-sm-s="apellido">{s.apellido}</span>
+      </p>
+      <div class="sm-s-bloque" data-sm="sobre-perfil">
+        <p class="sm-s-placa">{s.perfil.rotulo}</p>
+        <div class="sm-s-lineas">{s.perfil.lineas.map((l) => <p>{l}</p>)}</div>
+      </div>
+      <div class="sm-s-bloque" data-sm="sobre-personalidad">
+        <p class="sm-s-placa">{s.personalidad.rotulo}</p>
+        <ul class="sm-s-puntos">
+          {s.personalidad.puntos.map((p) => (
+            <li><Estrella class="sm-s-punto" /><span>{p}</span></li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style is:global>
+  .sm-sobre {
+    position: relative;
+    height: calc(var(--sm-pantallas) * var(--sm-vh));
+  }
+
+  .sm-s-escenario {
+    position: sticky;
+    top: 0;
+    height: var(--sm-vh);
+    overflow: hidden;
+  }
+
+  /* ---------- La entrada ---------- */
+
+  .sm-s-intro {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: calc(14 * var(--sm-p));
+  }
+
+  .sm-s-rotulo {
+    margin: 0;
+    font-size: var(--sm-letra-sm);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .sm-s-titulo {
+    margin: 0;
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    font-size: calc(118 * var(--sm-p));
+    line-height: 1;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .sm-s-titulo-letras {
+    display: block;
+  }
+
+  .sm-s-letra {
+    display: inline-block;
+    white-space: pre;
+  }
+
+  .sm-s-intro-estrella {
+    position: absolute;
+    right: 12%;
+    top: 24%;
+    width: calc(120 * var(--sm-p));
+    height: calc(120 * var(--sm-p));
+    color: var(--sm-primario);
+  }
+
+  /* ---------- La «foto» ---------- */
+
+  .sm-s-foto {
+    position: absolute;
+    left: 2.2%;
+    top: 3.6%;
+    width: 95.6%;
+    height: 92.9%;
+    overflow: hidden;
+    background-color: var(--sm-placa);
+    background-image: radial-gradient(
+      ellipse 42% 62% at 66% 42%,
+      color-mix(in srgb, var(--sm-placa) 68%, var(--sm-placa-texto)) 0%,
+      var(--sm-placa) 100%
+    );
+    will-change: clip-path, transform;
+  }
+
+  /* La cámara: la imagen se acerca al personaje (hasta ×1,4) con el origen en su cara. */
+  .sm-s-camara {
+    position: absolute;
+    inset: 0;
+    transform-origin: 66% 30%;
+    will-change: transform;
+  }
+
+  .sm-s-img {
+    position: absolute;
+    left: 66%;
+    top: 0;
+    translate: -50% 0;
+    height: 100%;
+    width: auto;
+    max-width: none;
+  }
+
+  .sm-s-atenuacion {
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--sm-invertida) 72%, transparent) 0%,
+      color-mix(in srgb, var(--sm-invertida) 40%, transparent) 38%,
+      transparent 62%
+    );
+    opacity: 0;
+  }
+
+  /* ---------- La línea de tinta ---------- */
+
+  .sm-s-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .sm-s-linea {
+    stroke: var(--sm-placa-texto);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+  }
+
+  .sm-s-flor .sm-petalo {
+    fill: var(--sm-papel);
+    stroke: var(--sm-primario);
+  }
+
+  .sm-s-flor .sm-flor-centro {
+    fill: var(--sm-primario);
+  }
+
+  /* Cerrada hasta que la estrella pasa (data-abierta="true"); se abre con un rebote. */
+  .sm-s-flor-giro {
+    transform: scale(0.1) rotate(-60deg);
+    opacity: 0;
+    transition: transform var(--sm-d-lenta) var(--sm-curva-atras), opacity var(--sm-d-base) var(--sm-curva-salida);
+  }
+
+  .sm-s-flor[data-abierta="true"] .sm-s-flor-giro {
+    transform: scale(1.1) rotate(0deg);
+    opacity: 1;
+  }
+
+  .sm-s-estrella path {
+    fill: var(--sm-primario);
+    stroke: var(--sm-placa-texto);
+    stroke-width: 1.4;
+  }
+
+  /* ---------- La columna de la izquierda ---------- */
+
+  .sm-s-columna {
+    position: absolute;
+    left: 12.4%;
+    top: 27.5%;
+    width: 22%;
+    color: var(--sm-placa-texto);
+  }
+
+  .sm-s-rol {
+    display: inline-block;
+    margin: 0 0 calc(12 * var(--sm-p));
+    padding: calc(3 * var(--sm-p)) calc(26 * var(--sm-p));
+    border-radius: var(--radio-full);
+    background-color: var(--sm-placa-texto);
+    color: var(--sm-placa);
+    font-size: var(--sm-letra-sm);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .sm-s-nombre-caja,
+  .sm-s-apellido-caja {
+    margin: 0;
+    overflow: hidden;
+    padding-block: 0.08em;
+  }
+
+  .sm-s-nombre {
+    display: block;
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    font-size: calc(60 * var(--sm-p));
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+  }
+
+  .sm-s-apellido {
+    display: block;
+    font-family: var(--fuente-display);
+    font-weight: 700;
+    font-size: calc(26 * var(--sm-p));
+    line-height: 1.25;
+    text-transform: uppercase;
+  }
+
+  .sm-s-bloque {
+    margin-top: calc(30 * var(--sm-p));
+  }
+
+  .sm-s-placa {
+    display: inline-block;
+    margin: 0 0 calc(10 * var(--sm-p));
+    padding: 0 calc(4 * var(--sm-p));
+    background-color: var(--sm-placa-texto);
+    color: var(--sm-placa);
+    font-size: var(--sm-letra-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .sm-s-lineas p,
+  .sm-s-puntos li {
+    margin: 0;
+    font-size: var(--sm-letra-md);
+    line-height: 1.7;
+  }
+
+  .sm-s-puntos {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .sm-s-puntos li {
+    display: flex;
+    align-items: baseline;
+    gap: calc(10 * var(--sm-p));
+  }
+
+  .sm-s-punto {
+    flex: none;
+    width: calc(11 * var(--sm-p));
+    height: calc(11 * var(--sm-p));
+    color: var(--sm-placa-texto);
+  }
+
+  /* Celular (K29): el personaje recortado a la derecha y el nombre abajo. */
+  @media (max-width: 767px), (max-aspect-ratio: 1/1) {
+    .sm-s-titulo {
+      font-size: calc(54 * var(--sm-p));
+    }
+
+    .sm-s-intro-estrella {
+      right: 6%;
+      top: 18%;
+      width: calc(70 * var(--sm-p));
+      height: calc(70 * var(--sm-p));
+    }
+
+    .sm-s-foto {
+      left: 4.1%;
+      top: 3.2%;
+      width: 91.8%;
+      height: 93.6%;
+    }
+
+    .sm-s-camara {
+      transform-origin: 58% 28%;
+    }
+
+    .sm-s-img {
+      left: 58%;
+      height: 84%;
+      top: 2%;
+    }
+
+    .sm-s-atenuacion {
+      background-image: linear-gradient(
+        0deg,
+        color-mix(in srgb, var(--sm-invertida) 86%, transparent) 0%,
+        color-mix(in srgb, var(--sm-invertida) 50%, transparent) 46%,
+        transparent 78%
+      );
+    }
+
+    .sm-s-columna {
+      left: 9%;
+      top: auto;
+      bottom: 7%;
+      width: 82%;
+    }
+
+    .sm-s-nombre {
+      font-size: calc(46 * var(--sm-p));
+    }
+
+    .sm-s-apellido {
+      font-size: calc(22 * var(--sm-p));
+    }
+
+    .sm-s-bloque {
+      margin-top: calc(14 * var(--sm-p));
+    }
+
+    .sm-s-lineas p,
+    .sm-s-puntos li {
+      font-size: var(--sm-letra-sm);
+      line-height: 1.5;
+    }
+  }
+
+  /* Con movimiento reducido todo está en su estado final y el bloque no es alto: el escenario no se fija. */
+  @media (prefers-reduced-motion: reduce) {
+    .sm-sobre {
+      height: auto;
+    }
+
+    .sm-s-escenario {
+      position: relative;
+    }
+
+    .sm-s-intro {
+      display: none;
+    }
+
+    .sm-s-flor-giro {
+      transform: scale(1.1);
+      opacity: 1;
+    }
+
+    .sm-s-atenuacion {
+      opacity: 1;
+    }
+  }
+</style>

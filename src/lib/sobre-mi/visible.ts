@@ -7,3 +7,12 @@
  * rueda no baja al final del menú y `/#sobre-mi` y `/#contacto` abren el home.
  */
 export const SOBRE_MI_VISIBLE: boolean = import.meta.env.PUBLIC_OCULTAR_SOBRE_MI !== '1';
+
+/**
+ * ¿Se publica bloqueada? (autor, 2026-10-15): como no alcanzó a terminarse, se muestra en GitHub Pages con cada
+ * letra y número cambiados por «X», la sección medio gris, sin nada que se pueda tocar y con cintas de «En
+ * construcción» encima (`data/sobre-mi.ts`, `lib/sobre-mi/bloqueo.ts`, `components/sobre-mi/Bloqueo.astro`).
+ * `tools/publicar.mjs` deja `PUBLIC_BLOQUEAR_SOBRE_MI=1`; en `npm run dev`, en el build local y en las pruebas se
+ * ve completa.
+ */
+export const SOBRE_MI_BLOQUEADA: boolean = import.meta.env.PUBLIC_BLOQUEAR_SOBRE_MI === '1';

@@ -1,3 +1,231 @@
 ---
-// «Sobre mí y contacto» no se publica todavía: la está terminando el autor.
+/**
+ * SobreMi.astro — la sección «Sobre mí y contacto», debajo del menú (nivel SM), calcada de Tonami & Ayano
+ * (T45; decisiones del autor del 2026-10-14 en docs/1-PRODUCTO.md § 7). Reemplaza el calco de noth.in y
+ * Digitalists de T35 en el aspecto y la composición; se conservan el nivel `SM`, cómo se llega y se sale
+ * (`lib/pelicula/paso-sm.ts`) y el envío por Web3Forms.
+ *
+ * Cuatro bloques en este orden: Portada, Sobre mí (con su puente hacia la historia), Historia por semestres y
+ * Contacto. Con la paleta Ciruela en Día y Noche (tokens en `styles/tokens.css`), los rieles laterales, los orbes
+ * con grano al fondo (WebGL), el cursor con sellos y chispas y el formulario con sus diálogos. Medidas de la ficha
+ * `fabrica/proyecto/referentes/T45.json`; textos de `data/sobre-mi.ts`; movimiento de `lib/sobre-mi/`.
+ */
+import { sobreMi as d } from '@/data/sobre-mi';
+import Marco from '@/components/sobre-mi/Marco.astro';
+import Portada from '@/components/sobre-mi/Portada.astro';
+import SobreMiPersona from '@/components/sobre-mi/SobreMiPersona.astro';
+import Puente from '@/components/sobre-mi/Puente.astro';
+import Historia from '@/components/sobre-mi/Historia.astro';
+import Contacto from '@/components/sobre-mi/Contacto.astro';
+import Dialogos from '@/components/sobre-mi/Dialogos.astro';
+import Bloqueo from '@/components/sobre-mi/Bloqueo.astro';
+import { SOBRE_MI_BLOQUEADA } from '@/lib/sobre-mi/visible';
+
+const f = d.contacto.formulario;
+// Lo que el módulo del navegador necesita y no debe importar de `data/` (para no llevar las imágenes en su JS).
+const config = {
+  endpoint: d.web3forms.endpoint,
+  correo: d.contacto.correo,
+  formulario: {
+    errores: f.errores,
+    resumen: f.resumen,
+    campos: f.campos,
+    palabras: f.gracias.palabras,
+  },
+  rieles: d.rieles,
+  historia: {
+    capitulos: d.historia.capitulos.map((c) => ({
+      id: c.id,
+      digitos: c.digitos,
+      rotulo: c.rotulo,
+      texto: c.texto,
+      extra: c.extra,
+      sabias: c.sabias,
+      imagenes: c.imagenes.map((im) => ({ src: im.src, ancho: im.ancho, alto: im.alto, alt: im.alt, pie: im.pie })),
+    })),
+  },
+};
+
+// El tema se decide antes de pintar la sección: la elección guardada y, si no hay, el esquema del sistema.
+const decidirTema = `(function(){var s=document.getElementById('act-sm');if(!s)return;var t=null;try{t=localStorage.getItem('sm-tema')}catch(e){}if(t!=='dia'&&t!=='noche'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'noche':'dia'}s.setAttribute('data-sm-tema',t)})();`;
 ---
+
+<section id="act-sm" class="sm-seccion" aria-label="Sobre mí y contacto" data-level="SM" tabindex="-1" inert={SOBRE_MI_BLOQUEADA}>
+  <script is:inline set:html={decidirTema}></script>
+
+  <!-- Bloqueada en GitHub Pages (autor, 2026-10-15): media escala de grises y cintas de «En construcción» -->
+  {SOBRE_MI_BLOQUEADA && <Bloqueo />}
+
+  <!-- Los orbes con grano (K9): un lienzo de WebGL que sigue al scroll dentro de la sección y se recorta a ella -->
+  <div class="sm-fondo" aria-hidden="true">
+    <div class="sm-fondo-fijo">
+      <canvas class="sm-lienzo-orbes" data-sm-lienzo="orbes"></canvas>
+    </div>
+  </div>
+
+  <Marco />
+
+  <div class="sm-bloques">
+    <Portada />
+    <SobreMiPersona />
+    <Puente />
+    <Historia />
+    <Contacto />
+  </div>
+
+  <!-- La estela de sellos y las chispas del cursor (K10): decorativas, salen del DOM al terminar -->
+  <div class="sm-estela" data-sm-estela aria-hidden="true"></div>
+
+  <Dialogos />
+
+  <script type="application/json" data-sm-config set:html={JSON.stringify(config)}></script>
+</section>
+
+<script>
+  import { iniciarSobreMi, type ControladorSobreMi } from '@/lib/sobre-mi/motor';
+
+  let controlador: ControladorSobreMi | null = null;
+  let seccionIniciada: HTMLElement | null = null;
+
+  // Idempotente: el módulo corre al cargar y `astro:page-load` llega después; con la misma sección no se vuelve a iniciar.
+  function inicializarSobreMi(): void {
+    const seccion = document.getElementById('act-sm');
+    if (!seccion || (controlador && seccion === seccionIniciada)) return;
+    destruirSobreMi();
+    seccionIniciada = seccion;
+    controlador = iniciarSobreMi(seccion);
+  }
+
+  function destruirSobreMi(): void {
+    controlador?.destruir();
+    controlador = null;
+    seccionIniciada = null;
+  }
+
+  document.addEventListener('astro:page-load', inicializarSobreMi);
+  document.addEventListener('astro:before-swap', destruirSobreMi);
+
+  if (document.readyState !== 'loading') {
+    inicializarSobreMi();
+  } else {
+    document.addEventListener('DOMContentLoaded', inicializarSobreMi, { once: true });
+  }
+</script>
+
+<style is:global>
+  /* Hasta que el menú pasa a la vista (home y preloader) la sección no ocupa lugar: así la caída del home
+     no puede pasarse de largo hasta ella con la rueda, y el documento termina en el N2 como antes. */
+  body[data-current-level="N0"] #act-sm,
+  body[data-current-level="N1"] #act-sm {
+    display: none;
+  }
+
+  /* Destinos del foco al entrar a la sección (lib/pelicula/scroll.ts): no son controles, no llevan anillo. */
+  #act-sm:focus {
+    outline: none;
+  }
+
+  .sm-seccion {
+    position: relative;
+    z-index: var(--z-sobre-mi);
+    width: 100%;
+    min-height: var(--sm-vh);
+    box-sizing: border-box;
+    overflow-x: clip;
+    background-color: var(--sm-pagina);
+    color: var(--sm-primario);
+    font-family: var(--fuente-texto);
+    font-size: var(--sm-letra-md);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sm-seccion *,
+  .sm-seccion *::before,
+  .sm-seccion *::after {
+    box-sizing: border-box;
+  }
+
+  .sm-seccion [hidden] {
+    display: none !important;
+  }
+
+  .sm-seccion button,
+  .sm-seccion input,
+  .sm-seccion textarea,
+  .sm-seccion dialog {
+    font-family: inherit;
+  }
+
+  .sm-seccion button {
+    color: inherit;
+  }
+
+  /* Lo que solo lee el lector de pantalla (el texto entero de lo que se parte en letras, los avisos). */
+  .sm-solo-lectores {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* Los bloques van sobre los orbes. */
+  .sm-bloques {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* El fondo de orbes: ocupa toda la sección y su lienzo queda fijo a la pantalla mientras ella pasa. El recorte
+     (clip-path) lo mantiene dentro de la sección: encima del N2 nunca se ve. */
+  .sm-fondo {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    clip-path: inset(0);
+  }
+
+  .sm-fondo-fijo {
+    position: sticky;
+    top: 0;
+    height: var(--sm-vh);
+  }
+
+  .sm-lienzo-orbes {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* La estela y las chispas: una capa fija sobre la sección, que no recibe clics. */
+  .sm-estela {
+    position: fixed;
+    inset: 0;
+    z-index: 6;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  body:not([data-current-level="SM"]) .sm-estela {
+    display: none;
+  }
+
+  /* Las máscaras de las líneas que suben (nombre, apellido, palabras del puente). */
+  .sm-seccion .sm-mascara {
+    overflow: hidden;
+  }
+
+  /* Con movimiento reducido el documento ya no tiene su propio scroll en <body> (lib/sobre-mi): el escenario fijo
+     de cada bloque necesita que el viewport sea el contenedor de scroll. Solo en el nivel SM. */
+  @media (prefers-reduced-motion: reduce) {
+    html body[data-current-level="SM"] {
+      overflow-y: visible !important;
+    }
+  }
+</style>

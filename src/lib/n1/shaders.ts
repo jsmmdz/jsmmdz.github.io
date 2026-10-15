@@ -119,6 +119,11 @@ void main() {
  * T36: solo las letras llevan el efecto del titular del N2 (el fluido las desplaza y el cursor les da el
  * filo de arcoíris: `lib/three/n2/efecto-titular.ts`). La máscara de la tinta y el video se leen en el uv
  * sin desplazar, así que no se deforman.
+ *
+ * T44: entre el fondo y las letras va el personaje (un video de color + máscara, `uPersonaje`: el color
+ * premultiplicado en la mitad izquierda y el alfa, en el canal R de la mitad derecha). Se dibuja en la caja
+ * `uCajaPersonaje` (la del <img> del póster, en uv del lienzo con y hacia arriba); el efecto de las letras
+ * no lo deforma. La tinta va encima de todo y, donde pasa, una línea de luz (`uLuz`) marca la silueta por fuera.
  */
 export const MEZCLA = /* glsl */ `
 precision highp float;
@@ -144,6 +149,11 @@ uniform float uEfecto;      // 1 con el cursor sobre la página
 uniform vec2 uPuntero;      // px del lienzo, y hacia arriba
 uniform float uRadio;       // px del lienzo
 uniform float uDpr;
+uniform sampler2D uPersonaje;
+uniform vec4 uCajaPersonaje;    // x, y (abajo), ancho y alto de su cuadro, en uv del lienzo
+uniform float uTienePersonaje;  // 1 cuando ya hay un cuadro del video y no está oculto
+uniform vec2 uContorno;         // grosor de la línea de luz, en uv del lienzo
+uniform vec3 uLuz;              // el color de la línea de luz
 
 // La cobertura de las letras en un punto (0 fuera del lienzo).
 float alfa(vec2 uv) {
@@ -152,6 +162,30 @@ float alfa(vec2 uv) {
 }
 
 ${GLSL_EFECTO_TITULAR}
+
+// Dónde cae un punto del lienzo dentro del cuadro del personaje (0–1, y hacia arriba; fuera, queda fuera de 0–1).
+vec2 enElCuadro(vec2 uv) {
+  return (uv - uCajaPersonaje.xy) / uCajaPersonaje.zw;
+}
+
+// El alfa del personaje en un punto del lienzo (0 fuera de su cuadro): el canal R de la mitad derecha del video.
+float alfaPersonaje(vec2 uv) {
+  vec2 p = enElCuadro(uv);
+  if (p.x < 0.0 || p.y < 0.0 || p.x > 1.0 || p.y > 1.0) return 0.0;
+  return texture2D(uPersonaje, vec2(0.5 + p.x * 0.5, p.y)).r;
+}
+
+// Cuánto de la silueta cae a un radio de aquí, por fuera del personaje (0 lejos o dentro, 1 pegado al borde).
+// Dos anillos de 8 muestras (a la mitad del radio y al radio completo) dan una línea sin dientes.
+float luzDeLaSilueta(vec2 uv) {
+  float alrededor = 0.0;
+  for (int i = 0; i < 16; i++) {
+    float angulo = float(i) * 0.39269908;
+    float radio = (i - (i / 2) * 2 == 0) ? 1.0 : 0.5;
+    alrededor = max(alrededor, alfaPersonaje(uv + vec2(cos(angulo), sin(angulo)) * uContorno * radio));
+  }
+  return clamp(alrededor - alfaPersonaje(uv), 0.0, 1.0);
+}
 
 void main() {
   float tinta = texture2D(uTinta, vUv).r * uTamano;
@@ -166,7 +200,17 @@ void main() {
   if (uEfecto > 0.5) {
     aplicarFiloArcoiris(vUv, fuente, cobertura, uResolucion, uPuntero, uRadio, uDpr, colorLetras, opacidad);
   }
-  vec3 base = mix(fondo, colorLetras, opacidad);
+  // El personaje, premultiplicado, sobre el fondo y debajo de las letras (que lo tapan).
+  vec3 debajo = fondo;
+  if (uTienePersonaje > 0.5) {
+    vec2 p = enElCuadro(vUv);
+    if (p.x >= 0.0 && p.y >= 0.0 && p.x <= 1.0 && p.y <= 1.0) {
+      float alfaP = texture2D(uPersonaje, vec2(0.5 + p.x * 0.5, p.y)).r;
+      vec3 colorP = min(texture2D(uPersonaje, vec2(p.x * 0.5, p.y)).rgb, vec3(alfaP));
+      debajo = colorP + fondo * (1.0 - alfaP);
+    }
+  }
+  vec3 base = mix(debajo, colorLetras, opacidad);
 
   // El video ocupa todo el ancho; su alto es ancho / aspecto. Sus letras están en el centro del cuadro (medido
   // en 6 cuadros del clip: el centro vertical de las letras cae entre 0,478 y 0,500 del alto), así que el centro
@@ -177,5 +221,10 @@ void main() {
   float dentro = step(0.0, v) * step(v, 1.0) * step(0.5, uTieneVideo);
   vec3 revelado = texture2D(uRevelado, vec2(vUv.x, clamp(v, 0.0, 1.0))).rgb * dentro;
 
-  gl_FragColor = vec4(mix(base, revelado, mascara), 1.0);
+  vec3 salida = mix(base, revelado, mascara);
+  // La línea de luz de la silueta, solo donde hay tinta (la tinta tapa al personaje: queda su contorno).
+  if (uTienePersonaje > 0.5 && mascara > 0.001) {
+    salida = mix(salida, uLuz, luzDeLaSilueta(vUv) * mascara);
+  }
+  gl_FragColor = vec4(salida, 1.0);
 }`;

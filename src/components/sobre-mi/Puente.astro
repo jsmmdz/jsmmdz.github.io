@@ -1,0 +1,147 @@
+---
+/**
+ * El puente hacia la historia (T45, K12 y A10): la línea se vuelve un resorte, la estrella cae y siete palabras se
+ * dispersan (en Tonami, «The next is our story from 2020 to today»); la estrella termina como un aro y entrega a la
+ * historia. Es un bloque alto con su escenario fijo: su avance sale de dónde está el bloque en la pantalla
+ * (`lib/sobre-mi/sobre.ts`), y empieza a moverse en cuanto entra por abajo. Las palabras son [EJEMPLO].
+ */
+import { sobreMi as datos } from '@/data/sobre-mi';
+import { PANTALLAS_PUENTE } from '@/lib/sobre-mi/geometria';
+
+const palabras = datos.puente.palabras;
+// Dónde cae cada palabra (x, y en %) y si lleva el tamaño de título. La escalera de Tonami, en zigzag.
+const sitios = [
+  { x: 3.5, y: 15 },
+  { x: 90, y: 27, derecha: true },
+  { x: 24, y: 43 },
+  { x: 3.5, y: 61 },
+  { x: 62, y: 53 },
+  { x: 26, y: 78 },
+  { x: 90, y: 80, derecha: true },
+];
+// El resorte: una hélice de 9 vueltas, de arriba abajo, que arranca en el eje del escenario (720, 250).
+const VUELTAS = 9;
+const PASOS = 36;
+const resorte = Array.from({ length: VUELTAS * PASOS + 1 }, (_, i) => {
+  const a = (i / PASOS) * Math.PI * 2;
+  const x = 720 + 96 * Math.cos(a);
+  const y = 250 + (i / PASOS) * 48 + 20 * Math.sin(a);
+  return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`;
+}).join('');
+---
+
+<div class="sm-puente" data-sm="puente" style={`--sm-pantallas: ${PANTALLAS_PUENTE}`}>
+  <div class="sm-pu-escenario" data-sm-pu="escenario">
+    <svg class="sm-pu-svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+      <path class="sm-pu-linea" data-sm-pu="linea" d="M720 -10V250" fill="none" />
+      <path class="sm-pu-resorte" data-sm-pu="resorte" d={resorte} fill="none" />
+      <circle class="sm-pu-aro" data-sm-pu="aro" cx="720" cy="720" r="46" fill="none" />
+      <g class="sm-pu-estrella" data-sm-pu="estrella">
+        <path d="M0 -44C2 -13 15 0 44 0C15 2 2 15 0 44C-2 15 -15 2 -44 0C-15 -2 -2 -15 0 -44Z" />
+      </g>
+    </svg>
+    <p class="sm-pu-frase">
+      {palabras.map((palabra, i) => (
+        <span
+          class:list={['sm-pu-palabra', { 'sm-pu-titulo': i === datos.puente.titulo, 'sm-pu-derecha': sitios[i].derecha }]}
+          data-sm-pu="palabra"
+          style={`left:${sitios[i].x}%;top:${sitios[i].y}%`}
+        >
+          <span class="sm-pu-palabra-texto">{palabra}</span>
+        </span>
+      ))}
+    </p>
+  </div>
+</div>
+
+<style is:global>
+  .sm-puente {
+    position: relative;
+    height: calc(var(--sm-pantallas) * var(--sm-vh));
+  }
+
+  .sm-pu-escenario {
+    position: sticky;
+    top: 0;
+    height: var(--sm-vh);
+    overflow: hidden;
+  }
+
+  .sm-pu-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .sm-pu-linea,
+  .sm-pu-resorte,
+  .sm-pu-aro {
+    stroke: var(--sm-primario);
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .sm-pu-estrella path {
+    fill: var(--sm-primario);
+  }
+
+  .sm-pu-frase {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+  }
+
+  .sm-pu-palabra {
+    position: absolute;
+    display: block;
+    overflow: hidden;
+    padding-block: 0.1em;
+    font-family: var(--fuente-display);
+    font-weight: 800;
+    font-size: calc(54 * var(--sm-p));
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .sm-pu-derecha {
+    translate: -100% 0;
+  }
+
+  .sm-pu-titulo {
+    font-size: calc(72 * var(--sm-p));
+  }
+
+  .sm-pu-palabra-texto {
+    display: block;
+  }
+
+  @media (max-width: 767px), (max-aspect-ratio: 1/1) {
+    .sm-pu-palabra {
+      font-size: calc(26 * var(--sm-p));
+    }
+
+    .sm-pu-titulo {
+      font-size: calc(34 * var(--sm-p));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sm-puente {
+      height: auto;
+    }
+
+    .sm-pu-escenario {
+      position: relative;
+    }
+
+    .sm-pu-linea,
+    .sm-pu-estrella {
+      display: none;
+    }
+  }
+</style>

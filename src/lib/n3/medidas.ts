@@ -13,7 +13,7 @@ const ALTO_TARJETA_REM = 55;
 
 /** Rectángulo (px CSS de la ventana) de una tarjeta de proporción `aspecto` centrada en la cinta. */
 export function rectTarjetaCentrada(anchoVentana: number, altoVentana: number, aspecto: number): RectPortada {
-  const rem = remDeVentana(anchoVentana);
+  const rem = remDeVentana(anchoVentana, altoVentana);
   const height = Math.min(ALTO_TARJETA_VH * altoVentana, ALTO_TARJETA_REM * rem);
   const width = height * aspecto;
   return { x: (anchoVentana - width) / 2, y: (altoVentana - height) / 2, width, height };

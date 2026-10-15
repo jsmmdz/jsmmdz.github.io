@@ -22,6 +22,7 @@ import gsap from 'gsap';
 import { tomarRegreso } from '@/lib/navigation/vuelo';
 import type { CasoN4 } from '@/lib/n4/caso';
 import type { N2TarjetasManager, UniformesRaton } from './n2-tarjetas';
+import { ajustarCamaraN2 } from './n2/camara-unidad';
 import { FluidoN2 } from './n2/fluido';
 import { TitularN2 } from './n2/titular';
 import type { ControladorN3, EntradaControlador } from './n3/controlador';
@@ -172,6 +173,7 @@ export class ThreeSceneManager {
 
       if (!this.n2Camera) {
         this.n2Camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
+        ajustarCamaraN2(this.n2Camera, width, height);
         this.n2Camera.position.set(0, 0.25, 4.4); // pulido: más cerca, el cilindro ocupa ≈ 40 % del alto como en aikawa-05
         this.n2Camera.lookAt(0, 0.12, 0);
       }
@@ -396,8 +398,7 @@ export class ThreeSceneManager {
     }
     const width = this.container.clientWidth || window.innerWidth;
     const height = this.container.clientHeight || window.innerHeight;
-    this.n2Camera.aspect = width / height;
-    this.n2Camera.updateProjectionMatrix();
+    ajustarCamaraN2(this.n2Camera, width, height);
 
     const scaleY = this.n2CylinderGroup?.scale.y ?? 1;
     const R = 1.3;
@@ -576,8 +577,7 @@ export class ThreeSceneManager {
     const width = this.container.clientWidth || window.innerWidth;
     const height = this.container.clientHeight || window.innerHeight;
     if (this.n2Camera) {
-      this.n2Camera.aspect = width / height;
-      this.n2Camera.updateProjectionMatrix();
+      ajustarCamaraN2(this.n2Camera, width, height);
       this.updateCylinderBoundingBox();
     }
     this.renderer.setSize(width, height);

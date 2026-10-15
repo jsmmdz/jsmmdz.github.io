@@ -147,59 +147,139 @@
   --radio-full: 9999px;
 
   /* ===================================================================
-   * 6B. SOBRE MÍ Y CONTACTO (T35) — medidas calcadas de noth.in y Digitalists a 1440 × 900
-   * (fabrica/proyecto/referentes/T35.json, K1–K12). Los anchos y márgenes van en vw para que la
-   * composición escale; el ajuste fino con textos reales y el celular son del pulido y de T39.
+   * 6B. SOBRE MÍ Y CONTACTO (T35, heredado)
+   * Estas medidas son las de la sección vieja (noth.in y Digitalists). Desde T45 la sección ya no las usa, pero
+   * `tests/T39/base.spec.ts` (protegida) las mide en la página 404, con sus cifras de hoy: se conservan tal cual
+   * hasta que el orquestador actualice esa prueba (SOLICITUDES de la entrega de T45).
    * =================================================================== */
-  /* Colores de la sección, siempre de la paleta: ámbar (botón y foco), esmeralda (campo válido). */
-  --sm-fondo: var(--color-negro);
-  --sm-texto: var(--color-texto-claro);
-  --sm-texto-tenue: rgba(250, 248, 245, 0.72);
-  --sm-acento: var(--color-motion);
-  --sm-ok: var(--color-3d);
-  --sm-texto-boton: var(--color-texto-oscuro);
+  --sm-margen: calc(1.25 * var(--uvw));
+  --sm-x-rotulo: calc(2.5 * var(--uvw));
+  --sm-x-pequena: calc(21.6 * var(--uvw));
+  --sm-x-columna: calc(43.2 * var(--uvw));
+  --sm-x-gusta-rotulo: calc(21.4 * var(--uvw));
+  --sm-x-gusta-lista: calc(43 * var(--uvw));
+  --sm-x-gusta-frase: calc(70.9 * var(--uvw));
+  --sm-ancho-parrafo: calc(35 * var(--uvw));
+  --sm-ancho-pequena: calc(13.5 * var(--uvw));
+  --sm-ancho-grande: calc(43.1 * var(--uvw));
+  --sm-contacto-arriba: calc(5.556 * var(--uvw));
+  --sm-contacto-lados: calc(3.472 * var(--uvw));
+  --sm-contacto-columna: min(400px, calc(27.8 * var(--uvw)));
+  --sm-contacto-formulario: min(500px, calc(34.7 * var(--uvw)));
+  --sm-imagen-contacto: calc(5.5 * var(--uvw));
+  --sm-tam-titular: clamp(2rem, calc(3.6 * var(--uvw)), 4.5rem);
+  --sm-tam-titular-contacto: clamp(1.5rem, calc(2.5 * var(--uvw)), 2.5rem);
+  --sm-tam-titulo-formulario: clamp(1.125rem, calc(1.75 * var(--uvw)), 1.75rem);
+  --sm-tam-campo: var(--letra-campo); /* 16 px: con menos, iOS hace zoom al tocar el campo */
+  --sm-tam-frase-gigante: min(calc(12.75 * var(--uvw)), 12rem);
 
-  /* Columnas de noth.in (x a 1440: 36, 311, 622 | 308, 620, 1021). */
-  --sm-margen: 1.25vw;
-  --sm-x-rotulo: 2.5vw;
-  --sm-x-pequena: 21.6vw;
-  --sm-x-columna: 43.2vw;
-  --sm-x-gusta-rotulo: 21.4vw;
-  --sm-x-gusta-lista: 43vw;
-  --sm-x-gusta-frase: 70.9vw;
-  --sm-ancho-parrafo: 35vw;
-  --sm-ancho-pequena: 13.5vw;
-  --sm-ancho-grande: 43.1vw;
+  /* ===================================================================
+   * 6C. SOBRE MÍ Y CONTACTO (T45) — paleta Ciruela, calcada de Tonami & Ayano
+   * Decisión del autor (2026-10-14, docs/1-PRODUCTO.md § 7): solo esta sección, con Día y Noche. El primario y el
+   * error del Día los eligió el autor; el resto de la tabla los propuso el orquestador y se afinan en el pulido.
+   * La sección lee los roles (`--sm-primario`, `--sm-pagina`…) según `#act-sm[data-sm-tema]`; los shaders los leen
+   * de ahí como uniformes: ningún color va fuera de este archivo.
+   * =================================================================== */
+  --ciruela-dia-primario: #4B1673;
+  --ciruela-dia-pagina: #F6F2F8;
+  --ciruela-dia-placa: #4B1673;
+  --ciruela-dia-placa-texto: #F6F2F8;
+  --ciruela-dia-linea: #E3D9EA;
+  --ciruela-dia-papel: #FCFAFD;
+  --ciruela-dia-invertida: #24092F;
+  --ciruela-dia-orbes: #8A7A96;
+  --ciruela-dia-error: var(--color-videojuegos); /* rubí, del autor */
+  --ciruela-noche-primario: #F6F2F8;
+  --ciruela-noche-pagina: #140A1C;
+  --ciruela-noche-placa: #4B1673;
+  --ciruela-noche-placa-texto: #F6F2F8;
+  --ciruela-noche-linea: #2E1D3B;
+  --ciruela-noche-papel: #1F1229;
+  --ciruela-noche-invertida: #0B0510;
+  --ciruela-noche-orbes: #3A2647;
+  --ciruela-noche-error: #DDABAA;
+  --ciruela-orbes-invertida: #1A0826;
+  /* El velo de los diálogos (la sombra de papel de las tarjetas, excepción del autor a «sin sombras», va en #act-sm). */
+  --ciruela-velo: color-mix(in srgb, var(--ciruela-dia-invertida) 62%, transparent);
 
-  /* Digitalists: 80 px arriba y 50 px a los lados, columna de 400 px, formulario de 500 px. */
-  --sm-contacto-arriba: 5.556vw;
-  --sm-contacto-lados: 3.472vw;
-  --sm-contacto-columna: min(400px, 27.8vw);
-  --sm-contacto-formulario: min(500px, 34.7vw);
-  --sm-imagen-contacto: 5.5vw;
+  /* Tiempos y curvas de la sección (K27: .2 / .4 / .8 s y los cuatro easings de Tonami). */
+  --sm-d-rapida: 0.2s;
+  --sm-d-base: 0.4s;
+  --sm-d-lenta: 0.8s;
+  --sm-curva-salida: cubic-bezier(0.16, 1, 0.3, 1);
+  --sm-curva-entrada-salida: cubic-bezier(0.65, 0, 0.35, 1);
+  --sm-curva-barrido: cubic-bezier(0.33, 1, 0.68, 1);
+  --sm-curva-atras: cubic-bezier(0.34, 1.46, 0.64, 1);
 
-  /* Tipografía: texto-lg hace de 22,5 px de noth.in; titulares en Unbounded; la frase gigante, 12,75vw. */
-  --sm-tam-titular: clamp(2rem, 3.6vw, 4.5rem);
-  --sm-tam-titular-contacto: clamp(1.5rem, 2.5vw, 2.5rem);
-  --sm-tam-titulo-formulario: clamp(1.125rem, 1.75vw, 1.75rem);
-  --sm-tam-campo: 0.875rem;
-  --sm-tam-frase-gigante: min(12.75vw, 12rem);
-  --sm-tam-errores: 0.8125rem;
-  --sm-tam-boton: 0.875rem;
+  /* El alto de una pantalla para los bloques altos de la sección (no cambia con la barra del celular). */
+  --sm-vh: 100vh;
+  /* Medidas de 1440 × 900 y, en celular, de 390 de ancho (K29). `--sm-p` es «1 px del diseño» de cada composición. */
+  --sm-p: var(--u);
+  --sm-letra-xs: max(var(--letra-min), calc(12 * var(--sm-p)));
+  --sm-letra-sm: max(var(--letra-min), calc(13 * var(--sm-p)));
+  --sm-letra-md: max(var(--letra-min), calc(16 * var(--sm-p)));
+  --sm-letra-lg: max(var(--letra-min), calc(22 * var(--sm-p)));
+}
 
-  /* Espacios del contacto (Digitalists) y medidas de los campos del formulario. */
-  --sm-espacio-sm: 20px;
-  --sm-espacio-md: 30px;
-  --sm-espacio-lg: 40px;
-  --sm-campo-alto-etiqueta: 1.15rem;
-  --sm-campo-reserva-estado: 1.6rem;
+@supports (height: 100svh) {
+  :root {
+    --sm-vh: 100svh;
+  }
+}
 
-  /* El botón (K5): 0,4 s con rebote hacia adelante. La casilla (K6): 20 px y 16 px por dentro. */
-  --sm-duracion-boton: 0.4s;
-  --sm-curva-boton: cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  --sm-radio-boton: 7px;
-  --sm-casilla: 20px;
-  --sm-casilla-marca: 16px;
+/* La composición de celular de Tonami (K29): a 390 de ancho el diseño mide `100vw / 390`; también en tablet vertical. */
+@media (max-width: 767px), (max-aspect-ratio: 1/1) {
+  :root {
+    --sm-p: calc(100vw / 390);
+  }
+}
+
+/* La sombra de papel de las tarjetas: depende del primario de cada tema, así que se resuelve en la sección. */
+#act-sm {
+  --sm-sombra-papel: 0 1px 0 color-mix(in srgb, var(--sm-primario) 12%, transparent), 0 14px 28px -14px color-mix(in srgb, var(--sm-primario) 38%, transparent);
+}
+
+/* Los roles de color de la sección: Día por defecto; Noche si el sistema lo pide y no hay elección guardada. */
+#act-sm,
+#act-sm[data-sm-tema="dia"] {
+  --sm-primario: var(--ciruela-dia-primario);
+  --sm-pagina: var(--ciruela-dia-pagina);
+  --sm-placa: var(--ciruela-dia-placa);
+  --sm-placa-texto: var(--ciruela-dia-placa-texto);
+  --sm-linea: var(--ciruela-dia-linea);
+  --sm-papel: var(--ciruela-dia-papel);
+  --sm-invertida: var(--ciruela-dia-invertida);
+  --sm-orbes: var(--ciruela-dia-orbes);
+  --sm-error: var(--ciruela-dia-error);
+  --color-foco: var(--ciruela-dia-primario);
+}
+
+@media (prefers-color-scheme: dark) {
+  #act-sm:not([data-sm-tema]) {
+    --sm-primario: var(--ciruela-noche-primario);
+    --sm-pagina: var(--ciruela-noche-pagina);
+    --sm-placa: var(--ciruela-noche-placa);
+    --sm-placa-texto: var(--ciruela-noche-placa-texto);
+    --sm-linea: var(--ciruela-noche-linea);
+    --sm-papel: var(--ciruela-noche-papel);
+    --sm-invertida: var(--ciruela-noche-invertida);
+    --sm-orbes: var(--ciruela-noche-orbes);
+    --sm-error: var(--ciruela-noche-error);
+    --color-foco: var(--ciruela-noche-primario);
+  }
+}
+
+#act-sm[data-sm-tema="noche"] {
+  --sm-primario: var(--ciruela-noche-primario);
+  --sm-pagina: var(--ciruela-noche-pagina);
+  --sm-placa: var(--ciruela-noche-placa);
+  --sm-placa-texto: var(--ciruela-noche-placa-texto);
+  --sm-linea: var(--ciruela-noche-linea);
+  --sm-papel: var(--ciruela-noche-papel);
+  --sm-invertida: var(--ciruela-noche-invertida);
+  --sm-orbes: var(--ciruela-noche-orbes);
+  --sm-error: var(--ciruela-noche-error);
+  --color-foco: var(--ciruela-noche-primario);
 }
 
 /* =====================================================================
@@ -312,9 +392,9 @@ body[data-current-level="N4"][data-discipline="editorial"] {
   --acento-activo: var(--color-crema-base);
 }
 
-/* --- SM · Sobre mí y contacto (T35): toda negra, texto crema ---
- * La sección va debajo del N2 y sube por encima de las capas fijas del menú. El foco sobre negro es el
- * crema (10,89:1 sobre #000000); la amatista da 2,62:1. */
+/* --- SM · Sobre mí y contacto ---
+ * Desde T45 la sección es Ciruela y trae sus propios roles de color por tema (§ 6C); el foco lo lleva ella
+ * (#act-sm define --color-foco). El cuerpo sigue negro: es lo que se ve si el documento se estira por debajo. */
 body[data-current-level="SM"] {
   --fondo-activo: var(--color-negro);
   --texto-activo: var(--color-texto-claro);
@@ -397,3 +477,30 @@ body {
   pointer-events: auto;
 }
 
+
+/* =====================================================================
+ * 9. ÁREAS DE TOQUE (T39)
+ *
+ * Todo control tiene un área que responde de al menos --toque × --toque (44 px con dedo, 24 con ratón; las cifras
+ * las escribe FilmLayout.astro desde lib/unidad.ts). El área es invisible: la dibuja un `::after` que no cambia el
+ * dibujo del control. Por defecto va centrada; donde pisaría a un vecino, el control la corre hacia el espacio
+ * libre con --toque-dx y --toque-dy (px), y el dibujo no se mueve. El foco visible sigue dibujándose sobre el control.
+ * El área mide 2 px más que el mínimo (--toque-area): el redondeo a píxeles del navegador no le quita nunca el último.
+ * ===================================================================== */
+:root {
+  --toque-area: calc(var(--toque) + 2px);
+}
+
+:where(.toque) {
+  position: relative;
+}
+
+.toque::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, var(--toque-area));
+  height: max(100%, var(--toque-area));
+  translate: calc(-50% + var(--toque-dx, 0px)) calc(-50% + var(--toque-dy, 0px));
+}
