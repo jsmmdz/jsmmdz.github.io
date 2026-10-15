@@ -77,7 +77,15 @@ const caraFuentes = (ds?.fuentes ?? [])
     {hayVideo && <div class="n4-clic-foto" data-n4-clic-foto aria-hidden="true"></div>}
   </div>
 
-  <h1 class="n4-titulo">{datos.titulo}</h1>
+  <!-- El título representativo (autor, 2026-10-15): el logo de la obra o la letra de su design system -->
+  {datos.tituloLogo ? (
+    <h1 class="n4-titulo n4-titulo-logo"><img src={datos.tituloLogo.src} width={datos.tituloLogo.width} height={datos.tituloLogo.height} alt={datos.titulo} decoding="async" draggable="false" /></h1>
+  ) : (
+    <h1
+      class:list={['n4-titulo', { 'n4-titulo-propio': datos.tituloFuente !== undefined }]}
+      style={datos.tituloFuente !== undefined ? `font-family: "${familiaFuente(datos.tituloFuente)}", var(--fuente-display)` : undefined}
+    >{datos.titulo}</h1>
+  )}
 
   <!-- La historia completa, en orden: con WebGL es transparente y su caja sigue a su cristal -->
   <ol class="n4-historia" data-n4-historia tabindex="-1" aria-label="Historia del caso">
@@ -398,6 +406,29 @@ const caraFuentes = (ds?.fuentes ?? [])
     color: var(--color-texto-claro);
     top: var(--n4-meseta-y);
     transform: translateY(-50%);
+  }
+
+  /* La letra del design system del caso: su archivo trae un solo peso y estilo, así que no se finge negrita ni
+     se aprieta el espaciado de Unbounded. */
+  #act-n4 .n4-titulo-propio {
+    font-weight: 400;
+    font-synthesis: none;
+    letter-spacing: normal;
+  }
+
+  /* El logo de la obra: escala con el tamaño de letra que mide `lib/n4/titulo.ts` (3 líneas de alto). */
+  #act-n4 .n4-titulo-logo {
+    line-height: 0;
+  }
+
+  #act-n4 .n4-titulo-logo img {
+    display: block;
+    height: 3em;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+    object-position: left center;
+    user-select: none;
   }
 
   /* ---------- La historia: la copia de cada cristal ---------- */

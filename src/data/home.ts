@@ -1,7 +1,7 @@
 // Textos y datos del home (N1). La diagramación es la del prototipo del autor (docs/1-PRODUCTO.md § 7, «Home
 // rediseñado con su diagramación · T36», 2026-10-04): el personaje en el centro (desde T44, un video detrás del
 // titular), una columna de texto a cada lado y el botón «Contacto» arriba a la derecha. Los textos de las columnas son del autor
-// (docs/1-PRODUCTO.md § 7, «Los textos del home», 2026-10-13). Las posiciones salen de
+// (docs/1-PRODUCTO.md § 7, «Los textos del home», 2026-10-13 y 2026-10-15). Las posiciones salen de
 // fabrica/proyecto/referentes/T36.json («diagramacion_autor»).
 
 import { conBase, conMedia } from '@/lib/rutas';
@@ -20,6 +20,8 @@ export interface Dato {
 export interface DatosHome {
   /** El titular: «JSMMDZ», su usuario de Instagram, sin arroba. Es el único h1 del home. */
   nombre: string;
+  /** Arriba a la izquierda, pequeño, con el estilo de rótulo de «Sobre mí» (autor, 2026-10-15). */
+  rol: string;
   /** Columna izquierda: titular de dos líneas, párrafo de dos líneas y el enlace que baja al menú. */
   columnaIzquierda: {
     /** Cada elemento es una línea (la subida entra línea por línea). */
@@ -29,8 +31,9 @@ export interface DatosHome {
     /** «Ver los casos»: baja al menú (lo intercepta lib/pelicula/scroll.ts). */
     cta: Enlace;
   };
-  /** Columna derecha: dos cifras con su pie. La primera la actualiza el autor al publicar un caso; la segunda es el
-   *  dato vivo del home pintado (T44): aquí va su valor inicial. */
+  /** Dos cifras con su pie. La primera, grande y sola en la columna derecha, la actualiza el autor al publicar un
+   *  caso; la segunda es el dato vivo del home pintado (T44), pequeña bajo el botón «Contacto» (autor, 2026-10-15):
+   *  aquí va su valor inicial. */
   columnaDerecha: readonly [Dato, Dato];
   /**
    * El personaje animado del home (T44). `src` es el póster (el primer cuadro del video, con transparencia): marca
@@ -71,9 +74,10 @@ const MINIATURA = conMedia('home/personaje/personaje-home-miniatura.webp');
 
 export const home: DatosHome & DatosHomeHeredados = {
   nombre: 'JSMMDZ',
+  rol: 'Creador digital',
   columnaIzquierda: {
     titular: ['Aprendo', 'jugando.'],
-    parrafo: ['Soy Junior. Nada de esto', 'lo sabía hacer antes.'],
+    parrafo: ['Cada proyecto inició con', 'algo que no sabía hacer.'],
     cta: { texto: 'Ver los casos', href: '#disciplinas' },
   },
   columnaDerecha: [

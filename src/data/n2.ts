@@ -19,7 +19,7 @@ import { conBase } from '@/lib/rutas';
 export const n2: DatosN2 = {
   titular: 'PORTAFOLIO',
   marca: 'JSMMDZ',
-  instruccion: '[TEXTO DEL AUTOR] ← → para cambiar',
+  instruccion: 'Juega con el anillo ← →',
   cta: { texto: 'Sobre mí', href: conBase('#sobre-mi') }, // T35: lleva a la sección «Sobre mí y contacto»
   textoEntrar: 'Ver',
 };

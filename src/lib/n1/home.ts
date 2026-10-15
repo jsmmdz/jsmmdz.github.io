@@ -16,7 +16,7 @@
  *
  * T44: el personaje es un video que la tinta dibuja en su canvas (`#act-n1[data-personaje-lienzo]` cuando ya lo
  * dibuja). Aquí se calcula su caja, se pide el video cuando la tinta se monta (corre mientras se está en el home)
- * y se publica el dato vivo «N % · Pintado por ti» (`#act-n1[data-pintado]` y la segunda cifra de la derecha).
+ * y se publica el dato vivo «N % · Pintado por ti» (`#act-n1[data-pintado]` y la cifra pequeña bajo el botón «Contacto»).
  */
 import gsap from 'gsap';
 import { suscribirProgresoCaida } from '@/lib/pelicula/caida-hook';

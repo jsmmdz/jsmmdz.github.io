@@ -117,6 +117,11 @@ export function esquemaProyecto<I extends z.ZodTypeAny, D extends z.ZodTypeAny =
       slug: z.string(),
       disciplina: disciplina ?? z.string(),
       titulo: z.string().trim().min(1, 'titulo es obligatorio'),
+      // El título representativo de cada caso (autor, 2026-10-15), ambos opcionales: el logo de la obra en lugar de
+      // la letra (el `titulo` queda como su texto alternativo) o la fuente de su design system (el índice en
+      // `designSystem.fuentes`). Con logo no se mira la fuente.
+      tituloLogo: image().optional(),
+      tituloFuente: z.number().int().min(0).optional(),
       anio: z.coerce.number().int(),
       portada: image(),
       // Portada en video (opcional): ruta relativa a /media, MP4. La tarjeta del N3 la usa como textura
@@ -160,6 +165,9 @@ export function esquemaProyecto<I extends z.ZodTypeAny, D extends z.ZodTypeAny =
       galeria: z.boolean().optional(),
     })
     .superRefine((caso, ctx) => {
+      if (caso.tituloFuente !== undefined && caso.tituloFuente >= (caso.designSystem?.fuentes.length ?? 0)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['tituloFuente'], message: 'tituloFuente: no hay esa fuente en designSystem.fuentes' });
+      }
       const pasos = caso.historia;
       if (pasos.length === 0) return;
       // Cada regla nombra el campo y el tipo que falta: «ningún resultado sin contexto» (§ 3 de 1-PRODUCTO)

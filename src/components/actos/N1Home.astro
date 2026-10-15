@@ -107,16 +107,22 @@ const iconoPuntos =
     </span>
   </div>
 
-  <!-- Columna derecha: dos cifras con su pie. Entran como el texto, sin contar. La segunda es el dato vivo (T44):
-       el % del home con tinta ahora; lib/n1/home.ts le cambia el texto. -->
+  <!-- Arriba a la izquierda, pequeño: «Creador digital» (autor, 2026-10-15) -->
+  <p class="n1-rol n1-envoltura n1-mezcla" data-n1-rol><span class="n1-linea" data-n1-sube>{home.rol}</span></p>
+
+  <!-- Columna derecha: una sola cifra grande con su pie (autor, 2026-10-15). Entra como el texto, sin contar. -->
   <div class="n1-columna n1-columna-derecha" data-n1-columna="derecha">
-    {home.columnaDerecha.map((dato, i) => (
-      <div class="n1-dato">
-        <div class="n1-envoltura n1-mezcla"><p class="n1-cifra" data-n1-cifra data-n1-pintado={i === 1 ? '' : undefined} data-n1-sube>{dato.cifra}</p></div>
-        <div class="n1-envoltura n1-mezcla"><p class="n1-pie" data-n1-sube>{dato.pie}</p></div>
-      </div>
-    ))}
+    <div class="n1-dato">
+      <div class="n1-envoltura n1-mezcla"><p class="n1-cifra" data-n1-cifra data-n1-sube>{home.columnaDerecha[0].cifra}</p></div>
+      <div class="n1-envoltura n1-mezcla"><p class="n1-pie" data-n1-sube>{home.columnaDerecha[0].pie}</p></div>
+    </div>
   </div>
+
+  <!-- Bajo el botón «Contacto», pequeño: el dato vivo (T44), el % del home con tinta ahora; lib/n1/home.ts le cambia
+       el texto. Va aunque «Sobre mí» esté oculta. -->
+  <p class="n1-pintado n1-envoltura n1-mezcla" data-n1-columna="pintado">
+    <span class="n1-linea" data-n1-sube><span data-n1-cifra data-n1-pintado>{home.columnaDerecha[1].cifra}</span> · {home.columnaDerecha[1].pie}</span>
+  </p>
 
   <!-- Arriba a la derecha: «Sobre mí» (T35, lleva a /#sobre-mi) como texto y el botón «Contacto» (lleva a
        /#contacto: la sección «Sobre mí» abierta en el formulario). Sin la sección (GitHub Pages,
@@ -559,6 +565,36 @@ const iconoPuntos =
     gap: var(--espacio-xs);
   }
 
+  /* ---------- «Creador digital» arriba a la izquierda y el dato vivo bajo «Contacto» (autor, 2026-10-15) ---------- */
+
+  /* El rótulo va a la altura del botón (centrado en su alto) y con el estilo de «Sobre mí». */
+  .n1-rol,
+  .n1-pintado {
+    position: absolute;
+    width: fit-content;
+    margin: 0;
+    font-family: var(--fuente-texto);
+    font-weight: 600;
+    font-size: var(--tamano-rotulo);
+    line-height: var(--linea-rotulo);
+    letter-spacing: var(--tracking-rotulo);
+    text-transform: uppercase;
+  }
+
+  .n1-rol {
+    top: 3.6%;
+    left: var(--n1-lado);
+    height: max(6.2%, 3rem);
+    display: flex;
+    align-items: center;
+  }
+
+  .n1-pintado {
+    top: calc(3.6% + max(6.2%, 3rem) + var(--espacio-xs));
+    right: var(--n1-lado-boton);
+    text-align: right;
+  }
+
   /* ---------- Las redes, encima del titular a la derecha ---------- */
 
   .n1-redes {
@@ -606,8 +642,13 @@ const iconoPuntos =
       width: 11rem;
     }
 
-    .n1-arriba {
+    .n1-arriba,
+    .n1-rol {
       top: 2.5%;
+    }
+
+    .n1-pintado {
+      top: calc(2.5% + max(6.2%, 3rem) + var(--espacio-xs));
     }
   }
 </style>
